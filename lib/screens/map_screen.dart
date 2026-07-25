@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -91,8 +94,14 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   }
 
   Future<void> _share(GpxRoute route) async {
+    final repo = context.read<RouteRepository>();
+    final xml = await repo.readGpxContent(route);
+    final bytes = Uint8List.fromList(utf8.encode(xml));
     await SharePlus.instance.share(
-      ShareParams(files: [XFile(route.filePath)], subject: route.name),
+      ShareParams(
+        files: [XFile.fromData(bytes, name: '${route.name}.gpx', mimeType: 'application/gpx+xml')],
+        subject: route.name,
+      ),
     );
   }
 

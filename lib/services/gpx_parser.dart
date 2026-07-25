@@ -86,7 +86,6 @@ ParsedGpx parseGpxXml(String xml) {
 GpxRoute buildRouteMetadata({
   required String id,
   required String name,
-  required String filePath,
   required DateTime importedAt,
   required ParsedGpx parsed,
 }) {
@@ -147,7 +146,6 @@ GpxRoute buildRouteMetadata({
   return GpxRoute(
     id: id,
     name: name,
-    filePath: filePath,
     importedAt: importedAt,
     distanceMeters: distanceMeters,
     elevationGainMeters: elevationGain,

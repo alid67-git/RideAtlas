@@ -1,11 +1,11 @@
-/// Persisted metadata for an imported GPX route. The raw GPX file itself is
-/// stored on disk at [filePath]; this record only caches the summary stats so
-/// the route list can render instantly without re-parsing every file.
+/// Persisted metadata for an imported GPX route. The raw GPX content itself
+/// is stored separately (see [RouteRepository]), keyed by [id]; this record
+/// only caches the summary stats so the route list can render instantly
+/// without re-parsing every file.
 class GpxRoute {
   const GpxRoute({
     required this.id,
     required this.name,
-    required this.filePath,
     required this.importedAt,
     required this.distanceMeters,
     required this.elevationGainMeters,
@@ -22,7 +22,6 @@ class GpxRoute {
 
   final String id;
   final String name;
-  final String filePath;
   final DateTime importedAt;
   final double distanceMeters;
   final double elevationGainMeters;
@@ -51,7 +50,6 @@ class GpxRoute {
     return GpxRoute(
       id: id,
       name: name ?? this.name,
-      filePath: filePath,
       importedAt: importedAt,
       distanceMeters: distanceMeters,
       elevationGainMeters: elevationGainMeters,
@@ -70,7 +68,6 @@ class GpxRoute {
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
-    'filePath': filePath,
     'importedAt': importedAt.toIso8601String(),
     'distanceMeters': distanceMeters,
     'elevationGainMeters': elevationGainMeters,
@@ -89,7 +86,6 @@ class GpxRoute {
     return GpxRoute(
       id: json['id'] as String,
       name: json['name'] as String,
-      filePath: json['filePath'] as String,
       importedAt: DateTime.parse(json['importedAt'] as String),
       distanceMeters: (json['distanceMeters'] as num).toDouble(),
       elevationGainMeters: (json['elevationGainMeters'] as num).toDouble(),

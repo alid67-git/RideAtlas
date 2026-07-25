@@ -1,9 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -13,10 +10,13 @@ import '../services/gpx_parser.dart';
 const _indexPrefsKey = 'rideatlas_routes_index_v1';
 const _uuid = Uuid();
 
-/// Owns the set of imported GPX routes: persists their raw files under the
-/// app's documents directory and caches their summary stats (as JSON) in
-/// [SharedPreferences] so the list screen can render without re-parsing GPX
-/// on every launch.
+String _contentKey(String id) => 'rideatlas_route_content_$id';
+
+/// Owns the set of imported GPX routes: persists their raw GPX text and
+/// cached summary stats in [SharedPreferences] so the list screen can render
+/// instantly without re-parsing GPX on every launch. Using SharedPreferences
+/// (instead of a real file on disk) keeps this working uniformly across
+/// mobile, web and desktop - the browser has no real filesystem to write to.
 class RouteRepository extends ChangeNotifier {
   final List<GpxRoute> _routes = [];
   bool _loading = true;
@@ -43,17 +43,8 @@ class RouteRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<Directory> _routesDir() async {
-    final docs = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docs.path, 'routes'));
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    return dir;
-  }
-
-  /// Imports a GPX file from raw bytes, parses it, stores a copy on disk and
-  /// adds it to the route index. Returns the new route's metadata.
+  /// Imports a GPX file from raw bytes, parses it, stores its text content
+  /// and adds it to the route index. Returns the new route's metadata.
   Future<GpxRoute> importFromBytes({
     required Uint8List bytes,
     required String suggestedFileName,
@@ -65,24 +56,21 @@ class RouteRepository extends ChangeNotifier {
     }
 
     final id = _uuid.v4();
-    final dir = await _routesDir();
-    final fileName = '$id.gpx';
-    final file = File(p.join(dir.path, fileName));
-    await file.writeAsBytes(bytes, flush: true);
-
-    final baseName = p.basenameWithoutExtension(suggestedFileName);
+    final baseName = suggestedFileName.replaceAll(RegExp(r'\.gpx$', caseSensitive: false), '');
     final name = parsed.suggestedName?.isNotEmpty == true ? parsed.suggestedName! : baseName;
 
     final route = buildRouteMetadata(
       id: id,
       name: name,
-      filePath: file.path,
       importedAt: DateTime.now(),
       parsed: parsed,
     );
 
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_contentKey(id), xml);
+
     _routes.add(route);
-    await _persistIndex();
+    await _persistIndex(prefs);
     notifyListeners();
     return route;
   }
@@ -98,23 +86,25 @@ class RouteRepository extends ChangeNotifier {
   Future<void> delete(String id) async {
     final index = _routes.indexWhere((r) => r.id == id);
     if (index == -1) return;
-    final route = _routes[index];
     _routes.removeAt(index);
     await _persistIndex();
     notifyListeners();
 
-    final file = File(route.filePath);
-    if (await file.exists()) {
-      await file.delete();
-    }
-  }
-
-  Future<String> readGpxContent(GpxRoute route) {
-    return File(route.filePath).readAsString();
-  }
-
-  Future<void> _persistIndex() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_contentKey(id));
+  }
+
+  Future<String> readGpxContent(GpxRoute route) async {
+    final prefs = await SharedPreferences.getInstance();
+    final content = prefs.getString(_contentKey(route.id));
+    if (content == null) {
+      throw StateError('Rota içeriği bulunamadı: ${route.name}');
+    }
+    return content;
+  }
+
+  Future<void> _persistIndex([SharedPreferences? sharedPrefs]) async {
+    final prefs = sharedPrefs ?? await SharedPreferences.getInstance();
     await prefs.setStringList(
       _indexPrefsKey,
       _routes.map((r) => jsonEncode(r.toJson())).toList(),
