@@ -34,7 +34,10 @@ class RouteCard extends StatelessWidget {
               CircleAvatar(
                 radius: 24,
                 backgroundColor: theme.colorScheme.primaryContainer,
-                child: Icon(Icons.route, color: theme.colorScheme.onPrimaryContainer),
+                child: Icon(
+                  Icons.route,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -43,7 +46,9 @@ class RouteCard extends StatelessWidget {
                   children: [
                     Text(
                       route.name,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -54,7 +59,10 @@ class RouteCard extends StatelessWidget {
                       spacing: 12,
                       runSpacing: 4,
                       children: [
-                        _StatChip(icon: Icons.straighten, label: '${route.distanceKm.toStringAsFixed(1)} km'),
+                        _StatChip(
+                          icon: Icons.straighten,
+                          label: '${route.distanceKm.toStringAsFixed(1)} km',
+                        ),
                         if (route.elevationGainMeters > 0)
                           _StatChip(
                             icon: Icons.trending_up,
@@ -76,7 +84,10 @@ class RouteCard extends StatelessWidget {
                   if (value == 'delete') onDelete();
                 },
                 itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'rename', child: Text('Yeniden adlandır')),
+                  PopupMenuItem(
+                    value: 'rename',
+                    child: Text('Yeniden adlandır'),
+                  ),
                   PopupMenuItem(value: 'delete', child: Text('Sil')),
                 ],
               ),

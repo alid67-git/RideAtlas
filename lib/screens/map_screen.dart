@@ -12,7 +12,7 @@ import '../models/gpx_route.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
 import '../repositories/route_repository.dart';
-import '../services/gpx_parser.dart';
+import '../services/track_io.dart';
 import 'analysis_sheet.dart';
 
 /// Shows a single imported GPX route on a map: the track as a red line,
@@ -54,8 +54,8 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     if (route == null) return;
     try {
       final repo = context.read<RouteRepository>();
-      final xml = await repo.readGpxContent(route);
-      final parsed = parseGpxXml(xml);
+      final xml = await repo.readTrackContent(route);
+      final parsed = parseTrackXml(xml);
       if (!mounted) return;
       setState(() {
         _points = parsed.points;
@@ -64,7 +64,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       _fitToRoute(route);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'GPX dosyası okunamadı: $e');
+      setState(() => _error = 'Rota dosyası okunamadı: $e');
     }
   }
 
@@ -77,6 +77,14 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       _mapController.fitCamera(
         CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(48)),
       );
+      // On Flutter Web, TileLayer sometimes doesn't request tiles for the
+      // very first programmatic camera move - a second, distinct move right
+      // after reliably kicks it, without visibly changing the view.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final camera = _mapController.camera;
+        _mapController.move(camera.center, camera.zoom + 0.001);
+        _mapController.move(camera.center, camera.zoom);
+      });
     });
   }
 
@@ -107,16 +115,38 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   }
 
   Future<void> _share(GpxRoute route) async {
-    final repo = context.read<RouteRepository>();
-    final xml = await repo.readGpxContent(route);
-    final bytes = Uint8List.fromList(utf8.encode(xml));
+    final points = _points;
+    if (points == null) return;
+
+    final format = await showDialog<TrackFormat>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Hangi formatta dışa aktarılsın?'),
+        children: [
+          for (final f in TrackFormat.values)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, f),
+              child: Text(f.label),
+            ),
+        ],
+      ),
+    );
+    if (format == null || !mounted) return;
+
+    final xmlText = exportTrack(
+      name: route.name,
+      points: points,
+      waypoints: _waypoints ?? const [],
+      format: format,
+    );
+    final bytes = Uint8List.fromList(utf8.encode(xmlText));
     await SharePlus.instance.share(
       ShareParams(
         files: [
           XFile.fromData(
             bytes,
-            name: '${route.name}.gpx',
-            mimeType: 'application/gpx+xml',
+            name: '${route.name}.${format.extension}',
+            mimeType: format.mimeType,
           ),
         ],
         subject: route.name,
@@ -323,10 +353,10 @@ class _RouteSwitcherDialog extends StatefulWidget {
 class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
   bool _importing = false;
 
-  Future<void> _importGpx() async {
+  Future<void> _importTrack() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['gpx'],
+      allowedExtensions: const ['gpx', 'kml'],
       withData: true,
     );
     if (result == null || result.files.isEmpty) return;
@@ -364,7 +394,7 @@ class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('GPX içe aktarılamadı: $e')));
+        ).showSnackBar(SnackBar(content: Text('Dosya içe aktarılamadı: $e')));
       }
     } finally {
       if (mounted) setState(() => _importing = false);
@@ -402,8 +432,8 @@ class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.add),
-                    tooltip: 'GPX İçe Aktar',
-                    onPressed: _importing ? null : _importGpx,
+                    tooltip: 'GPX/KML İçe Aktar',
+                    onPressed: _importing ? null : _importTrack,
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),

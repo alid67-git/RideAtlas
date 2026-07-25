@@ -40,17 +40,20 @@ class _RouteListScreenState extends State<RouteListScreen> {
         title: Text('Çalışan sürüm: $kAppBuildLabel'),
         content: Text(kAppBuildNote),
         actions: [
-          FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Kapat')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Kapat'),
+          ),
         ],
       ),
     );
     await box.put(_lastSeenBuildKey, kAppBuildLabel);
   }
 
-  Future<void> _importGpx() async {
+  Future<void> _importTrack() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['gpx'],
+      allowedExtensions: const ['gpx', 'kml'],
       withData: true,
     );
     if (result == null || result.files.isEmpty) return;
@@ -77,7 +80,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
     } on FormatException catch (e) {
       _showError(e.message);
     } catch (e) {
-      _showError('GPX içe aktarılamadı: $e');
+      _showError('Dosya içe aktarılamadı: $e');
     } finally {
       if (mounted) setState(() => _importing = false);
     }
@@ -85,7 +88,9 @@ class _RouteListScreenState extends State<RouteListScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _rename(GpxRoute route) async {
@@ -96,7 +101,10 @@ class _RouteListScreenState extends State<RouteListScreen> {
         title: const Text('Rotayı yeniden adlandır'),
         content: TextField(controller: controller, autofocus: true),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Vazgeç')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Vazgeç'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: const Text('Kaydet'),
@@ -116,7 +124,10 @@ class _RouteListScreenState extends State<RouteListScreen> {
         title: const Text('Rotayı sil'),
         content: Text('"${route.name}" silinsin mi? Bu işlem geri alınamaz.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Vazgeç')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
           FilledButton.tonal(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Sil'),
@@ -140,7 +151,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
           }
           final routes = repo.routes;
           if (routes.isEmpty) {
-            return _EmptyState(onImport: _importing ? null : _importGpx);
+            return _EmptyState(onImport: _importing ? null : _importTrack);
           }
           return ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -150,7 +161,9 @@ class _RouteListScreenState extends State<RouteListScreen> {
               return RouteCard(
                 route: route,
                 onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)),
+                  MaterialPageRoute(
+                    builder: (_) => RouteMapScreen(routeId: route.id),
+                  ),
                 ),
                 onRename: () => _rename(route),
                 onDelete: () => _delete(route),
@@ -160,15 +173,18 @@ class _RouteListScreenState extends State<RouteListScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _importing ? null : _importGpx,
+        onPressed: _importing ? null : _importTrack,
         icon: _importing
             ? const SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
               )
             : const Icon(Icons.add),
-        label: const Text('GPX İçe Aktar'),
+        label: const Text('GPX/KML İçe Aktar'),
       ),
     );
   }
@@ -188,7 +204,11 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.map_outlined, size: 72, color: theme.colorScheme.outline),
+            Icon(
+              Icons.map_outlined,
+              size: 72,
+              color: theme.colorScheme.outline,
+            ),
             const SizedBox(height: 16),
             Text(
               'Henüz rota yok',
@@ -197,7 +217,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Bir .gpx dosyası içe aktararak rotanızı haritada görüntüleyin ve detaylı analiz edin.',
+              'Bir .gpx veya .kml dosyası içe aktararak rotanızı haritada görüntüleyin ve detaylı analiz edin.',
               style: theme.textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
@@ -205,7 +225,7 @@ class _EmptyState extends StatelessWidget {
             FilledButton.icon(
               onPressed: onImport,
               icon: const Icon(Icons.add),
-              label: const Text('GPX İçe Aktar'),
+              label: const Text('GPX/KML İçe Aktar'),
             ),
           ],
         ),

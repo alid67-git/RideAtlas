@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/gpx_route.dart';
 import '../services/gpx_parser.dart';
+import '../services/track_io.dart';
 
 const _boxName = 'rideatlas_routes';
 const _indexKey = 'index';
@@ -49,21 +50,27 @@ class RouteRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Imports a GPX file from raw bytes, parses it, stores its text content
-  /// and adds it to the route index. Returns the new route's metadata.
+  /// Imports a GPX or KML file from raw bytes, parses it, stores its text
+  /// content and adds it to the route index. Returns the new route's
+  /// metadata.
   Future<GpxRoute> importFromBytes({
     required Uint8List bytes,
     required String suggestedFileName,
   }) async {
     final xml = utf8.decode(bytes, allowMalformed: true);
-    final parsed = parseGpxXml(xml);
+    final parsed = parseTrackXml(xml);
     if (parsed.points.isEmpty) {
-      throw const FormatException('GPX dosyasında rota/track noktası bulunamadı.');
+      throw const FormatException('Dosyada rota/track noktası bulunamadı.');
     }
 
     final id = _uuid.v4();
-    final baseName = suggestedFileName.replaceAll(RegExp(r'\.gpx$', caseSensitive: false), '');
-    final name = parsed.suggestedName?.isNotEmpty == true ? parsed.suggestedName! : baseName;
+    final baseName = suggestedFileName.replaceAll(
+      RegExp(r'\.(gpx|kml)$', caseSensitive: false),
+      '',
+    );
+    final name = parsed.suggestedName?.isNotEmpty == true
+        ? parsed.suggestedName!
+        : baseName;
 
     final route = buildRouteMetadata(
       id: id,
@@ -99,7 +106,7 @@ class RouteRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String> readGpxContent(GpxRoute route) async {
+  Future<String> readTrackContent(GpxRoute route) async {
     final box = await _openBox();
     final content = box.get(_contentKey(route.id));
     if (content == null) {
@@ -110,6 +117,9 @@ class RouteRepository extends ChangeNotifier {
 
   Future<void> _persistIndex([Box<String>? openBox]) async {
     final box = openBox ?? await _openBox();
-    await box.put(_indexKey, jsonEncode(_routes.map((r) => r.toJson()).toList()));
+    await box.put(
+      _indexKey,
+      jsonEncode(_routes.map((r) => r.toJson()).toList()),
+    );
   }
 }

@@ -2,24 +2,11 @@ import 'package:gpx/gpx.dart' as gpxlib;
 import 'package:latlong2/latlong.dart';
 
 import '../models/gpx_route.dart';
+import '../models/parsed_track.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
 
 const _distance = Distance();
-
-/// The result of parsing a raw GPX file: the flattened track line plus any
-/// named waypoints, ready to be drawn on the map or turned into stats.
-class ParsedGpx {
-  const ParsedGpx({
-    required this.points,
-    required this.waypoints,
-    required this.suggestedName,
-  });
-
-  final List<TrackPoint> points;
-  final List<Waypoint> waypoints;
-  final String? suggestedName;
-}
 
 /// Parses raw GPX XML into track points and waypoints.
 ///
@@ -27,7 +14,7 @@ class ParsedGpx {
 /// tracks are concatenated in document order). If a file has no tracks but
 /// does have a `<rte>`, that is used as a fallback so plain route files still
 /// render a line.
-ParsedGpx parseGpxXml(String xml) {
+ParsedTrack parseGpxXml(String xml) {
   final gpx = gpxlib.GpxReader().fromString(xml);
 
   final points = <TrackPoint>[];
@@ -71,14 +58,18 @@ ParsedGpx parseGpxXml(String xml) {
         ),
   ];
 
-  final suggestedName =
-      (gpx.metadata?.name?.trim().isNotEmpty ?? false)
+  final suggestedName = (gpx.metadata?.name?.trim().isNotEmpty ?? false)
       ? gpx.metadata!.name!.trim()
-      : (gpx.trks.isNotEmpty && (gpx.trks.first.name?.trim().isNotEmpty ?? false))
+      : (gpx.trks.isNotEmpty &&
+            (gpx.trks.first.name?.trim().isNotEmpty ?? false))
       ? gpx.trks.first.name!.trim()
       : null;
 
-  return ParsedGpx(points: points, waypoints: waypoints, suggestedName: suggestedName);
+  return ParsedTrack(
+    points: points,
+    waypoints: waypoints,
+    suggestedName: suggestedName,
+  );
 }
 
 /// Computes summary stats (distance, elevation gain/loss, duration, bounds)
@@ -87,7 +78,7 @@ GpxRoute buildRouteMetadata({
   required String id,
   required String name,
   required DateTime importedAt,
-  required ParsedGpx parsed,
+  required ParsedTrack parsed,
 }) {
   final points = parsed.points;
 
@@ -109,8 +100,12 @@ GpxRoute buildRouteMetadata({
     if (lon < west) west = lon;
 
     if (p.elevation != null) {
-      minEle = minEle == null ? p.elevation : (p.elevation! < minEle ? p.elevation : minEle);
-      maxEle = maxEle == null ? p.elevation : (p.elevation! > maxEle ? p.elevation : maxEle);
+      minEle = minEle == null
+          ? p.elevation
+          : (p.elevation! < minEle ? p.elevation : minEle);
+      maxEle = maxEle == null
+          ? p.elevation
+          : (p.elevation! > maxEle ? p.elevation : maxEle);
     }
 
     if (i > 0) {

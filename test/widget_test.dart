@@ -20,12 +20,18 @@ void main() {
     }
   });
 
-  testWidgets('shows the empty route list on first launch', (WidgetTester tester) async {
+  testWidgets('shows the empty route list on first launch', (
+    WidgetTester tester,
+  ) async {
     // Hive's box-open is real file I/O, so it must run outside the fake-async
     // zone that pump()/pumpAndSettle() normally use.
     await tester.runAsync(() async {
       await tester.pumpWidget(const RideAtlasApp());
-      for (var i = 0; i < 20 && find.text('Henüz rota yok').evaluate().isEmpty; i++) {
+      for (
+        var i = 0;
+        i < 20 && find.text('Henüz rota yok').evaluate().isEmpty;
+        i++
+      ) {
         await Future<void>.delayed(const Duration(milliseconds: 100));
         await tester.pump();
       }
@@ -33,6 +39,6 @@ void main() {
 
     expect(find.text('RideAtlas'), findsOneWidget);
     expect(find.text('Henüz rota yok'), findsOneWidget);
-    expect(find.text('GPX İçe Aktar'), findsWidgets);
+    expect(find.text('GPX/KML İçe Aktar'), findsWidgets);
   });
 }
