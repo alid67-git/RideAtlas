@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../build_info.dart';
 import '../models/gpx_route.dart';
 import '../repositories/route_repository.dart';
 import '../widgets/route_card.dart';
@@ -102,7 +103,21 @@ class _RouteListScreenState extends State<RouteListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('RideAtlas')),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('RideAtlas'),
+            Text(
+              kAppBuildLabel,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
       body: Consumer<RouteRepository>(
         builder: (context, repo, _) {
           if (repo.isLoading) {
