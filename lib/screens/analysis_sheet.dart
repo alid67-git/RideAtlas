@@ -24,8 +24,8 @@ class AnalysisSheet extends StatelessWidget {
     final theme = Theme.of(context);
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.8,
-      minChildSize: 0.4,
+      initialChildSize: 0.55,
+      minChildSize: 0.3,
       maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
@@ -117,11 +117,14 @@ class AnalysisSheet extends StatelessWidget {
                     value: '${route.elevationLossMeters.round()} m',
                   ),
                   _StatCard(
-                    icon: Icons.height,
-                    label: 'Yükseklik (min/maks)',
-                    value: route.minElevation == null
-                        ? '—'
-                        : '${route.minElevation!.round()} / ${route.maxElevation!.round()} m',
+                    icon: Icons.arrow_upward,
+                    label: 'Maksimum irtifa',
+                    value: route.maxElevation == null ? '—' : '${route.maxElevation!.round()} m',
+                  ),
+                  _StatCard(
+                    icon: Icons.arrow_downward,
+                    label: 'Minimum irtifa',
+                    value: route.minElevation == null ? '—' : '${route.minElevation!.round()} m',
                   ),
                   _StatCard(
                     icon: Icons.landscape,

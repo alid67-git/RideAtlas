@@ -83,6 +83,16 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  void _zoomIn() {
+    final camera = _mapController.camera;
+    _mapController.move(camera.center, camera.zoom + 1);
+  }
+
+  void _zoomOut() {
+    final camera = _mapController.camera;
+    _mapController.move(camera.center, camera.zoom - 1);
+  }
+
   void _openAnalysis(GpxRoute route) {
     final points = _points;
     if (points == null) return;
@@ -124,6 +134,18 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 bottom: 24,
                 child: Column(
                   children: [
+                    FloatingActionButton.small(
+                      heroTag: 'zoomIn',
+                      onPressed: _zoomIn,
+                      child: const Icon(Icons.add),
+                    ),
+                    const SizedBox(height: 8),
+                    FloatingActionButton.small(
+                      heroTag: 'zoomOut',
+                      onPressed: _zoomOut,
+                      child: const Icon(Icons.remove),
+                    ),
+                    const SizedBox(height: 12),
                     FloatingActionButton(
                       heroTag: 'locate',
                       onPressed: () => _fitToRoute(route),
