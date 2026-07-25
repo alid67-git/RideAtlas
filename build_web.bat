@@ -8,7 +8,7 @@ echo (Bunu her "git pull" sonrasinda bir kez calistirman yeterli.)
 echo.
 
 call flutter pub get
-call flutter build web --release
+call flutter build web --release --pwa-strategy=none
 
 echo.
 echo Derleme tamamlandi. Artik run_web.bat ile hizlica acabilirsin.
