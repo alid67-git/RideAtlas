@@ -79,8 +79,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     });
   }
 
-  void _showList() {
-    Navigator.of(context).popUntil((route) => route.isFirst);
+  void _showList(GpxRoute currentRoute) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _RouteSwitcherDialog(currentRouteId: currentRoute.id),
+    );
   }
 
   void _zoomIn() {
@@ -96,9 +99,8 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   void _openAnalysis(GpxRoute route) {
     final points = _points;
     if (points == null) return;
-    showModalBottomSheet(
+    showDialog<void>(
       context: context,
-      isScrollControlled: true,
       builder: (_) => AnalysisSheet(route: route, points: points),
     );
   }
@@ -109,7 +111,13 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     final bytes = Uint8List.fromList(utf8.encode(xml));
     await SharePlus.instance.share(
       ShareParams(
-        files: [XFile.fromData(bytes, name: '${route.name}.gpx', mimeType: 'application/gpx+xml')],
+        files: [
+          XFile.fromData(
+            bytes,
+            name: '${route.name}.gpx',
+            mimeType: 'application/gpx+xml',
+          ),
+        ],
         subject: route.name,
       ),
     );
@@ -128,7 +136,12 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           body: Stack(
             children: [
               Positioned.fill(child: _buildMap(route)),
-              Positioned(top: 0, left: 0, right: 0, child: _buildTopBar(context, route)),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _buildTopBar(context, route),
+              ),
               Positioned(
                 right: 16,
                 bottom: 24,
@@ -154,7 +167,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                     const SizedBox(height: 12),
                     FloatingActionButton.extended(
                       heroTag: 'analysis',
-                      onPressed: _points == null ? null : () => _openAnalysis(route),
+                      onPressed: _points == null
+                          ? null
+                          : () => _openAnalysis(route),
                       icon: const Icon(Icons.insights),
                       label: const Text('Analiz'),
                     ),
@@ -170,7 +185,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
 
   Widget _buildMap(GpxRoute route) {
     if (_error != null) {
-      return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)));
+      return Center(
+        child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)),
+      );
     }
     final points = _points;
     if (points == null) {
@@ -187,20 +204,28 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         initialCenter: start,
         initialZoom: 12,
         initialCameraFit: CameraFit.bounds(
-          bounds: LatLngBounds(LatLng(route.south, route.west), LatLng(route.north, route.east)),
+          bounds: LatLngBounds(
+            LatLng(route.south, route.west),
+            LatLng(route.north, route.east),
+          ),
           padding: const EdgeInsets.all(48),
         ),
       ),
       children: [
         TileLayer(
-          urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+          urlTemplate:
+              'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
           subdomains: const ['a', 'b', 'c', 'd'],
           userAgentPackageName: 'com.rideatlas.app',
           maxNativeZoom: 20,
         ),
         PolylineLayer(
           polylines: [
-            Polyline(points: line, strokeWidth: 4, color: const Color(0xFFE53935)),
+            Polyline(
+              points: line,
+              strokeWidth: 4,
+              color: const Color(0xFFE53935),
+            ),
           ],
         ),
         MarkerLayer(
@@ -219,13 +244,21 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
               point: start,
               width: 36,
               height: 36,
-              child: const Icon(Icons.trip_origin, color: Color(0xFF2E7D32), size: 32),
+              child: const Icon(
+                Icons.trip_origin,
+                color: Color(0xFF2E7D32),
+                size: 32,
+              ),
             ),
             Marker(
               point: end,
               width: 36,
               height: 36,
-              child: const Icon(Icons.location_on, color: Color(0xFFD32F2F), size: 36),
+              child: const Icon(
+                Icons.location_on,
+                color: Color(0xFFD32F2F),
+                size: 36,
+              ),
             ),
           ],
         ),
@@ -245,28 +278,124 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
-            _RoundIconButton(icon: Icons.list, onPressed: _showList),
+            _RoundIconButton(
+              icon: Icons.list,
+              onPressed: () => _showList(route),
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surface.withValues(alpha: 0.92),
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 6),
+                  ],
                 ),
                 child: Text(
                   route.name,
                   textAlign: TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            _RoundIconButton(icon: Icons.ios_share, onPressed: () => _share(route)),
+            _RoundIconButton(
+              icon: Icons.ios_share,
+              onPressed: () => _share(route),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Centered "switch route" window opened from the map screen's list button.
+/// The current map stays underneath; picking another route swaps to it,
+/// while dismissing (X, tap outside, or Esc) returns to the same map.
+class _RouteSwitcherDialog extends StatelessWidget {
+  const _RouteSwitcherDialog({required this.currentRouteId});
+
+  final String currentRouteId;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final routes = context.watch<RouteRepository>().routes;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 560),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Rotalar',
+                      style: theme.textTheme.headlineSmall,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Kapat',
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: routes.length,
+                  itemBuilder: (context, i) {
+                    final r = routes[i];
+                    final selected = r.id == currentRouteId;
+                    return ListTile(
+                      leading: Icon(
+                        Icons.route,
+                        color: selected
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.outline,
+                      ),
+                      title: Text(
+                        r.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text('${r.distanceKm.toStringAsFixed(1)} km'),
+                      selected: selected,
+                      onTap: () {
+                        Navigator.pop(context);
+                        if (!selected) {
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (_) => RouteMapScreen(routeId: r.id),
+                            ),
+                          );
+                        }
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

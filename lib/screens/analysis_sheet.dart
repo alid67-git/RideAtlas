@@ -20,128 +20,161 @@ class AnalysisSheet extends StatelessWidget {
     final profile = buildElevationProfile(points);
     final avgElevation = profile.isEmpty
         ? null
-        : profile.map((s) => s.elevation).reduce((a, b) => a + b) / profile.length;
+        : profile.map((s) => s.elevation).reduce((a, b) => a + b) /
+              profile.length;
     final theme = Theme.of(context);
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.55,
-      minChildSize: 0.3,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (context, scrollController) {
-        return SingleChildScrollView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 640),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 12, 20),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      route.name,
+                      style: theme.textTheme.headlineSmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Kapat',
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
               ),
-              Text(route.name, style: theme.textTheme.headlineSmall),
-              const SizedBox(height: 4),
               Text(
                 DateFormat('d MMMM yyyy, HH:mm').format(route.importedAt),
                 style: theme.textTheme.bodySmall,
               ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: _HeroStat(
-                      label: 'Mesafe',
-                      value: route.distanceKm.toStringAsFixed(1),
-                      unit: 'km',
-                    ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _HeroStat(
+                              label: 'Mesafe',
+                              value: route.distanceKm.toStringAsFixed(1),
+                              unit: 'km',
+                            ),
+                          ),
+                          Expanded(
+                            child: _HeroStat(
+                              label: 'Süre',
+                              value: route.duration == null
+                                  ? '—'
+                                  : _formatDuration(route.duration!),
+                              unit: '',
+                            ),
+                          ),
+                          Expanded(
+                            child: _HeroStat(
+                              label: 'Ort. hız',
+                              value:
+                                  route.averageSpeedKmh?.toStringAsFixed(0) ??
+                                  '—',
+                              unit: 'km/s',
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (profile.length > 1) ...[
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.show_chart,
+                              size: 18,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Yükseklik profili',
+                              style: theme.textTheme.titleMedium,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: SizedBox(
+                            height: 200,
+                            child: _ElevationChart(samples: profile),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      GridView.count(
+                        crossAxisCount: 2,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: 2.6,
+                        children: [
+                          _StatCard(
+                            icon: Icons.trending_up,
+                            label: 'Tırmanış',
+                            value: '${route.elevationGainMeters.round()} m',
+                          ),
+                          _StatCard(
+                            icon: Icons.trending_down,
+                            label: 'İniş',
+                            value: '${route.elevationLossMeters.round()} m',
+                          ),
+                          _StatCard(
+                            icon: Icons.arrow_upward,
+                            label: 'Maksimum irtifa',
+                            value: route.maxElevation == null
+                                ? '—'
+                                : '${route.maxElevation!.round()} m',
+                          ),
+                          _StatCard(
+                            icon: Icons.arrow_downward,
+                            label: 'Minimum irtifa',
+                            value: route.minElevation == null
+                                ? '—'
+                                : '${route.minElevation!.round()} m',
+                          ),
+                          _StatCard(
+                            icon: Icons.landscape,
+                            label: 'Ortalama yükseklik',
+                            value: avgElevation == null
+                                ? '—'
+                                : '${avgElevation.round()} m',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${route.pointCount} GPS noktası',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
                   ),
-                  Expanded(
-                    child: _HeroStat(
-                      label: 'Süre',
-                      value: route.duration == null ? '—' : _formatDuration(route.duration!),
-                      unit: '',
-                    ),
-                  ),
-                  Expanded(
-                    child: _HeroStat(
-                      label: 'Ort. hız',
-                      value: route.averageSpeedKmh?.toStringAsFixed(0) ?? '—',
-                      unit: 'km/s',
-                    ),
-                  ),
-                ],
-              ),
-              if (profile.length > 1) ...[
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Icon(Icons.show_chart, size: 18, color: theme.colorScheme.primary),
-                    const SizedBox(width: 6),
-                    Text('Yükseklik profili', style: theme.textTheme.titleMedium),
-                  ],
                 ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: SizedBox(height: 200, child: _ElevationChart(samples: profile)),
-                ),
-              ],
-              const SizedBox(height: 24),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 2.6,
-                children: [
-                  _StatCard(
-                    icon: Icons.trending_up,
-                    label: 'Tırmanış',
-                    value: '${route.elevationGainMeters.round()} m',
-                  ),
-                  _StatCard(
-                    icon: Icons.trending_down,
-                    label: 'İniş',
-                    value: '${route.elevationLossMeters.round()} m',
-                  ),
-                  _StatCard(
-                    icon: Icons.arrow_upward,
-                    label: 'Maksimum irtifa',
-                    value: route.maxElevation == null ? '—' : '${route.maxElevation!.round()} m',
-                  ),
-                  _StatCard(
-                    icon: Icons.arrow_downward,
-                    label: 'Minimum irtifa',
-                    value: route.minElevation == null ? '—' : '${route.minElevation!.round()} m',
-                  ),
-                  _StatCard(
-                    icon: Icons.landscape,
-                    label: 'Ortalama yükseklik',
-                    value: avgElevation == null ? '—' : '${avgElevation.round()} m',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${route.pointCount} GPS noktası',
-                style: theme.textTheme.bodySmall,
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -154,7 +187,11 @@ class AnalysisSheet extends StatelessWidget {
 }
 
 class _HeroStat extends StatelessWidget {
-  const _HeroStat({required this.label, required this.value, required this.unit});
+  const _HeroStat({
+    required this.label,
+    required this.value,
+    required this.unit,
+  });
 
   final String label;
   final String value;
@@ -193,7 +230,11 @@ class _HeroStat extends StatelessWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.icon, required this.label, required this.value});
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
   final IconData icon;
   final String label;
@@ -218,7 +259,12 @@ class _StatCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(label, style: theme.textTheme.bodySmall),
-                Text(value, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                Text(
+                  value,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
@@ -235,8 +281,12 @@ class _ElevationChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final minY = samples.map((s) => s.elevation).reduce((a, b) => a < b ? a : b);
-    final maxY = samples.map((s) => s.elevation).reduce((a, b) => a > b ? a : b);
+    final minY = samples
+        .map((s) => s.elevation)
+        .reduce((a, b) => a < b ? a : b);
+    final maxY = samples
+        .map((s) => s.elevation)
+        .reduce((a, b) => a > b ? a : b);
     final maxX = samples.last.distanceKm;
     final theme = Theme.of(context);
 
@@ -249,17 +299,32 @@ class _ElevationChart extends StatelessWidget {
         gridData: const FlGridData(drawVerticalLine: false),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
           leftTitles: AxisTitles(
-            sideTitles: SideTitles(showTitles: true, reservedSize: 44, getTitlesWidget: (v, meta) {
-              return Text('${v.round()}m', style: theme.textTheme.bodySmall);
-            }),
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 44,
+              getTitlesWidget: (v, meta) {
+                return Text('${v.round()}m', style: theme.textTheme.bodySmall);
+              },
+            ),
           ),
           bottomTitles: AxisTitles(
-            sideTitles: SideTitles(showTitles: true, reservedSize: 24, getTitlesWidget: (v, meta) {
-              return Text('${v.toStringAsFixed(0)}km', style: theme.textTheme.bodySmall);
-            }),
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 24,
+              getTitlesWidget: (v, meta) {
+                return Text(
+                  '${v.toStringAsFixed(0)}km',
+                  style: theme.textTheme.bodySmall,
+                );
+              },
+            ),
           ),
         ),
         lineTouchData: const LineTouchData(enabled: true),
@@ -270,7 +335,10 @@ class _ElevationChart extends StatelessWidget {
             barWidth: 2,
             color: theme.colorScheme.primary,
             dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(show: true, color: theme.colorScheme.primary.withValues(alpha: 0.15)),
+            belowBarData: BarAreaData(
+              show: true,
+              color: theme.colorScheme.primary.withValues(alpha: 0.15),
+            ),
           ),
         ],
       ),
