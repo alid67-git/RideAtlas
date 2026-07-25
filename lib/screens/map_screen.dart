@@ -171,8 +171,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       ),
       children: [
         TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+          subdomains: const ['a', 'b', 'c', 'd'],
           userAgentPackageName: 'com.rideatlas.app',
+          maxNativeZoom: 20,
         ),
         PolylineLayer(
           polylines: [
@@ -206,7 +208,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           ],
         ),
         const RichAttributionWidget(
-          attributions: [TextSourceAttribution('OpenStreetMap katkıda bulunanlar')],
+          attributions: [
+            TextSourceAttribution('OpenStreetMap katkıda bulunanlar'),
+            TextSourceAttribution('CARTO'),
+          ],
         ),
       ],
     );

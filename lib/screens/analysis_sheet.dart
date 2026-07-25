@@ -21,11 +21,12 @@ class AnalysisSheet extends StatelessWidget {
     final avgElevation = profile.isEmpty
         ? null
         : profile.map((s) => s.elevation).reduce((a, b) => a + b) / profile.length;
+    final theme = Theme.of(context);
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.6,
-      minChildSize: 0.35,
-      maxChildSize: 0.92,
+      initialChildSize: 0.8,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
         return SingleChildScrollView(
@@ -40,18 +41,63 @@ class AnalysisSheet extends StatelessWidget {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.outlineVariant,
+                    color: theme.colorScheme.outlineVariant,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
-              Text(route.name, style: Theme.of(context).textTheme.headlineSmall),
+              Text(route.name, style: theme.textTheme.headlineSmall),
               const SizedBox(height: 4),
               Text(
                 DateFormat('d MMMM yyyy, HH:mm').format(route.importedAt),
-                style: Theme.of(context).textTheme.bodySmall,
+                style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _HeroStat(
+                      label: 'Mesafe',
+                      value: route.distanceKm.toStringAsFixed(1),
+                      unit: 'km',
+                    ),
+                  ),
+                  Expanded(
+                    child: _HeroStat(
+                      label: 'Süre',
+                      value: route.duration == null ? '—' : _formatDuration(route.duration!),
+                      unit: '',
+                    ),
+                  ),
+                  Expanded(
+                    child: _HeroStat(
+                      label: 'Ort. hız',
+                      value: route.averageSpeedKmh?.toStringAsFixed(0) ?? '—',
+                      unit: 'km/s',
+                    ),
+                  ),
+                ],
+              ),
+              if (profile.length > 1) ...[
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Icon(Icons.show_chart, size: 18, color: theme.colorScheme.primary),
+                    const SizedBox(width: 6),
+                    Text('Yükseklik profili', style: theme.textTheme.titleMedium),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: SizedBox(height: 200, child: _ElevationChart(samples: profile)),
+                ),
+              ],
+              const SizedBox(height: 24),
               GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,
@@ -60,19 +106,6 @@ class AnalysisSheet extends StatelessWidget {
                 crossAxisSpacing: 12,
                 childAspectRatio: 2.6,
                 children: [
-                  _StatCard(icon: Icons.straighten, label: 'Mesafe', value: '${route.distanceKm.toStringAsFixed(2)} km'),
-                  _StatCard(
-                    icon: Icons.schedule,
-                    label: 'Süre',
-                    value: route.duration == null ? '—' : _formatDuration(route.duration!),
-                  ),
-                  _StatCard(
-                    icon: Icons.speed,
-                    label: 'Ortalama hız',
-                    value: route.averageSpeedKmh == null
-                        ? '—'
-                        : '${route.averageSpeedKmh!.toStringAsFixed(1)} km/s',
-                  ),
                   _StatCard(
                     icon: Icons.trending_up,
                     label: 'Tırmanış',
@@ -90,21 +123,18 @@ class AnalysisSheet extends StatelessWidget {
                         ? '—'
                         : '${route.minElevation!.round()} / ${route.maxElevation!.round()} m',
                   ),
+                  _StatCard(
+                    icon: Icons.landscape,
+                    label: 'Ortalama yükseklik',
+                    value: avgElevation == null ? '—' : '${avgElevation.round()} m',
+                  ),
                 ],
               ),
-              if (avgElevation != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Ortalama yükseklik: ${avgElevation.round()} m  •  ${route.pointCount} nokta',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-              if (profile.length > 1) ...[
-                const SizedBox(height: 24),
-                Text('Yükseklik profili', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                SizedBox(height: 200, child: _ElevationChart(samples: profile)),
-              ],
+              const SizedBox(height: 8),
+              Text(
+                '${route.pointCount} GPS noktası',
+                style: theme.textTheme.bodySmall,
+              ),
             ],
           ),
         );
@@ -117,6 +147,45 @@ class AnalysisSheet extends StatelessWidget {
     final m = d.inMinutes % 60;
     if (h > 0) return '$h sa $m dk';
     return '$m dk';
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({required this.label, required this.value, required this.unit});
+
+  final String label;
+  final String value;
+  final String unit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: theme.textTheme.bodySmall),
+        const SizedBox(height: 2),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.end,
+          children: [
+            Text(
+              value,
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            if (unit.isNotEmpty) ...[
+              const SizedBox(width: 4),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(unit, style: theme.textTheme.bodyMedium),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
   }
 }
 
