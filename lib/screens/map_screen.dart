@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -310,10 +311,65 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
 /// Centered "switch route" window opened from the map screen's list button.
 /// The current map stays underneath; picking another route swaps to it,
 /// while dismissing (X, tap outside, or Esc) returns to the same map.
-class _RouteSwitcherDialog extends StatelessWidget {
+class _RouteSwitcherDialog extends StatefulWidget {
   const _RouteSwitcherDialog({required this.currentRouteId});
 
   final String currentRouteId;
+
+  @override
+  State<_RouteSwitcherDialog> createState() => _RouteSwitcherDialogState();
+}
+
+class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
+  bool _importing = false;
+
+  Future<void> _importGpx() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['gpx'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    if (!mounted) return;
+
+    final file = result.files.single;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Dosya okunamadı.')));
+      return;
+    }
+
+    setState(() => _importing = true);
+    try {
+      final repo = context.read<RouteRepository>();
+      final route = await repo.importFromBytes(
+        bytes: bytes,
+        suggestedFileName: file.name,
+      );
+      if (!mounted) return;
+      final navigator = Navigator.of(context);
+      navigator.pop();
+      navigator.pushReplacement(
+        MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)),
+      );
+    } on FormatException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('GPX içe aktarılamadı: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -339,6 +395,17 @@ class _RouteSwitcherDialog extends StatelessWidget {
                     ),
                   ),
                   IconButton(
+                    icon: _importing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add),
+                    tooltip: 'GPX İçe Aktar',
+                    onPressed: _importing ? null : _importGpx,
+                  ),
+                  IconButton(
                     icon: const Icon(Icons.close),
                     tooltip: 'Kapat',
                     onPressed: () => Navigator.pop(context),
@@ -351,7 +418,7 @@ class _RouteSwitcherDialog extends StatelessWidget {
                   itemCount: routes.length,
                   itemBuilder: (context, i) {
                     final r = routes[i];
-                    final selected = r.id == currentRouteId;
+                    final selected = r.id == widget.currentRouteId;
                     return ListTile(
                       leading: Icon(
                         Icons.route,
