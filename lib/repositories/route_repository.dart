@@ -1,25 +1,28 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/gpx_route.dart';
 import '../services/gpx_parser.dart';
 
-const _indexPrefsKey = 'rideatlas_routes_index_v1';
+const _boxName = 'rideatlas_routes';
+const _indexKey = 'index';
 const _uuid = Uuid();
 
-String _contentKey(String id) => 'rideatlas_route_content_$id';
+String _contentKey(String id) => 'content_$id';
 
 /// Owns the set of imported GPX routes: persists their raw GPX text and
-/// cached summary stats in [SharedPreferences] so the list screen can render
-/// instantly without re-parsing GPX on every launch. Using SharedPreferences
-/// (instead of a real file on disk) keeps this working uniformly across
-/// mobile, web and desktop - the browser has no real filesystem to write to.
+/// cached summary stats in a [Hive] box so the list screen can render
+/// instantly without re-parsing GPX on every launch. Hive is backed by
+/// IndexedDB on web (a much larger quota than SharedPreferences/localStorage)
+/// and by a local file on mobile/desktop, so imports work uniformly across
+/// platforms regardless of GPX file size.
 class RouteRepository extends ChangeNotifier {
   final List<GpxRoute> _routes = [];
   bool _loading = true;
+  Box<String>? _box;
 
   List<GpxRoute> get routes => List.unmodifiable(
     _routes.toList()..sort((a, b) => b.importedAt.compareTo(a.importedAt)),
@@ -27,17 +30,20 @@ class RouteRepository extends ChangeNotifier {
 
   bool get isLoading => _loading;
 
+  Future<Box<String>> _openBox() async {
+    return _box ??= await Hive.openBox<String>(_boxName);
+  }
+
   Future<void> load() async {
     _loading = true;
     notifyListeners();
 
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_indexPrefsKey) ?? const [];
+    final box = await _openBox();
+    final raw = box.get(_indexKey);
+    final list = raw == null ? const [] : jsonDecode(raw) as List<dynamic>;
     _routes
       ..clear()
-      ..addAll(
-        raw.map((s) => GpxRoute.fromJson(jsonDecode(s) as Map<String, dynamic>)),
-      );
+      ..addAll(list.map((e) => GpxRoute.fromJson(e as Map<String, dynamic>)));
 
     _loading = false;
     notifyListeners();
@@ -66,11 +72,11 @@ class RouteRepository extends ChangeNotifier {
       parsed: parsed,
     );
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_contentKey(id), xml);
+    final box = await _openBox();
+    await box.put(_contentKey(id), xml);
 
     _routes.add(route);
-    await _persistIndex(prefs);
+    await _persistIndex(box);
     notifyListeners();
     return route;
   }
@@ -87,27 +93,23 @@ class RouteRepository extends ChangeNotifier {
     final index = _routes.indexWhere((r) => r.id == id);
     if (index == -1) return;
     _routes.removeAt(index);
-    await _persistIndex();
+    final box = await _openBox();
+    await box.delete(_contentKey(id));
+    await _persistIndex(box);
     notifyListeners();
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_contentKey(id));
   }
 
   Future<String> readGpxContent(GpxRoute route) async {
-    final prefs = await SharedPreferences.getInstance();
-    final content = prefs.getString(_contentKey(route.id));
+    final box = await _openBox();
+    final content = box.get(_contentKey(route.id));
     if (content == null) {
       throw StateError('Rota içeriği bulunamadı: ${route.name}');
     }
     return content;
   }
 
-  Future<void> _persistIndex([SharedPreferences? sharedPrefs]) async {
-    final prefs = sharedPrefs ?? await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      _indexPrefsKey,
-      _routes.map((r) => jsonEncode(r.toJson())).toList(),
-    );
+  Future<void> _persistIndex([Box<String>? openBox]) async {
+    final box = openBox ?? await _openBox();
+    await box.put(_indexKey, jsonEncode(_routes.map((r) => r.toJson()).toList()));
   }
 }
