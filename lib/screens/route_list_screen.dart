@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
 
 import '../build_info.dart';
@@ -7,6 +8,9 @@ import '../models/gpx_route.dart';
 import '../repositories/route_repository.dart';
 import '../widgets/route_card.dart';
 import 'map_screen.dart';
+
+const _metaBoxName = 'rideatlas_meta';
+const _lastSeenBuildKey = 'last_seen_build';
 
 class RouteListScreen extends StatefulWidget {
   const RouteListScreen({super.key});
@@ -17,6 +21,31 @@ class RouteListScreen extends StatefulWidget {
 
 class _RouteListScreenState extends State<RouteListScreen> {
   bool _importing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowWhatsNew());
+  }
+
+  Future<void> _maybeShowWhatsNew() async {
+    final box = await Hive.openBox<String>(_metaBoxName);
+    if (box.get(_lastSeenBuildKey) == kAppBuildLabel) return;
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Çalışan sürüm: $kAppBuildLabel'),
+        content: Text(kAppBuildNote),
+        actions: [
+          FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Kapat')),
+        ],
+      ),
+    );
+    await box.put(_lastSeenBuildKey, kAppBuildLabel);
+  }
 
   Future<void> _importGpx() async {
     final result = await FilePicker.pickFiles(
@@ -103,21 +132,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('RideAtlas'),
-            Text(
-              kAppBuildLabel,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
+      appBar: AppBar(title: const Text('RideAtlas')),
       body: Consumer<RouteRepository>(
         builder: (context, repo, _) {
           if (repo.isLoading) {
