@@ -27,7 +27,7 @@ class AnalysisSheet extends StatelessWidget {
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 640),
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 720),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 12, 20),
           child: Column(
@@ -115,7 +115,7 @@ class AnalysisSheet extends StatelessWidget {
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: SizedBox(
-                            height: 200,
+                            height: 180,
                             child: _ElevationChart(samples: profile),
                           ),
                         ),

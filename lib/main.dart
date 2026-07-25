@@ -38,7 +38,11 @@ class RideAtlasApp extends StatelessWidget {
           return Stack(
             children: [
               ?child,
-              const Positioned(left: 8, bottom: 8, child: IgnorePointer(child: _BuildBadge())),
+              const Positioned(
+                left: 8,
+                bottom: 8,
+                child: IgnorePointer(child: _BuildBadge()),
+              ),
             ],
           );
         },
@@ -58,10 +62,20 @@ class _BuildBadge extends StatelessWidget {
       color: Colors.black.withValues(alpha: 0.55),
       borderRadius: BorderRadius.circular(6),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        child: Text(
-          kAppBuildLabel,
-          style: const TextStyle(color: Colors.white, fontSize: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              kAppBuildLabel,
+              style: TextStyle(color: Colors.white, fontSize: 11),
+            ),
+            Text(
+              'Geliştiren: Ali Dinçer',
+              style: TextStyle(color: Colors.white70, fontSize: 9),
+            ),
+          ],
         ),
       ),
     );

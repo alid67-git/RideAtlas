@@ -164,15 +164,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                       onPressed: () => _fitToRoute(route),
                       child: const Icon(Icons.my_location),
                     ),
-                    const SizedBox(height: 12),
-                    FloatingActionButton.extended(
-                      heroTag: 'analysis',
-                      onPressed: _points == null
-                          ? null
-                          : () => _openAnalysis(route),
-                      icon: const Icon(Icons.insights),
-                      label: const Text('Analiz'),
-                    ),
                   ],
                 ),
               ),
@@ -200,17 +191,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
 
     return FlutterMap(
       mapController: _mapController,
-      options: MapOptions(
-        initialCenter: start,
-        initialZoom: 12,
-        initialCameraFit: CameraFit.bounds(
-          bounds: LatLngBounds(
-            LatLng(route.south, route.west),
-            LatLng(route.north, route.east),
-          ),
-          padding: const EdgeInsets.all(48),
-        ),
-      ),
+      options: MapOptions(initialCenter: start, initialZoom: 12),
       children: [
         TileLayer(
           urlTemplate:
@@ -311,6 +292,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
             ),
             const SizedBox(width: 8),
             _RoundIconButton(
+              icon: Icons.insights,
+              onPressed: _points == null ? null : () => _openAnalysis(route),
+            ),
+            const SizedBox(width: 8),
+            _RoundIconButton(
               icon: Icons.ios_share,
               onPressed: () => _share(route),
             ),
@@ -380,6 +366,21 @@ class _RouteSwitcherDialog extends StatelessWidget {
                       ),
                       subtitle: Text('${r.distanceKm.toStringAsFixed(1)} km'),
                       selected: selected,
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'rename') _renameRoute(context, r);
+                          if (value == 'delete') {
+                            _deleteRoute(context, r, selected);
+                          }
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(
+                            value: 'rename',
+                            child: Text('Yeniden adlandır'),
+                          ),
+                          PopupMenuItem(value: 'delete', child: Text('Sil')),
+                        ],
+                      ),
                       onTap: () {
                         Navigator.pop(context);
                         if (!selected) {
@@ -402,11 +403,68 @@ class _RouteSwitcherDialog extends StatelessWidget {
   }
 }
 
+Future<void> _renameRoute(BuildContext context, GpxRoute route) async {
+  final controller = TextEditingController(text: route.name);
+  final newName = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Rotayı yeniden adlandır'),
+      content: TextField(controller: controller, autofocus: true),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, controller.text.trim()),
+          child: const Text('Kaydet'),
+        ),
+      ],
+    ),
+  );
+  if (newName != null && newName.isNotEmpty && context.mounted) {
+    await context.read<RouteRepository>().rename(route.id, newName);
+  }
+}
+
+Future<void> _deleteRoute(
+  BuildContext context,
+  GpxRoute route,
+  bool isCurrentlyOpen,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Rotayı sil'),
+      content: Text('"${route.name}" silinsin mi? Bu işlem geri alınamaz.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton.tonal(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Sil'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+
+  await context.read<RouteRepository>().delete(route.id);
+  if (!context.mounted) return;
+
+  if (isCurrentlyOpen) {
+    // The map this dialog was opened over no longer has a route to show.
+    Navigator.of(context).popUntil((r) => r.isFirst);
+  }
+}
+
 class _RoundIconButton extends StatelessWidget {
   const _RoundIconButton({required this.icon, required this.onPressed});
 
   final IconData icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
