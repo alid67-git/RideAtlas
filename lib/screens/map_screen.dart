@@ -118,7 +118,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           body: Stack(
             children: [
               Positioned.fill(child: _buildMap(route)),
-              _buildTopBar(context, route),
+              Positioned(top: 0, left: 0, right: 0, child: _buildTopBar(context, route)),
               Positioned(
                 right: 16,
                 bottom: 24,
