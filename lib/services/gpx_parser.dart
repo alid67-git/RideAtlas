@@ -173,8 +173,91 @@ List<ElevationSample> buildElevationProfile(List<TrackPoint> points) {
   return samples;
 }
 
+/// Instantaneous speeds between consecutive timed points.
+///
+/// Segments shorter than 1s, slower than 1 km/h (stopped / GPS jitter) or
+/// faster than 250 km/h (implausible GPS spikes) are ignored. [minKmh] /
+/// [maxKmh] / [averageMovingKmh] are therefore "while moving" figures;
+/// overall average (distance ÷ total duration) lives on [GpxRoute].
+SpeedStats buildSpeedStats(List<TrackPoint> points) {
+  const minDtSeconds = 1.0;
+  const minMovingKmh = 1.0;
+  const maxPlausibleKmh = 250.0;
+
+  double? minKmh;
+  double? maxKmh;
+  var sumKmh = 0.0;
+  var count = 0;
+
+  for (var i = 1; i < points.length; i++) {
+    final prev = points[i - 1];
+    final curr = points[i];
+    final t0 = prev.time;
+    final t1 = curr.time;
+    if (t0 == null || t1 == null) continue;
+
+    final dtSeconds = t1.difference(t0).inMilliseconds / 1000.0;
+    if (dtSeconds < minDtSeconds) continue;
+
+    final meters = _distance(prev.latLng, curr.latLng);
+    final kmh = (meters / 1000.0) / (dtSeconds / 3600.0);
+    if (kmh < minMovingKmh || kmh > maxPlausibleKmh) continue;
+
+    minKmh = minKmh == null ? kmh : (kmh < minKmh ? kmh : minKmh);
+    maxKmh = maxKmh == null ? kmh : (kmh > maxKmh ? kmh : maxKmh);
+    sumKmh += kmh;
+    count++;
+  }
+
+  return SpeedStats(
+    minKmh: minKmh,
+    maxKmh: maxKmh,
+    averageMovingKmh: count == 0 ? null : sumKmh / count,
+  );
+}
+
+/// First / last GPS timestamps on the track (if present).
+({DateTime? start, DateTime? end}) trackTimeRange(List<TrackPoint> points) {
+  DateTime? start;
+  DateTime? end;
+  for (final p in points) {
+    final t = p.time;
+    if (t == null) continue;
+    if (start == null || t.isBefore(start)) start = t;
+    if (end == null || t.isAfter(end)) end = t;
+  }
+  return (start: start, end: end);
+}
+
+/// Net elevation change from first to last point that has elevation data.
+double? netElevationChange(List<TrackPoint> points) {
+  double? first;
+  double? last;
+  for (final p in points) {
+    if (p.elevation == null) continue;
+    first ??= p.elevation;
+    last = p.elevation;
+  }
+  if (first == null || last == null) return null;
+  return last - first;
+}
+
 class ElevationSample {
   const ElevationSample({required this.distanceKm, required this.elevation});
   final double distanceKm;
   final double elevation;
+}
+
+class SpeedStats {
+  const SpeedStats({
+    required this.minKmh,
+    required this.maxKmh,
+    required this.averageMovingKmh,
+  });
+
+  final double? minKmh;
+  final double? maxKmh;
+
+  /// Mean of per-segment speeds while moving (see [buildSpeedStats]).
+  final double? averageMovingKmh;
 }
