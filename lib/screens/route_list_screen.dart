@@ -4,9 +4,11 @@ import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
 
 import '../build_info.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
 import '../repositories/route_repository.dart';
 import '../widgets/route_card.dart';
+import 'language_picker.dart';
 import 'map_screen.dart';
 
 const _metaBoxName = 'rideatlas_meta';
@@ -33,16 +35,17 @@ class _RouteListScreenState extends State<RouteListScreen> {
     if (box.get(_lastSeenBuildKey) == kAppBuildLabel) return;
     if (!mounted) return;
 
+    final l10n = AppLocalizations.of(context)!;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: Text('Çalışan sürüm: $kAppBuildLabel'),
+        title: Text(l10n.appRunningVersion(kAppBuildLabel)),
         content: Text(kAppBuildNote),
         actions: [
           FilledButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Kapat'),
+            child: Text(l10n.close),
           ),
         ],
       ),
@@ -62,7 +65,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
     final file = result.files.single;
     final bytes = file.bytes;
     if (bytes == null) {
-      _showError('Dosya okunamadı.');
+      _showError(AppLocalizations.of(context)!.fileNotReadable);
       return;
     }
 
@@ -77,10 +80,12 @@ class _RouteListScreenState extends State<RouteListScreen> {
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)),
       );
-    } on FormatException catch (e) {
-      _showError(e.message);
+    } on FormatException catch (_) {
+      if (mounted) _showError(AppLocalizations.of(context)!.trackHasNoPoints);
     } catch (e) {
-      _showError('Dosya içe aktarılamadı: $e');
+      if (mounted) {
+        _showError(AppLocalizations.of(context)!.importFailedGeneric('$e'));
+      }
     } finally {
       if (mounted) setState(() => _importing = false);
     }
@@ -94,20 +99,21 @@ class _RouteListScreenState extends State<RouteListScreen> {
   }
 
   Future<void> _rename(GpxRoute route) async {
+    final l10n = AppLocalizations.of(context)!;
     final controller = TextEditingController(text: route.name);
     final newName = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Rotayı yeniden adlandır'),
+        title: Text(l10n.renameRouteTitle),
         content: TextField(controller: controller, autofocus: true),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Vazgeç'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Kaydet'),
+            child: Text(l10n.save),
           ),
         ],
       ),
@@ -118,19 +124,20 @@ class _RouteListScreenState extends State<RouteListScreen> {
   }
 
   Future<void> _delete(GpxRoute route) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Rotayı sil'),
-        content: Text('"${route.name}" silinsin mi? Bu işlem geri alınamaz.'),
+        title: Text(l10n.deleteRouteTitle),
+        content: Text(l10n.deleteRouteConfirm(route.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
+            child: Text(l10n.cancel),
           ),
           FilledButton.tonal(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sil'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -142,8 +149,12 @@ class _RouteListScreenState extends State<RouteListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('RideAtlas')),
+      appBar: AppBar(
+        title: const Text('RideAtlas'),
+        actions: const [LanguagePickerButton()],
+      ),
       body: Consumer<RouteRepository>(
         builder: (context, repo, _) {
           if (repo.isLoading) {
@@ -184,7 +195,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
                 ),
               )
             : const Icon(Icons.add),
-        label: const Text('GPX/KML/KMZ İçe Aktar'),
+        label: Text(l10n.importTrackButton),
       ),
     );
   }
@@ -198,6 +209,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -211,13 +223,13 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Henüz rota yok',
+              l10n.emptyRoutesTitle,
               style: theme.textTheme.titleLarge,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'Bir .gpx, .kml veya .kmz dosyası içe aktararak rotanızı haritada görüntüleyin ve detaylı analiz edin.',
+              l10n.emptyRoutesMessage,
               style: theme.textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
@@ -225,7 +237,7 @@ class _EmptyState extends StatelessWidget {
             FilledButton.icon(
               onPressed: onImport,
               icon: const Icon(Icons.add),
-              label: const Text('GPX/KML/KMZ İçe Aktar'),
+              label: Text(l10n.importTrackButton),
             ),
           ],
         ),

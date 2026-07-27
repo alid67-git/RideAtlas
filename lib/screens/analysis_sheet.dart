@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
 import '../models/track_point.dart';
 import '../services/daily_analysis.dart';
@@ -60,10 +61,11 @@ class _AnalysisSheetState extends State<AnalysisSheet>
   Future<void> _ensureGeography() async {
     if (_geoStarted || _geography != null) return;
     _geoStarted = true;
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _geoLoading = true;
       _geoError = null;
-      _status = 'Güzergâh analiz ediliyor…';
+      _status = l10n.statusAnalyzingRoute;
       _progress = 0;
     });
     try {
@@ -88,7 +90,7 @@ class _AnalysisSheetState extends State<AnalysisSheet>
       if (!mounted) return;
       setState(() {
         _geoLoading = false;
-        _geoError = 'Güzergâh analizi başarısız: $e';
+        _geoError = l10n.geographyFailed('$e');
         _status = '';
         _progress = null;
       });
@@ -98,10 +100,11 @@ class _AnalysisSheetState extends State<AnalysisSheet>
   Future<void> _ensureWeather() async {
     if (_weatherStarted || _weather != null) return;
     _weatherStarted = true;
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _weatherLoading = true;
       _weatherError = null;
-      _status = 'Hava durumu yükleniyor…';
+      _status = l10n.statusLoadingWeather;
       _progress = 0;
     });
     try {
@@ -126,7 +129,7 @@ class _AnalysisSheetState extends State<AnalysisSheet>
       if (!mounted) return;
       setState(() {
         _weatherLoading = false;
-        _weatherError = 'Hava durumu alınamadı: $e';
+        _weatherError = l10n.weatherFailed('$e');
         _status = '';
         _progress = null;
       });
@@ -136,7 +139,9 @@ class _AnalysisSheetState extends State<AnalysisSheet>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final route = widget.route;
+    final localeName = Localizations.localeOf(context).languageCode;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
@@ -159,13 +164,16 @@ class _AnalysisSheetState extends State<AnalysisSheet>
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    tooltip: 'Kapat',
+                    tooltip: l10n.close,
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
               Text(
-                DateFormat('d MMMM yyyy, HH:mm').format(route.importedAt),
+                DateFormat(
+                  'd MMMM yyyy, HH:mm',
+                  localeName,
+                ).format(route.importedAt),
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
@@ -173,13 +181,13 @@ class _AnalysisSheetState extends State<AnalysisSheet>
                 controller: _tabs,
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
-                tabs: const [
-                  Tab(text: 'Özet'),
-                  Tab(text: 'Yükseklik'),
-                  Tab(text: 'Güzergâh'),
-                  Tab(text: 'Molalar'),
-                  Tab(text: 'Hava'),
-                  Tab(text: 'Günlük'),
+                tabs: [
+                  Tab(text: l10n.tabOverview),
+                  Tab(text: l10n.tabElevation),
+                  Tab(text: l10n.tabRoute),
+                  Tab(text: l10n.tabStops),
+                  Tab(text: l10n.tabWeather),
+                  Tab(text: l10n.tabDaily),
                 ],
               ),
               if (_status.isNotEmpty) ...[
@@ -255,9 +263,13 @@ class _OverviewTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final speed = buildSpeedStats(points);
     final times = trackTimeRange(points);
-    final timeFmt = DateFormat('d MMM yyyy, HH:mm');
+    final timeFmt = DateFormat(
+      'd MMM yyyy, HH:mm',
+      Localizations.localeOf(context).languageCode,
+    );
 
     return ListView(
       padding: const EdgeInsets.only(right: 8, top: 8),
@@ -266,23 +278,23 @@ class _OverviewTab extends StatelessWidget {
           children: [
             Expanded(
               child: AnalysisHeroStat(
-                label: 'Mesafe',
+                label: l10n.distance,
                 value: route.distanceKm.toStringAsFixed(1),
                 unit: 'km',
               ),
             ),
             Expanded(
               child: AnalysisHeroStat(
-                label: 'Süre',
+                label: l10n.duration,
                 value: route.duration == null
                     ? '—'
-                    : formatAnalysisDuration(route.duration!),
+                    : formatAnalysisDuration(l10n, route.duration!),
                 unit: '',
               ),
             ),
             Expanded(
               child: AnalysisHeroStat(
-                label: 'Maks. hız',
+                label: l10n.maxSpeed,
                 value: speed.maxKmh?.toStringAsFixed(1) ?? '—',
                 unit: 'km/s',
               ),
@@ -290,28 +302,28 @@ class _OverviewTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 20),
-        const AnalysisSectionTitle(icon: Icons.schedule, title: 'Zaman'),
+        AnalysisSectionTitle(icon: Icons.schedule, title: l10n.timeSectionTitle),
         const SizedBox(height: 10),
         AnalysisStatGrid(
           children: [
             AnalysisStatCard(
               icon: Icons.play_arrow,
-              label: 'Başlangıç',
+              label: l10n.start,
               value: times.start == null ? '—' : timeFmt.format(times.start!),
             ),
             AnalysisStatCard(
               icon: Icons.stop,
-              label: 'Bitiş',
+              label: l10n.end,
               value: times.end == null ? '—' : timeFmt.format(times.end!),
             ),
             AnalysisStatCard(
               icon: Icons.gps_fixed,
-              label: 'GPS noktası',
+              label: l10n.gpsPoints,
               value: '${route.pointCount}',
             ),
             AnalysisStatCard(
               icon: Icons.trending_up,
-              label: 'Tırmanış',
+              label: l10n.climb,
               value: '${route.elevationGainMeters.round()} m',
             ),
           ],
@@ -329,6 +341,7 @@ class _ElevationTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final profile = buildElevationProfile(points);
     final netEle = netElevationChange(points);
     final avgElevation = profile.isEmpty
@@ -354,42 +367,45 @@ class _ElevationTab extends StatelessWidget {
           ),
           const SizedBox(height: 20),
         ],
-        const AnalysisSectionTitle(icon: Icons.terrain, title: 'İstatistikler'),
+        AnalysisSectionTitle(
+          icon: Icons.terrain,
+          title: l10n.statisticsTitle,
+        ),
         const SizedBox(height: 10),
         AnalysisStatGrid(
           children: [
             AnalysisStatCard(
               icon: Icons.trending_up,
-              label: 'Tırmanış',
+              label: l10n.climb,
               value: '${route.elevationGainMeters.round()} m',
             ),
             AnalysisStatCard(
               icon: Icons.trending_down,
-              label: 'İniş',
+              label: l10n.descent,
               value: '${route.elevationLossMeters.round()} m',
             ),
             AnalysisStatCard(
               icon: Icons.arrow_upward,
-              label: 'Maksimum irtifa',
+              label: l10n.maxAltitude,
               value: route.maxElevation == null
                   ? '—'
                   : '${route.maxElevation!.round()} m',
             ),
             AnalysisStatCard(
               icon: Icons.arrow_downward,
-              label: 'Minimum irtifa',
+              label: l10n.minAltitude,
               value: route.minElevation == null
                   ? '—'
                   : '${route.minElevation!.round()} m',
             ),
             AnalysisStatCard(
               icon: Icons.landscape,
-              label: 'Ortalama yükseklik',
+              label: l10n.avgAltitude,
               value: avgElevation == null ? '—' : '${avgElevation.round()} m',
             ),
             AnalysisStatCard(
               icon: Icons.swap_vert,
-              label: 'Net değişim',
+              label: l10n.netChange,
               value: netEle == null
                   ? '—'
                   : '${netEle >= 0 ? '+' : ''}${netEle.round()} m',
@@ -416,6 +432,7 @@ class _CountriesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (loading && geography == null) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -424,13 +441,12 @@ class _CountriesTab extends StatelessWidget {
     }
     final geo = geography;
     if (geo == null) {
-      return const Center(child: Text('Güzergâh sekmesine geçince yüklenir.'));
+      return Center(child: Text(l10n.loadsOnRouteTab));
     }
     if (geo.legs.isEmpty) {
-      return const _EmptyPane(
+      return _EmptyPane(
         icon: Icons.public_off,
-        message:
-            'Ülke bilgisi çıkarılamadı. İnternet gerekir; konum servisi yanıt vermemiş olabilir.',
+        message: l10n.countryDataUnavailable,
       );
     }
 
@@ -439,7 +455,7 @@ class _CountriesTab extends StatelessWidget {
       padding: const EdgeInsets.only(right: 8, top: 8),
       children: [
         Text(
-          '${geo.uniqueCountries.length} ülke · geçiş sırası',
+          l10n.countriesCountLabel(geo.uniqueCountries.length),
           style: theme.textTheme.titleSmall,
         ),
         const SizedBox(height: 8),
@@ -473,6 +489,7 @@ class _CountryLegTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final cities = leg.cities.isEmpty ? null : leg.cities.join(', ');
     return Container(
       padding: const EdgeInsets.all(12),
@@ -505,7 +522,7 @@ class _CountryLegTile extends StatelessWidget {
                   [
                     '${leg.distanceKm.toStringAsFixed(0)} km',
                     if (leg.duration != null)
-                      formatAnalysisDuration(leg.duration!),
+                      formatAnalysisDuration(l10n, leg.duration!),
                   ].join(' · '),
                   style: theme.textTheme.bodySmall,
                 ),
@@ -542,6 +559,7 @@ class _StopsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (loading && geography == null) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -550,23 +568,25 @@ class _StopsTab extends StatelessWidget {
     }
     final geo = geography;
     if (geo == null) {
-      return const Center(child: Text('Molalar sekmesine geçince yüklenir.'));
+      return Center(child: Text(l10n.loadsOnStopsTab));
     }
     if (geo.stops.isEmpty) {
-      return const _EmptyPane(
+      return _EmptyPane(
         icon: Icons.hotel_outlined,
-        message:
-            '20 dk+ mola tespit edilmedi. GPX’te zaman damgası yoksa veya sürekli hareket varsa liste boş kalır.',
+        message: l10n.noStopsDetected,
       );
     }
 
     final theme = Theme.of(context);
-    final fmt = DateFormat('d MMM HH:mm');
+    final fmt = DateFormat(
+      'd MMM HH:mm',
+      Localizations.localeOf(context).languageCode,
+    );
     return ListView(
       padding: const EdgeInsets.only(right: 8, top: 8),
       children: [
         Text(
-          '${geo.stops.length} mola (≥ 20 dk)',
+          l10n.stopsCountLabel(geo.stops.length),
           style: theme.textTheme.titleSmall,
         ),
         const SizedBox(height: 12),
@@ -591,7 +611,7 @@ class _StopsTab extends StatelessWidget {
                               if (stop.city != null) stop.city!,
                               if (stop.country != null) stop.country!,
                             ].isEmpty
-                            ? 'Bilinmeyen konum'
+                            ? l10n.unknownLocation
                             : [
                                 if (stop.city != null) stop.city!,
                                 if (stop.country != null) stop.country!,
@@ -602,7 +622,7 @@ class _StopsTab extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        formatAnalysisDuration(stop.duration),
+                        formatAnalysisDuration(l10n, stop.duration),
                         style: theme.textTheme.bodySmall,
                       ),
                       if (stop.start != null || stop.end != null)
@@ -645,11 +665,11 @@ class _WeatherTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (!hasTimestamps) {
-      return const _EmptyPane(
+      return _EmptyPane(
         icon: Icons.event_busy,
-        message:
-            'Bu rotada GPS zaman damgası yok; günlük hava durumu hesaplanamaz.',
+        message: l10n.noTimestampsWeather,
       );
     }
     if (loading && weather == null) {
@@ -660,22 +680,25 @@ class _WeatherTab extends StatelessWidget {
     }
     final days = weather;
     if (days == null) {
-      return const Center(child: Text('Hava sekmesine geçince yüklenir.'));
+      return Center(child: Text(l10n.loadsOnWeatherTab));
     }
     if (days.isEmpty) {
       return _EmptyPane(
         icon: Icons.cloud_off,
-        message: 'Hava verisi alınamadı. İnternet bağlantını kontrol et.',
+        message: l10n.weatherDataUnavailable,
         onRetry: onRetry,
       );
     }
 
     final theme = Theme.of(context);
-    final fmt = DateFormat('EEEE, d MMM yyyy', 'tr');
+    final fmt = DateFormat(
+      'EEEE, d MMM yyyy',
+      Localizations.localeOf(context).languageCode,
+    );
     return ListView(
       padding: const EdgeInsets.only(right: 8, top: 8),
       children: [
-        Text('${days.length} gün', style: theme.textTheme.titleSmall),
+        Text(l10n.daysCountLabel(days.length), style: theme.textTheme.titleSmall),
         const SizedBox(height: 12),
         for (final day in days) ...[
           Container(
@@ -698,13 +721,18 @@ class _WeatherTab extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Text(day.label, style: theme.textTheme.bodySmall),
+                      Text(
+                        weatherLabelFor(l10n, day.weatherCode),
+                        style: theme.textTheme.bodySmall,
+                      ),
                       Text(
                         [
                           if (day.tempMinC != null && day.tempMaxC != null)
                             '${day.tempMinC!.round()}° / ${day.tempMaxC!.round()}°C',
                           if (day.precipitationMm != null)
-                            'yağış ${day.precipitationMm!.toStringAsFixed(1)} mm',
+                            l10n.precipitationLabel(
+                              day.precipitationMm!.toStringAsFixed(1),
+                            ),
                         ].join(' · '),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
@@ -723,6 +751,24 @@ class _WeatherTab extends StatelessWidget {
   }
 }
 
+/// Maps an Open-Meteo weather code to a localized label (mirrors
+/// [weatherCodeLabelTr] in weather_service.dart, which stays Turkish-only
+/// since it has no BuildContext).
+String weatherLabelFor(AppLocalizations l10n, int code) {
+  if (code == 0) return l10n.weatherClear;
+  if (code == 1) return l10n.weatherMostlyClear;
+  if (code == 2) return l10n.weatherPartlyCloudy;
+  if (code == 3) return l10n.weatherOvercast;
+  if (code == 45 || code == 48) return l10n.weatherFog;
+  if (code >= 51 && code <= 57) return l10n.weatherDrizzle;
+  if (code >= 61 && code <= 67) return l10n.weatherRain;
+  if (code >= 71 && code <= 77) return l10n.weatherSnow;
+  if (code >= 80 && code <= 82) return l10n.weatherShowers;
+  if (code >= 85 && code <= 86) return l10n.weatherSnowShowers;
+  if (code >= 95 && code <= 99) return l10n.weatherThunderstorm;
+  return l10n.weatherVariable;
+}
+
 class _DailyTab extends StatelessWidget {
   const _DailyTab({
     required this.points,
@@ -736,11 +782,12 @@ class _DailyTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final days = splitIntoDays(points, geography: geography);
     if (days.isEmpty) {
-      return const _EmptyPane(
+      return _EmptyPane(
         icon: Icons.calendar_month,
-        message: 'Bu rotada GPS zaman damgası yok; günlere ayrılamıyor.',
+        message: l10n.noTimestampsDaily,
       );
     }
 
@@ -748,7 +795,7 @@ class _DailyTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(right: 8, top: 8),
       children: [
-        Text('${days.length} gün', style: theme.textTheme.titleSmall),
+        Text(l10n.daysCountLabel(days.length), style: theme.textTheme.titleSmall),
         const SizedBox(height: 12),
         for (final day in days) ...[
           _DayCard(
@@ -777,7 +824,11 @@ class _DayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final fmt = DateFormat('d MMMM yyyy, EEEE', 'tr');
+    final l10n = AppLocalizations.of(context)!;
+    final fmt = DateFormat(
+      'd MMMM yyyy, EEEE',
+      Localizations.localeOf(context).languageCode,
+    );
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -801,7 +852,7 @@ class _DayCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Gün ${day.dayNumber} · ${fmt.format(day.date)}',
+                  '${l10n.dayLabel(day.dayNumber)} · ${fmt.format(day.date)}',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -816,33 +867,33 @@ class _DayCard extends StatelessWidget {
             children: [
               AnalysisStatCard(
                 icon: Icons.straighten,
-                label: 'Mesafe',
+                label: l10n.distance,
                 value: '${day.distanceKm.toStringAsFixed(0)} km',
               ),
               AnalysisStatCard(
                 icon: Icons.schedule,
-                label: 'Sürüş süresi',
+                label: l10n.ridingDuration,
                 value: day.ridingDuration == null
                     ? '—'
-                    : formatAnalysisDuration(day.ridingDuration!),
+                    : formatAnalysisDuration(l10n, day.ridingDuration!),
               ),
               AnalysisStatCard(
                 icon: Icons.hotel,
-                label: 'Mola',
+                label: l10n.rest,
                 value: day.restDuration == Duration.zero
                     ? '—'
-                    : formatAnalysisDuration(day.restDuration),
+                    : formatAnalysisDuration(l10n, day.restDuration),
               ),
               AnalysisStatCard(
                 icon: Icons.arrow_upward,
-                label: 'Maks. irtifa',
+                label: l10n.maxAltitude,
                 value: day.maxElevation == null
                     ? '—'
                     : '${day.maxElevation!.round()} m',
               ),
               AnalysisStatCard(
                 icon: Icons.trending_up,
-                label: 'Tırmanış',
+                label: l10n.climb,
                 value: '${day.elevationGainM.round()} m',
               ),
             ],
@@ -862,11 +913,11 @@ class _DayCard extends StatelessWidget {
             ),
           ] else if (geoLoading) ...[
             const SizedBox(height: 8),
-            Text('Ülkeler hesaplanıyor…', style: theme.textTheme.bodySmall),
+            Text(l10n.countriesCalculating, style: theme.textTheme.bodySmall),
           ] else if (!hasGeography) ...[
             const SizedBox(height: 8),
             Text(
-              'Ülkeler için Güzergâh sekmesine geçin.',
+              l10n.countriesNeedRouteTab,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -880,13 +931,13 @@ class _DayCard extends StatelessWidget {
 
 // ─── Shared UI ──────────────────────────────────────────────────────────────
 
-String formatAnalysisDuration(Duration d) {
+String formatAnalysisDuration(AppLocalizations l10n, Duration d) {
   final h = d.inHours;
   final m = d.inMinutes % 60;
   final s = d.inSeconds % 60;
-  if (h > 0) return '$h sa $m dk';
-  if (m > 0) return '$m dk $s sn';
-  return '$s sn';
+  if (h > 0) return l10n.durationHoursMinutes(h, m);
+  if (m > 0) return l10n.durationMinutesSeconds(m, s);
+  return l10n.durationSeconds(s);
 }
 
 class AnalysisSectionTitle extends StatelessWidget {
@@ -1108,6 +1159,7 @@ class _ErrorPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -1116,7 +1168,7 @@ class _ErrorPane extends StatelessWidget {
           children: [
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 12),
-            FilledButton(onPressed: onRetry, child: const Text('Tekrar dene')),
+            FilledButton(onPressed: onRetry, child: Text(l10n.retry)),
           ],
         ),
       ),
@@ -1134,6 +1186,7 @@ class _EmptyPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -1145,10 +1198,7 @@ class _EmptyPane extends StatelessWidget {
             Text(message, textAlign: TextAlign.center),
             if (onRetry != null) ...[
               const SizedBox(height: 12),
-              FilledButton(
-                onPressed: onRetry,
-                child: const Text('Tekrar dene'),
-              ),
+              FilledButton(onPressed: onRetry, child: Text(l10n.retry)),
             ],
           ],
         ),
