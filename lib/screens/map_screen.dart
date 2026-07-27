@@ -35,10 +35,30 @@ String _mapStyleLabel(AppLocalizations l10n, BaseMapStyle style) {
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
 
-/// A dwell stop long enough to be a hotel/camp overnight rather than a
-/// lunch/fuel/sightseeing break - shown in a different color/icon on the map.
-bool isOvernightStop(DetectedStop stop) =>
-    stop.duration >= const Duration(hours: 4);
+/// Where each calendar day's riding ends and the next begins - i.e. the
+/// overnight stay. A GPS dwell-radius heuristic can miss overnights (the
+/// arrival and departure points aren't always within the same few hundred
+/// meters - parking, a different hotel entrance, etc.), but the calendar-day
+/// boundary itself always exists once a route spans multiple days, so this
+/// is used instead of guessing from stop duration.
+typedef OvernightStay = ({LatLng location, Duration? duration});
+
+List<OvernightStay> overnightStays(List<DayStats> days) {
+  final out = <OvernightStay>[];
+  for (var i = 0; i < days.length - 1; i++) {
+    final end = days[i].points.last;
+    final start = days[i + 1].points.first;
+    final t0 = end.time;
+    final t1 = start.time;
+    out.add((
+      location: end.latLng,
+      duration: (t0 != null && t1 != null && t1.isAfter(t0))
+          ? t1.difference(t0)
+          : null,
+    ));
+  }
+  return out;
+}
 
 /// Shows a single imported GPX route on a map: the track as a red line,
 /// green/red start & end pins, any named waypoints, and quick access to the
@@ -285,14 +305,20 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         // Cheap, local-only clustering (no reverse geocoding) - just enough
         // to drop a pin at each dwell stop; the full geography analysis with
         // city/country still only runs lazily from the analysis sheet.
+        // Overnight stays are excluded here (day boundaries below cover them
+        // more reliably) so a long stop doesn't get double-marked.
         final stops = points == null
             ? const <DetectedStop>[]
-            : RouteGeographyAnalyzer().detectStops(points);
+            : RouteGeographyAnalyzer()
+                  .detectStops(points)
+                  .where((s) => s.duration < const Duration(hours: 4))
+                  .toList();
+        final overnights = overnightStays(days);
 
         return Scaffold(
           body: Stack(
             children: [
-              Positioned.fill(child: _buildMap(route, days, stops)),
+              Positioned.fill(child: _buildMap(route, days, stops, overnights)),
               Positioned(
                 top: 0,
                 left: 0,
@@ -377,6 +403,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     GpxRoute route,
     List<DayStats> days,
     List<DetectedStop> stops,
+    List<OvernightStay> overnights,
   ) {
     if (_error != null) {
       return Center(
@@ -444,7 +471,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                   child: const Icon(Icons.park, color: Colors.green, size: 28),
                 ),
               ),
-            if (_showStops)
+            if (_showStops) ...[
               for (final stop in stops)
                 Marker(
                   point: stop.location,
@@ -454,19 +481,35 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                     onTap: () => _zoomToStop(stop.location),
                     child: Tooltip(
                       message:
-                          '${isOvernightStop(stop) ? l10n.overnightLabel : l10n.rest} · ${formatAnalysisDuration(l10n, stop.duration)}',
-                      child: Icon(
-                        isOvernightStop(stop)
-                            ? Icons.hotel
-                            : Icons.pause_circle_filled,
-                        color: isOvernightStop(stop)
-                            ? const Color(0xFF5E35B1)
-                            : const Color(0xFFFF8F00),
+                          '${l10n.rest} · ${formatAnalysisDuration(l10n, stop.duration)}',
+                      child: const Icon(
+                        Icons.pause_circle_filled,
+                        color: Color(0xFFFF8F00),
                         size: 26,
                       ),
                     ),
                   ),
                 ),
+              for (final stay in overnights)
+                Marker(
+                  point: stay.location,
+                  width: 30,
+                  height: 30,
+                  child: GestureDetector(
+                    onTap: () => _zoomToStop(stay.location),
+                    child: Tooltip(
+                      message: stay.duration == null
+                          ? l10n.overnightLabel
+                          : '${l10n.overnightLabel} · ${formatAnalysisDuration(l10n, stay.duration!)}',
+                      child: const Icon(
+                        Icons.hotel,
+                        color: Color(0xFF5E35B1),
+                        size: 26,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
             Marker(
               point: start,
               width: 36,
