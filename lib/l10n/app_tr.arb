@@ -110,5 +110,6 @@
   "northUpTooltip": "Kuzeyi yukarı al",
   "showStopsTooltip": "Molaları ve gecelemeleri göster",
   "hideStopsTooltip": "Molaları ve gecelemeleri gizle",
-  "overnightLabel": "Geceleme"
+  "overnightLabel": "Geceleme",
+  "changelogTitle": "Sürüm geçmişi"
 }
