@@ -64,10 +64,16 @@ class RouteRepository extends ChangeNotifier {
     }
 
     final id = _uuid.v4();
+    // Prefer the file name the user actually gave it: many GPS tracker apps
+    // (Garmin, "GPX Tracker", etc.) embed a generic auto-generated name like
+    // "Track 219" inside the file's own metadata, which isn't what the user
+    // meant when they renamed the file to something meaningful before import.
     final baseName = stripTrackExtension(suggestedFileName);
-    final name = parsed.suggestedName?.isNotEmpty == true
-        ? parsed.suggestedName!
-        : baseName;
+    final name = baseName.isNotEmpty
+        ? baseName
+        : (parsed.suggestedName?.isNotEmpty == true
+              ? parsed.suggestedName!
+              : 'Adsız rota');
 
     final route = buildRouteMetadata(
       id: id,
