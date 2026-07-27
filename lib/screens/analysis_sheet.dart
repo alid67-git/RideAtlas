@@ -727,7 +727,7 @@ String formatAnalysisDuration(Duration d) {
 }
 
 class AnalysisSectionTitle extends StatelessWidget {
-  const AnalysisSectionTitle({required this.icon, required this.title});
+  const AnalysisSectionTitle({super.key, required this.icon, required this.title});
 
   final IconData icon;
   final String title;
@@ -747,6 +747,7 @@ class AnalysisSectionTitle extends StatelessWidget {
 
 class AnalysisHeroStat extends StatelessWidget {
   const AnalysisHeroStat({
+    super.key,
     required this.label,
     required this.value,
     required this.unit,
@@ -790,6 +791,7 @@ class AnalysisHeroStat extends StatelessWidget {
 
 class AnalysisStatCard extends StatelessWidget {
   const AnalysisStatCard({
+    super.key,
     required this.icon,
     required this.label,
     required this.value,
@@ -841,7 +843,7 @@ class AnalysisStatCard extends StatelessWidget {
 }
 
 class AnalysisStatGrid extends StatelessWidget {
-  const AnalysisStatGrid({required this.children});
+  const AnalysisStatGrid({super.key, required this.children});
 
   final List<Widget> children;
 
@@ -860,7 +862,7 @@ class AnalysisStatGrid extends StatelessWidget {
 }
 
 class AnalysisElevationChart extends StatelessWidget {
-  const AnalysisElevationChart({required this.samples});
+  const AnalysisElevationChart({super.key, required this.samples});
 
   final List<ElevationSample> samples;
 

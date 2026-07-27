@@ -223,7 +223,7 @@ class RouteGeographyAnalyzer {
       }
       legs.add(
         CountryLeg(
-          country: currentCountry!,
+          country: currentCountry,
           countryCode: currentCode,
           distanceKm: (endKm - legStartKm).clamp(0, double.infinity),
           duration: dur,
