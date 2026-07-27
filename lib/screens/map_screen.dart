@@ -16,6 +16,7 @@ import '../models/track_point.dart';
 import '../models/waypoint.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart';
+import '../services/route_geography.dart';
 import '../services/track_io.dart';
 import 'analysis_sheet.dart';
 import 'language_picker.dart';
@@ -84,6 +85,13 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   }
 
   void _resetNorth() => _mapController.rotate(0);
+
+  /// Centers on a detected stop, zooming in only if currently more zoomed
+  /// out than that - tapping again once already close just re-centers.
+  void _zoomToStop(LatLng point) {
+    final zoom = _mapController.camera.zoom;
+    _mapController.move(point, zoom < 15 ? 15 : zoom);
+  }
 
   Future<void> _loadMapStyle() async {
     final box = await Hive.openBox<String>(_metaBoxName);
@@ -249,11 +257,17 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
 
         final points = _points;
         final days = points == null ? const <DayStats>[] : splitIntoDays(points);
+        // Cheap, local-only clustering (no reverse geocoding) - just enough
+        // to drop a pin at each dwell stop; the full geography analysis with
+        // city/country still only runs lazily from the analysis sheet.
+        final stops = points == null
+            ? const <DetectedStop>[]
+            : RouteGeographyAnalyzer().detectStops(points);
 
         return Scaffold(
           body: Stack(
             children: [
-              Positioned.fill(child: _buildMap(route, days)),
+              Positioned.fill(child: _buildMap(route, days, stops)),
               Positioned(
                 top: 0,
                 left: 0,
@@ -318,7 +332,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
   }
 
-  Widget _buildMap(GpxRoute route, List<DayStats> days) {
+  Widget _buildMap(
+    GpxRoute route,
+    List<DayStats> days,
+    List<DetectedStop> stops,
+  ) {
     if (_error != null) {
       return Center(
         child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)),
@@ -357,6 +375,8 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
             ),
     ];
 
+    final l10n = AppLocalizations.of(context)!;
+
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(initialCenter: start, initialZoom: 12),
@@ -378,6 +398,24 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 child: Tooltip(
                   message: w.name ?? '',
                   child: const Icon(Icons.park, color: Colors.green, size: 28),
+                ),
+              ),
+            for (final stop in stops)
+              Marker(
+                point: stop.location,
+                width: 30,
+                height: 30,
+                child: GestureDetector(
+                  onTap: () => _zoomToStop(stop.location),
+                  child: Tooltip(
+                    message:
+                        '${l10n.rest} · ${formatAnalysisDuration(l10n, stop.duration)}',
+                    child: const Icon(
+                      Icons.pause_circle_filled,
+                      color: Color(0xFFFF8F00),
+                      size: 26,
+                    ),
+                  ),
                 ),
               ),
             Marker(
