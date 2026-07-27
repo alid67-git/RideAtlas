@@ -103,5 +103,8 @@
   "precipitationLabel": "yağış {mm} mm",
   "@precipitationLabel": {"placeholders": {"mm": {"type": "String"}}},
   "statusAnalyzingRoute": "Güzergâh analiz ediliyor…",
-  "statusLoadingWeather": "Hava durumu yükleniyor…"
+  "statusLoadingWeather": "Hava durumu yükleniyor…",
+  "dayFilterTooltip": "Günleri filtrele",
+  "dayFilterTitle": "Hangi günler gösterilsin?",
+  "dayFilterShowAll": "Tüm günler"
 }

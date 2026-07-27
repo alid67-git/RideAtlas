@@ -88,5 +88,8 @@
   "languageGerman": "Deutsch",
   "precipitationLabel": "precipitation {mm} mm",
   "statusAnalyzingRoute": "Analyzing route…",
-  "statusLoadingWeather": "Loading weather…"
+  "statusLoadingWeather": "Loading weather…",
+  "dayFilterTooltip": "Filter days",
+  "dayFilterTitle": "Which days to show?",
+  "dayFilterShowAll": "All days"
 }

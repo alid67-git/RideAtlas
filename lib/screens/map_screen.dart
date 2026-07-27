@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hive/hive.dart';
+import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -50,6 +51,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   String? _error;
   BaseMapStyle _mapStyle = kBaseMapStyles.first;
 
+  /// Which day numbers to draw on the map. Null means "show every day" (the
+  /// default); a non-null set is always non-empty, so the map never goes
+  /// blank from the filter alone.
+  Set<int>? _visibleDayNumbers;
+
   @override
   void initState() {
     super.initState();
@@ -76,6 +82,17 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       builder: (_) => _MapStylePickerDialog(
         current: _mapStyle,
         onSelected: _changeMapStyle,
+      ),
+    );
+  }
+
+  void _showDayFilterPicker(List<DayStats> days) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _DayFilterDialog(
+        days: days,
+        selected: _visibleDayNumbers,
+        onChanged: (selected) => setState(() => _visibleDayNumbers = selected),
       ),
     );
   }
@@ -208,10 +225,13 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           );
         }
 
+        final points = _points;
+        final days = points == null ? const <DayStats>[] : splitIntoDays(points);
+
         return Scaffold(
           body: Stack(
             children: [
-              Positioned.fill(child: _buildMap(route)),
+              Positioned.fill(child: _buildMap(route, days)),
               Positioned(
                 top: 0,
                 left: 0,
@@ -223,6 +243,15 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 bottom: 24,
                 child: Column(
                   children: [
+                    if (days.length > 1) ...[
+                      FloatingActionButton.small(
+                        heroTag: 'dayFilter',
+                        tooltip: AppLocalizations.of(context)!.dayFilterTooltip,
+                        onPressed: () => _showDayFilterPicker(days),
+                        child: const Icon(Icons.filter_alt),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     FloatingActionButton.small(
                       heroTag: 'mapStyle',
                       onPressed: _showMapStylePicker,
@@ -256,7 +285,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
   }
 
-  Widget _buildMap(GpxRoute route) {
+  Widget _buildMap(GpxRoute route, List<DayStats> days) {
     if (_error != null) {
       return Center(
         child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)),
@@ -271,20 +300,28 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     final start = line.first;
     final end = line.last;
 
-    final days = splitIntoDays(points);
+    final visible = _visibleDayNumbers;
+    bool isShown(int index) =>
+        visible == null || visible.contains(days[index].dayNumber);
+
     final polylines = <Polyline>[
       if (days.isEmpty)
         Polyline(points: line, strokeWidth: 4, color: const Color(0xFFE53935))
       else
         for (var i = 0; i < days.length; i++)
-          Polyline(
-            points: [
-              if (i > 0) days[i - 1].points.last.latLng,
-              ...days[i].points.map((p) => p.latLng),
-            ],
-            strokeWidth: 4,
-            color: days[i].color,
-          ),
+          if (isShown(i))
+            Polyline(
+              points: [
+                // Only bridge into the previous day's last point when that
+                // day is consecutive AND also visible - otherwise a gap
+                // (e.g. day 1 + day 7 selected) would draw a stray line
+                // straight across the skipped days.
+                if (i > 0 && isShown(i - 1)) days[i - 1].points.last.latLng,
+                ...days[i].points.map((p) => p.latLng),
+              ],
+              strokeWidth: 4,
+              color: days[i].color,
+            ),
     ];
 
     return FlutterMap(
@@ -457,6 +494,126 @@ class _MapStylePickerDialog extends StatelessWidget {
                         onSelected(style);
                         Navigator.pop(context);
                       },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Multi-select picker for which day(s) of a multi-day trip to draw on the
+/// map (e.g. only day 1, or just days 3 and 7). `selected: null` means every
+/// day is shown - the default.
+class _DayFilterDialog extends StatefulWidget {
+  const _DayFilterDialog({
+    required this.days,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final List<DayStats> days;
+  final Set<int>? selected;
+  final ValueChanged<Set<int>?> onChanged;
+
+  @override
+  State<_DayFilterDialog> createState() => _DayFilterDialogState();
+}
+
+class _DayFilterDialogState extends State<_DayFilterDialog> {
+  late Set<int> _checked;
+
+  @override
+  void initState() {
+    super.initState();
+    _checked =
+        widget.selected?.toSet() ??
+        widget.days.map((d) => d.dayNumber).toSet();
+  }
+
+  void _toggle(int dayNumber, bool? value) {
+    setState(() {
+      if (value == true) {
+        _checked.add(dayNumber);
+      } else if (_checked.length > 1) {
+        // Keep at least one day checked so the map is never left blank.
+        _checked.remove(dayNumber);
+      }
+    });
+    widget.onChanged(
+      _checked.length == widget.days.length ? null : Set.of(_checked),
+    );
+  }
+
+  void _showAll() {
+    setState(() => _checked = widget.days.map((d) => d.dayNumber).toSet());
+    widget.onChanged(null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final dateFmt = DateFormat(
+      'd MMM',
+      Localizations.localeOf(context).languageCode,
+    );
+    final allChecked = _checked.length == widget.days.length;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360, maxHeight: 480),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.dayFilterTitle,
+                      style: theme.textTheme.headlineSmall,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: l10n.close,
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              TextButton.icon(
+                onPressed: allChecked ? null : _showAll,
+                icon: const Icon(Icons.done_all),
+                label: Text(l10n.dayFilterShowAll),
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: widget.days.length,
+                  itemBuilder: (context, i) {
+                    final day = widget.days[i];
+                    return CheckboxListTile(
+                      value: _checked.contains(day.dayNumber),
+                      onChanged: (v) => _toggle(day.dayNumber, v),
+                      secondary: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: day.color,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      title: Text(
+                        '${l10n.dayLabel(day.dayNumber)} · ${dateFmt.format(day.date)}',
+                      ),
                     );
                   },
                 ),

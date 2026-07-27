@@ -88,5 +88,8 @@
   "languageGerman": "Deutsch",
   "precipitationLabel": "Niederschlag {mm} mm",
   "statusAnalyzingRoute": "Strecke wird analysiert…",
-  "statusLoadingWeather": "Wetter wird geladen…"
+  "statusLoadingWeather": "Wetter wird geladen…",
+  "dayFilterTooltip": "Tage filtern",
+  "dayFilterTitle": "Welche Tage anzeigen?",
+  "dayFilterShowAll": "Alle Tage"
 }
