@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -133,20 +130,19 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
     if (format == null || !mounted) return;
 
-    final xmlText = exportTrack(
+    final export = buildTrackExport(
       name: route.name,
       points: points,
       waypoints: _waypoints ?? const [],
       format: format,
     );
-    final bytes = Uint8List.fromList(utf8.encode(xmlText));
     await SharePlus.instance.share(
       ShareParams(
         files: [
           XFile.fromData(
-            bytes,
-            name: '${route.name}.${format.extension}',
-            mimeType: format.mimeType,
+            export.bytes,
+            name: '${route.name}.${export.extension}',
+            mimeType: export.mimeType,
           ),
         ],
         subject: route.name,
@@ -356,7 +352,7 @@ class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
   Future<void> _importTrack() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['gpx', 'kml'],
+      allowedExtensions: const ['gpx', 'kml', 'kmz'],
       withData: true,
     );
     if (result == null || result.files.isEmpty) return;
@@ -432,7 +428,7 @@ class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.add),
-                    tooltip: 'GPX/KML İçe Aktar',
+                    tooltip: 'GPX/KML/KMZ İçe Aktar',
                     onPressed: _importing ? null : _importTrack,
                   ),
                   IconButton(

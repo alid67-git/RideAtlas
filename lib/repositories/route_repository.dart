@@ -50,24 +50,21 @@ class RouteRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Imports a GPX or KML file from raw bytes, parses it, stores its text
-  /// content and adds it to the route index. Returns the new route's
+  /// Imports a GPX, KML or KMZ file from raw bytes, parses it, stores its
+  /// text content and adds it to the route index. Returns the new route's
   /// metadata.
   Future<GpxRoute> importFromBytes({
     required Uint8List bytes,
     required String suggestedFileName,
   }) async {
-    final xml = utf8.decode(bytes, allowMalformed: true);
+    final xml = decodeTrackBytes(bytes, fileName: suggestedFileName);
     final parsed = parseTrackXml(xml);
     if (parsed.points.isEmpty) {
       throw const FormatException('Dosyada rota/track noktası bulunamadı.');
     }
 
     final id = _uuid.v4();
-    final baseName = suggestedFileName.replaceAll(
-      RegExp(r'\.(gpx|kml)$', caseSensitive: false),
-      '',
-    );
+    final baseName = stripTrackExtension(suggestedFileName);
     final name = parsed.suggestedName?.isNotEmpty == true
         ? parsed.suggestedName!
         : baseName;

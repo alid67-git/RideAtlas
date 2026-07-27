@@ -53,7 +53,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
   Future<void> _importTrack() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['gpx', 'kml'],
+      allowedExtensions: const ['gpx', 'kml', 'kmz'],
       withData: true,
     );
     if (result == null || result.files.isEmpty) return;
@@ -184,7 +184,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
                 ),
               )
             : const Icon(Icons.add),
-        label: const Text('GPX/KML İçe Aktar'),
+        label: const Text('GPX/KML/KMZ İçe Aktar'),
       ),
     );
   }
@@ -217,7 +217,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Bir .gpx veya .kml dosyası içe aktararak rotanızı haritada görüntüleyin ve detaylı analiz edin.',
+              'Bir .gpx, .kml veya .kmz dosyası içe aktararak rotanızı haritada görüntüleyin ve detaylı analiz edin.',
               style: theme.textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
@@ -225,7 +225,7 @@ class _EmptyState extends StatelessWidget {
             FilledButton.icon(
               onPressed: onImport,
               icon: const Icon(Icons.add),
-              label: const Text('GPX/KML İçe Aktar'),
+              label: const Text('GPX/KML/KMZ İçe Aktar'),
             ),
           ],
         ),

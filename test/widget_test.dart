@@ -39,6 +39,6 @@ void main() {
 
     expect(find.text('RideAtlas'), findsOneWidget);
     expect(find.text('Henüz rota yok'), findsOneWidget);
-    expect(find.text('GPX/KML İçe Aktar'), findsWidgets);
+    expect(find.text('GPX/KML/KMZ İçe Aktar'), findsWidgets);
   });
 }

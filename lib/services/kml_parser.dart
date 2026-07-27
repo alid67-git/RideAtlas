@@ -7,103 +7,32 @@ import '../models/waypoint.dart';
 
 /// Parses raw KML XML into track points and waypoints.
 ///
-/// Supports the two common shapes GPS/mapping tools export: a plain
-/// `<Placemark><LineString><coordinates>` path (no timestamps), and Google
-/// Earth's `<gx:Track>` with paired `<when>`/`<gx:coord>` elements (which do
-/// carry timestamps and are preferred when present). `<Placemark><Point>`
-/// elements become waypoints. Namespace prefixes are ignored - elements are
-/// matched by local name only, since KML files vary in how they declare the
-/// `gx` namespace.
+/// Handles nested Folder/Placemark/MultiGeometry trees, multiple LineStrings,
+/// gx:Track / MultiTrack (when/coord pairs in order), LinearRing boundaries,
+/// and rich exports from Google Earth, Garmin, etc.
 ParsedTrack parseKmlXml(String xmlText) {
   final doc = XmlDocument.parse(xmlText);
-  final allElements = doc.descendants.whereType<XmlElement>();
+  final root = doc.rootElement;
 
-  String? suggestedName;
-  for (final el in allElements) {
-    if (el.name.local != 'name') continue;
-    final parent = el.parent;
-    final parentLocal = parent is XmlElement ? parent.name.local : null;
-    if (parentLocal != 'Document' &&
-        parentLocal != 'kml' &&
-        parentLocal != 'Folder') {
-      continue;
-    }
-    final text = el.innerText.trim();
-    if (text.isNotEmpty) {
-      suggestedName = text;
-      break;
-    }
-  }
-
+  final suggestedName = _findDocumentName(root);
   final points = <TrackPoint>[];
-
-  var usedGxTrack = false;
-  for (final trackEl in allElements.where((e) => e.name.local == 'Track')) {
-    final children = trackEl.children.whereType<XmlElement>();
-    final whens = children
-        .where((e) => e.name.local == 'when')
-        .map((e) => e.innerText.trim())
-        .toList();
-    final coords = children
-        .where((e) => e.name.local == 'coord')
-        .map((e) => e.innerText.trim())
-        .toList();
-    if (coords.isEmpty) continue;
-
-    usedGxTrack = true;
-    for (var i = 0; i < coords.length; i++) {
-      final parts = coords[i].split(RegExp(r'\s+'));
-      if (parts.length < 2) continue;
-      final lon = double.tryParse(parts[0]);
-      final lat = double.tryParse(parts[1]);
-      if (lon == null || lat == null) continue;
-      final ele = parts.length > 2 ? double.tryParse(parts[2]) : null;
-      final time = i < whens.length ? DateTime.tryParse(whens[i]) : null;
-      points.add(
-        TrackPoint(latLng: LatLng(lat, lon), elevation: ele, time: time),
-      );
-    }
-  }
-
-  if (!usedGxTrack) {
-    for (final lineEl in allElements.where(
-      (e) => e.name.local == 'LineString',
-    )) {
-      final coordEl = _child(lineEl, 'coordinates');
-      if (coordEl == null) continue;
-      for (final tuple in coordEl.innerText.trim().split(RegExp(r'\s+'))) {
-        if (tuple.trim().isEmpty) continue;
-        final parts = tuple.split(',');
-        if (parts.length < 2) continue;
-        final lon = double.tryParse(parts[0]);
-        final lat = double.tryParse(parts[1]);
-        if (lon == null || lat == null) continue;
-        final ele = parts.length > 2 ? double.tryParse(parts[2]) : null;
-        points.add(TrackPoint(latLng: LatLng(lat, lon), elevation: ele));
-      }
-    }
-  }
+  _collectGeometryPoints(root, points);
 
   final waypoints = <Waypoint>[];
-  for (final placemark in allElements.where(
-    (e) => e.name.local == 'Placemark',
-  )) {
-    final pointEl = _child(placemark, 'Point');
+  for (final placemark in root.descendants.whereType<XmlElement>()) {
+    if (placemark.name.local != 'Placemark') continue;
+    if (_placemarkHasLineGeometry(placemark)) continue;
+    final pointEl = _firstDescendant(placemark, 'Point');
     if (pointEl == null) continue;
-    final coordEl = _child(pointEl, 'coordinates');
+    final coordEl = _firstDescendant(pointEl, 'coordinates');
     if (coordEl == null) continue;
-
-    final parts = coordEl.innerText.trim().split(',');
-    if (parts.length < 2) continue;
-    final lon = double.tryParse(parts[0]);
-    final lat = double.tryParse(parts[1]);
-    if (lon == null || lat == null) continue;
-
+    final ll = _parseLonLat(coordEl.innerText);
+    if (ll == null) continue;
     waypoints.add(
       Waypoint(
-        latLng: LatLng(lat, lon),
-        name: _child(placemark, 'name')?.innerText.trim(),
-        description: _child(placemark, 'description')?.innerText.trim(),
+        latLng: ll,
+        name: _firstDescendant(placemark, 'name')?.innerText.trim(),
+        description: _firstDescendant(placemark, 'description')?.innerText.trim(),
       ),
     );
   }
@@ -115,9 +44,111 @@ ParsedTrack parseKmlXml(String xmlText) {
   );
 }
 
-XmlElement? _child(XmlElement parent, String localName) {
-  for (final c in parent.children.whereType<XmlElement>()) {
-    if (c.name.local == localName) return c;
+String? _findDocumentName(XmlElement root) {
+  for (final el in root.descendants.whereType<XmlElement>()) {
+    if (el.name.local != 'name') continue;
+    final parent = el.parent;
+    if (parent is! XmlElement) continue;
+    final p = parent.name.local;
+    if (p == 'Document' || p == 'kml' || p == 'Folder') {
+      final text = el.innerText.trim();
+      if (text.isNotEmpty) return text;
+    }
+  }
+  return null;
+}
+
+void _collectGeometryPoints(XmlElement node, List<TrackPoint> out) {
+  for (final child in node.children.whereType<XmlElement>()) {
+    switch (child.name.local) {
+      case 'Track':
+        _parseGxTrack(child, out);
+      case 'MultiTrack':
+        for (final track in child.children.whereType<XmlElement>()) {
+          if (track.name.local == 'Track') {
+            _parseGxTrack(track, out);
+          }
+        }
+      case 'LineString':
+        _parseCoordinateElement(child, out);
+      case 'LinearRing':
+        _parseCoordinateElement(child, out);
+      default:
+        _collectGeometryPoints(child, out);
+    }
+  }
+}
+
+void _parseGxTrack(XmlElement trackEl, List<TrackPoint> out) {
+  DateTime? pendingWhen;
+  for (final child in trackEl.children.whereType<XmlElement>()) {
+    switch (child.name.local) {
+      case 'when':
+        pendingWhen = DateTime.tryParse(child.innerText.trim());
+      case 'coord':
+        final parts = child.innerText.trim().split(RegExp(r'\s+'));
+        if (parts.length < 2) continue;
+        final lon = double.tryParse(parts[0]);
+        final lat = double.tryParse(parts[1]);
+        if (lon == null || lat == null) continue;
+        final ele = parts.length > 2 ? double.tryParse(parts[2]) : null;
+        out.add(
+          TrackPoint(
+            latLng: LatLng(lat, lon),
+            elevation: ele,
+            time: pendingWhen,
+          ),
+        );
+        pendingWhen = null;
+      default:
+        break;
+    }
+  }
+}
+
+void _parseCoordinateElement(XmlElement geometryEl, List<TrackPoint> out) {
+  final coordEl = _firstDescendant(geometryEl, 'coordinates');
+  if (coordEl == null) return;
+  for (final ll in _parseCoordinateTuples(coordEl.innerText)) {
+    out.add(TrackPoint(latLng: ll));
+  }
+}
+
+/// KML coordinate text: tuples of lon,lat[,alt] separated by whitespace.
+Iterable<LatLng> _parseCoordinateTuples(String raw) {
+  final tuples = <LatLng>[];
+  for (final token in raw.trim().split(RegExp(r'\s+'))) {
+    if (token.isEmpty) continue;
+    final ll = _parseLonLat(token);
+    if (ll != null) tuples.add(ll);
+  }
+  return tuples;
+}
+
+LatLng? _parseLonLat(String tuple) {
+  final parts = tuple.split(',');
+  if (parts.length < 2) return null;
+  final lon = double.tryParse(parts[0].trim());
+  final lat = double.tryParse(parts[1].trim());
+  if (lon == null || lat == null) return null;
+  return LatLng(lat, lon);
+}
+
+bool _placemarkHasLineGeometry(XmlElement placemark) {
+  for (final el in placemark.descendants.whereType<XmlElement>()) {
+    if (el == placemark) continue;
+    final n = el.name.local;
+    if (n == 'LineString' || n == 'LinearRing' || n == 'Track') {
+      return true;
+    }
+  }
+  return false;
+}
+
+XmlElement? _firstDescendant(XmlElement root, String localName) {
+  if (root.name.local == localName) return root;
+  for (final el in root.descendants.whereType<XmlElement>()) {
+    if (el.name.local == localName) return el;
   }
   return null;
 }
