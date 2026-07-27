@@ -108,6 +108,7 @@
   "dayFilterTitle": "Hangi günler gösterilsin?",
   "dayFilterShowAll": "Tüm günler",
   "northUpTooltip": "Kuzeyi yukarı al",
-  "showStopsTooltip": "Molaları göster",
-  "hideStopsTooltip": "Molaları gizle"
+  "showStopsTooltip": "Molaları ve gecelemeleri göster",
+  "hideStopsTooltip": "Molaları ve gecelemeleri gizle",
+  "overnightLabel": "Geceleme"
 }
