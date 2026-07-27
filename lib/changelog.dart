@@ -20,6 +20,13 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.10 beta',
+    date: '2026-07-27',
+    note:
+        'Topografik harita katmanı artık Esri altyapısından geliyor - '
+        'OpenTopoMap bazen bazı kareleri (gri kutular) hiç yüklemiyordu.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.9 beta',
     date: '2026-07-27',
     note:
