@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "RideAtlas: web gelistirme (Chrome :8080)",
+      "type": "shell",
+      "command": "C:\\src\\flutter\\bin\\flutter.bat run -d chrome --web-port=8080",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "RideAtlas: web release derle + ac",
+      "type": "shell",
+      "command": "C:\\src\\flutter\\bin\\flutter.bat build web --release --pwa-strategy=none && C:\\src\\flutter\\bin\\dart.bat pub global activate dhttpd && start http://localhost:8080 && C:\\src\\flutter\\bin\\dart.bat pub global run dhttpd --path build/web --port 8080",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

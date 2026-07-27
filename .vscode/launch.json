@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "RideAtlas (Chrome :8080)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "toolArgs": ["--web-port", "8080"]
+    },
+    {
+      "name": "RideAtlas (Chrome :8080, release)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "flutterMode": "release",
+      "toolArgs": ["--web-port", "8080"]
+    },
+    {
+      "name": "RideAtlas (Windows)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "windows"
+    }
+  ]
+}
