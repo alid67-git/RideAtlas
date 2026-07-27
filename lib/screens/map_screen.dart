@@ -11,6 +11,7 @@ import '../models/gpx_route.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
 import '../repositories/route_repository.dart';
+import '../services/daily_analysis.dart';
 import '../services/track_io.dart';
 import 'analysis_sheet.dart';
 
@@ -252,6 +253,22 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     final start = line.first;
     final end = line.last;
 
+    final days = splitIntoDays(points);
+    final polylines = <Polyline>[
+      if (days.isEmpty)
+        Polyline(points: line, strokeWidth: 4, color: const Color(0xFFE53935))
+      else
+        for (var i = 0; i < days.length; i++)
+          Polyline(
+            points: [
+              if (i > 0) days[i - 1].points.last.latLng,
+              ...days[i].points.map((p) => p.latLng),
+            ],
+            strokeWidth: 4,
+            color: days[i].color,
+          ),
+    ];
+
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(initialCenter: start, initialZoom: 12),
@@ -262,15 +279,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           userAgentPackageName: 'com.rideatlas.app',
           maxNativeZoom: 20,
         ),
-        PolylineLayer(
-          polylines: [
-            Polyline(
-              points: line,
-              strokeWidth: 4,
-              color: const Color(0xFFE53935),
-            ),
-          ],
-        ),
+        PolylineLayer(polylines: polylines),
         MarkerLayer(
           markers: [
             for (final w in _waypoints ?? const <Waypoint>[])

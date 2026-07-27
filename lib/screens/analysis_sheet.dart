@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../models/gpx_route.dart';
 import '../models/track_point.dart';
+import '../services/daily_analysis.dart';
 import '../services/gpx_parser.dart';
 import '../services/route_geography.dart';
 import '../services/weather_service.dart';
@@ -36,7 +37,7 @@ class _AnalysisSheetState extends State<AnalysisSheet>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 5, vsync: this);
+    _tabs = TabController(length: 6, vsync: this);
     _tabs.addListener(_onTabChanged);
   }
 
@@ -49,7 +50,7 @@ class _AnalysisSheetState extends State<AnalysisSheet>
 
   void _onTabChanged() {
     if (_tabs.indexIsChanging) return;
-    if (_tabs.index == 2 || _tabs.index == 3) {
+    if (_tabs.index == 2 || _tabs.index == 3 || _tabs.index == 5) {
       _ensureGeography();
     } else if (_tabs.index == 4) {
       _ensureWeather();
@@ -178,6 +179,7 @@ class _AnalysisSheetState extends State<AnalysisSheet>
                   Tab(text: 'Güzergâh'),
                   Tab(text: 'Molalar'),
                   Tab(text: 'Hava'),
+                  Tab(text: 'Günlük'),
                 ],
               ),
               if (_status.isNotEmpty) ...[
@@ -226,6 +228,11 @@ class _AnalysisSheetState extends State<AnalysisSheet>
                         _weather = null;
                         _ensureWeather();
                       },
+                    ),
+                    _DailyTab(
+                      points: widget.points,
+                      geography: _geography,
+                      geoLoading: _geoLoading,
                     ),
                   ],
                 ),
@@ -581,9 +588,9 @@ class _StopsTab extends StatelessWidget {
                     children: [
                       Text(
                         [
-                          if (stop.city != null) stop.city!,
-                          if (stop.country != null) stop.country!,
-                        ].isEmpty
+                              if (stop.city != null) stop.city!,
+                              if (stop.country != null) stop.country!,
+                            ].isEmpty
                             ? 'Bilinmeyen konum'
                             : [
                                 if (stop.city != null) stop.city!,
@@ -641,7 +648,8 @@ class _WeatherTab extends StatelessWidget {
     if (!hasTimestamps) {
       return const _EmptyPane(
         icon: Icons.event_busy,
-        message: 'Bu rotada GPS zaman damgası yok; günlük hava durumu hesaplanamaz.',
+        message:
+            'Bu rotada GPS zaman damgası yok; günlük hava durumu hesaplanamaz.',
       );
     }
     if (loading && weather == null) {
@@ -715,6 +723,161 @@ class _WeatherTab extends StatelessWidget {
   }
 }
 
+class _DailyTab extends StatelessWidget {
+  const _DailyTab({
+    required this.points,
+    required this.geography,
+    required this.geoLoading,
+  });
+
+  final List<TrackPoint> points;
+  final RouteGeography? geography;
+  final bool geoLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final days = splitIntoDays(points, geography: geography);
+    if (days.isEmpty) {
+      return const _EmptyPane(
+        icon: Icons.calendar_month,
+        message: 'Bu rotada GPS zaman damgası yok; günlere ayrılamıyor.',
+      );
+    }
+
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.only(right: 8, top: 8),
+      children: [
+        Text('${days.length} gün', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 12),
+        for (final day in days) ...[
+          _DayCard(
+            day: day,
+            geoLoading: geoLoading,
+            hasGeography: geography != null,
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _DayCard extends StatelessWidget {
+  const _DayCard({
+    required this.day,
+    required this.geoLoading,
+    required this.hasGeography,
+  });
+
+  final DayStats day;
+  final bool geoLoading;
+  final bool hasGeography;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fmt = DateFormat('d MMMM yyyy, EEEE', 'tr');
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: day.color,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Gün ${day.dayNumber} · ${fmt.format(day.date)}',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          AnalysisStatGrid(
+            children: [
+              AnalysisStatCard(
+                icon: Icons.straighten,
+                label: 'Mesafe',
+                value: '${day.distanceKm.toStringAsFixed(0)} km',
+              ),
+              AnalysisStatCard(
+                icon: Icons.schedule,
+                label: 'Sürüş süresi',
+                value: day.ridingDuration == null
+                    ? '—'
+                    : formatAnalysisDuration(day.ridingDuration!),
+              ),
+              AnalysisStatCard(
+                icon: Icons.hotel,
+                label: 'Mola',
+                value: day.restDuration == Duration.zero
+                    ? '—'
+                    : formatAnalysisDuration(day.restDuration),
+              ),
+              AnalysisStatCard(
+                icon: Icons.arrow_upward,
+                label: 'Maks. irtifa',
+                value: day.maxElevation == null
+                    ? '—'
+                    : '${day.maxElevation!.round()} m',
+              ),
+              AnalysisStatCard(
+                icon: Icons.trending_up,
+                label: 'Tırmanış',
+                value: '${day.elevationGainM.round()} m',
+              ),
+            ],
+          ),
+          if (day.countries.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final c in day.countries)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(c, style: theme.textTheme.bodySmall),
+                  ),
+              ],
+            ),
+          ] else if (geoLoading) ...[
+            const SizedBox(height: 8),
+            Text('Ülkeler hesaplanıyor…', style: theme.textTheme.bodySmall),
+          ] else if (!hasGeography) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Ülkeler için Güzergâh sekmesine geçin.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Shared UI ──────────────────────────────────────────────────────────────
 
 String formatAnalysisDuration(Duration d) {
@@ -727,7 +890,11 @@ String formatAnalysisDuration(Duration d) {
 }
 
 class AnalysisSectionTitle extends StatelessWidget {
-  const AnalysisSectionTitle({super.key, required this.icon, required this.title});
+  const AnalysisSectionTitle({
+    super.key,
+    required this.icon,
+    required this.title,
+  });
 
   final IconData icon;
   final String title;
@@ -868,10 +1035,12 @@ class AnalysisElevationChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final minY =
-        samples.map((s) => s.elevation).reduce((a, b) => a < b ? a : b);
-    final maxY =
-        samples.map((s) => s.elevation).reduce((a, b) => a > b ? a : b);
+    final minY = samples
+        .map((s) => s.elevation)
+        .reduce((a, b) => a < b ? a : b);
+    final maxY = samples
+        .map((s) => s.elevation)
+        .reduce((a, b) => a > b ? a : b);
     final maxX = samples.last.distanceKm;
     final theme = Theme.of(context);
 
@@ -956,11 +1125,7 @@ class _ErrorPane extends StatelessWidget {
 }
 
 class _EmptyPane extends StatelessWidget {
-  const _EmptyPane({
-    required this.icon,
-    required this.message,
-    this.onRetry,
-  });
+  const _EmptyPane({required this.icon, required this.message, this.onRetry});
 
   final IconData icon;
   final String message;
@@ -980,7 +1145,10 @@ class _EmptyPane extends StatelessWidget {
             Text(message, textAlign: TextAlign.center),
             if (onRetry != null) ...[
               const SizedBox(height: 12),
-              FilledButton(onPressed: onRetry, child: const Text('Tekrar dene')),
+              FilledButton(
+                onPressed: onRetry,
+                child: const Text('Tekrar dene'),
+              ),
             ],
           ],
         ),
