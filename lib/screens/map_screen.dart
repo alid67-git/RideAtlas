@@ -35,6 +35,11 @@ String _mapStyleLabel(AppLocalizations l10n, BaseMapStyle style) {
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
 
+/// A dwell stop long enough to be a hotel/camp overnight rather than a
+/// lunch/fuel/sightseeing break - shown in a different color/icon on the map.
+bool isOvernightStop(DetectedStop stop) =>
+    stop.duration >= const Duration(hours: 4);
+
 /// Shows a single imported GPX route on a map: the track as a red line,
 /// green/red start & end pins, any named waypoints, and quick access to the
 /// route list and detailed analysis - mirroring the reference screenshot's
@@ -60,10 +65,29 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   /// blank from the filter alone.
   Set<int>? _visibleDayNumbers;
 
+  /// Whether detected-stop pins are drawn on the map. On by default; a
+  /// button lets riders hide them if they find the map too busy.
+  bool _showStops = true;
+
   /// Current map bearing in degrees, tracked so the compass button can show
   /// which way is north and only appear once the map's been rotated off it.
   double _rotationDeg = 0;
   late final StreamSubscription<MapEvent> _mapEventSub;
+
+  /// flutter_map never retries a tile once it fails to load (a flaky
+  /// connection or a tile host's rate limit can otherwise leave permanent
+  /// gray gaps) - pushing into this forces every visible tile to reload.
+  final _tileResetController = StreamController<void>.broadcast();
+  bool _tileRetryScheduled = false;
+
+  void _onTileError(TileImage tile, Object error, StackTrace? stackTrace) {
+    if (_tileRetryScheduled) return;
+    _tileRetryScheduled = true;
+    Future.delayed(const Duration(seconds: 2), () {
+      _tileRetryScheduled = false;
+      if (mounted) _tileResetController.add(null);
+    });
+  }
 
   @override
   void initState() {
@@ -81,6 +105,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   @override
   void dispose() {
     _mapEventSub.cancel();
+    _tileResetController.close();
     super.dispose();
   }
 
@@ -288,6 +313,22 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                       ),
                       const SizedBox(height: 8),
                     ],
+                    if (stops.isNotEmpty) ...[
+                      FloatingActionButton.small(
+                        heroTag: 'toggleStops',
+                        tooltip: _showStops
+                            ? AppLocalizations.of(context)!.hideStopsTooltip
+                            : AppLocalizations.of(context)!.showStopsTooltip,
+                        onPressed: () =>
+                            setState(() => _showStops = !_showStops),
+                        child: Icon(
+                          _showStops
+                              ? Icons.pause_circle_filled
+                              : Icons.pause_circle_outline,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     FloatingActionButton.small(
                       heroTag: 'mapStyle',
                       onPressed: _showMapStylePicker,
@@ -386,6 +427,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           subdomains: _mapStyle.subdomains,
           userAgentPackageName: 'com.rideatlas.app',
           maxNativeZoom: 20,
+          evictErrorTileStrategy: EvictErrorTileStrategy.notVisibleRespectMargin,
+          errorTileCallback: _onTileError,
+          reset: _tileResetController.stream,
         ),
         PolylineLayer(polylines: polylines),
         MarkerLayer(
@@ -400,24 +444,29 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                   child: const Icon(Icons.park, color: Colors.green, size: 28),
                 ),
               ),
-            for (final stop in stops)
-              Marker(
-                point: stop.location,
-                width: 30,
-                height: 30,
-                child: GestureDetector(
-                  onTap: () => _zoomToStop(stop.location),
-                  child: Tooltip(
-                    message:
-                        '${l10n.rest} · ${formatAnalysisDuration(l10n, stop.duration)}',
-                    child: const Icon(
-                      Icons.pause_circle_filled,
-                      color: Color(0xFFFF8F00),
-                      size: 26,
+            if (_showStops)
+              for (final stop in stops)
+                Marker(
+                  point: stop.location,
+                  width: 30,
+                  height: 30,
+                  child: GestureDetector(
+                    onTap: () => _zoomToStop(stop.location),
+                    child: Tooltip(
+                      message:
+                          '${isOvernightStop(stop) ? l10n.overnightLabel : l10n.rest} · ${formatAnalysisDuration(l10n, stop.duration)}',
+                      child: Icon(
+                        isOvernightStop(stop)
+                            ? Icons.hotel
+                            : Icons.pause_circle_filled,
+                        color: isOvernightStop(stop)
+                            ? const Color(0xFF5E35B1)
+                            : const Color(0xFFFF8F00),
+                        size: 26,
+                      ),
                     ),
                   ),
                 ),
-              ),
             Marker(
               point: start,
               width: 36,

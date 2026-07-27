@@ -92,5 +92,8 @@
   "dayFilterTooltip": "Filter days",
   "dayFilterTitle": "Which days to show?",
   "dayFilterShowAll": "All days",
-  "northUpTooltip": "Reset to north"
+  "northUpTooltip": "Reset to north",
+  "showStopsTooltip": "Show stops and overnight stays",
+  "hideStopsTooltip": "Hide stops and overnight stays",
+  "overnightLabel": "Overnight stay"
 }
