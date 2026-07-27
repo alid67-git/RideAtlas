@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
 
 class RouteCard extends StatelessWidget {
@@ -20,7 +21,11 @@ class RouteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dateStr = DateFormat('d MMM yyyy').format(route.importedAt);
+    final l10n = AppLocalizations.of(context)!;
+    final dateStr = DateFormat(
+      'd MMM yyyy',
+      Localizations.localeOf(context).languageCode,
+    ).format(route.importedAt);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -71,7 +76,7 @@ class RouteCard extends StatelessWidget {
                         if (route.duration != null)
                           _StatChip(
                             icon: Icons.schedule,
-                            label: _formatDuration(route.duration!),
+                            label: _formatDuration(l10n, route.duration!),
                           ),
                       ],
                     ),
@@ -83,12 +88,9 @@ class RouteCard extends StatelessWidget {
                   if (value == 'rename') onRename();
                   if (value == 'delete') onDelete();
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: 'rename',
-                    child: Text('Yeniden adlandır'),
-                  ),
-                  PopupMenuItem(value: 'delete', child: Text('Sil')),
+                itemBuilder: (context) => [
+                  PopupMenuItem(value: 'rename', child: Text(l10n.rename)),
+                  PopupMenuItem(value: 'delete', child: Text(l10n.delete)),
                 ],
               ),
             ],
@@ -98,11 +100,11 @@ class RouteCard extends StatelessWidget {
     );
   }
 
-  static String _formatDuration(Duration d) {
+  static String _formatDuration(AppLocalizations l10n, Duration d) {
     final h = d.inHours;
     final m = d.inMinutes % 60;
-    if (h > 0) return '${h}sa ${m}dk';
-    return '${m}dk';
+    if (h > 0) return l10n.durationHoursMinutes(h, m);
+    return l10n.durationMinutes(m);
   }
 }
 

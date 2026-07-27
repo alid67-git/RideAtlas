@@ -12,6 +12,8 @@ class CountryLeg {
     required this.distanceKm,
     required this.duration,
     required this.cities,
+    this.start,
+    this.end,
   });
 
   final String country;
@@ -19,6 +21,11 @@ class CountryLeg {
   final double distanceKm;
   final Duration? duration;
   final List<String> cities;
+
+  /// Timestamps this leg spans, when the track has GPS time data. Used to
+  /// attribute a leg's country to the calendar day(s) it falls on.
+  final DateTime? start;
+  final DateTime? end;
 }
 
 class DetectedStop {
@@ -96,21 +103,22 @@ class RouteGeographyAnalyzer {
     }
 
     final legs = _buildCountryLegs(points, samples, places);
-    final stops = [
-      for (final s in rawStops)
-        DetectedStop(
-          location: s.location,
-          start: s.start,
-          end: s.end,
-          duration: s.duration,
-          country: places[GeoLookup.cacheKey(s.location)]?.country,
-          city: places[GeoLookup.cacheKey(s.location)]?.city,
-        ),
-    ]..sort((a, b) {
-      final aT = a.start ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bT = b.start ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return aT.compareTo(bT);
-    });
+    final stops =
+        [
+          for (final s in rawStops)
+            DetectedStop(
+              location: s.location,
+              start: s.start,
+              end: s.end,
+              duration: s.duration,
+              country: places[GeoLookup.cacheKey(s.location)]?.country,
+              city: places[GeoLookup.cacheKey(s.location)]?.city,
+            ),
+        ]..sort((a, b) {
+          final aT = a.start ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bT = b.start ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return aT.compareTo(bT);
+        });
 
     final unique = <String>[];
     for (final leg in legs) {
@@ -218,7 +226,9 @@ class RouteGeographyAnalyzer {
     void flush(double endKm, DateTime? endTime) {
       if (currentCountry == null) return;
       Duration? dur;
-      if (legStartTime != null && endTime != null && !endTime.isBefore(legStartTime)) {
+      if (legStartTime != null &&
+          endTime != null &&
+          !endTime.isBefore(legStartTime)) {
         dur = endTime.difference(legStartTime);
       }
       legs.add(
@@ -228,6 +238,8 @@ class RouteGeographyAnalyzer {
           distanceKm: (endKm - legStartKm).clamp(0, double.infinity),
           duration: dur,
           cities: cities.toList()..sort(),
+          start: legStartTime,
+          end: endTime,
         ),
       );
       cities.clear();
@@ -237,9 +249,7 @@ class RouteGeographyAnalyzer {
       final place = placeAt(s);
       final country = place?.country;
       final city = place?.city;
-      if (city != null &&
-          currentCountry != null &&
-          country == currentCountry) {
+      if (city != null && currentCountry != null && country == currentCountry) {
         cities.add(city);
       }
 
@@ -284,6 +294,8 @@ class RouteGeographyAnalyzer {
           distanceKm: total,
           duration: only.duration,
           cities: only.cities,
+          start: only.start,
+          end: only.end,
         ),
       ];
     }

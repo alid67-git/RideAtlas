@@ -29,7 +29,7 @@ void main() {
       await tester.pumpWidget(const RideAtlasApp());
       for (
         var i = 0;
-        i < 20 && find.text('Henüz rota yok').evaluate().isEmpty;
+        i < 20 && find.text('No routes yet').evaluate().isEmpty;
         i++
       ) {
         await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -37,8 +37,10 @@ void main() {
       }
     });
 
+    // The test harness's default locale is en_US, which our
+    // localeResolutionCallback resolves to English (a supported locale).
     expect(find.text('RideAtlas'), findsOneWidget);
-    expect(find.text('Henüz rota yok'), findsOneWidget);
-    expect(find.text('GPX/KML/KMZ İçe Aktar'), findsWidgets);
+    expect(find.text('No routes yet'), findsOneWidget);
+    expect(find.text('Import GPX/KML/KMZ'), findsWidgets);
   });
 }
