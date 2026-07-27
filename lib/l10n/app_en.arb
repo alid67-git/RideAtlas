@@ -91,5 +91,6 @@
   "statusLoadingWeather": "Loading weather…",
   "dayFilterTooltip": "Filter days",
   "dayFilterTitle": "Which days to show?",
-  "dayFilterShowAll": "All days"
+  "dayFilterShowAll": "All days",
+  "northUpTooltip": "Reset to north"
 }
