@@ -16,6 +16,7 @@ import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart';
 import '../services/track_io.dart';
 import 'analysis_sheet.dart';
+import 'language_picker.dart';
 
 String _mapStyleLabel(AppLocalizations l10n, BaseMapStyle style) {
   return switch (style.id) {
@@ -422,6 +423,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
             _RoundIconButton(
               icon: Icons.ios_share,
               onPressed: () => _share(route),
+            ),
+            const SizedBox(width: 8),
+            _RoundIconButton(
+              icon: Icons.language,
+              onPressed: () => showLanguagePicker(context),
             ),
           ],
         ),
