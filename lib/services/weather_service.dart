@@ -144,9 +144,9 @@ String weatherCodeLabelTr(int code) {
 
 IconData weatherCodeIcon(int code) {
   if (code == 0 || code == 1) return Icons.wb_sunny_outlined;
-  if (code == 2) return Icons.partly_cloudy_day;
+  if (code == 2) return Icons.filter_drama;
   if (code == 3) return Icons.cloud_outlined;
-  if (code == 45 || code == 48) return Icons.foggy;
+  if (code == 45 || code == 48) return Icons.dehaze;
   if (code >= 51 && code <= 67) return Icons.water_drop_outlined;
   if (code >= 71 && code <= 86) return Icons.ac_unit;
   if (code >= 95) return Icons.thunderstorm_outlined;

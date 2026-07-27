@@ -40,16 +40,15 @@ class GeoLookup {
   static final GeoLookup instance = GeoLookup._();
 
   Box<String>? _box;
-  Future<void>? _inflightOpen;
+  Future<Box<String>>? _inflightOpen;
   DateTime? _lastRequestAt;
 
   Future<Box<String>> _open() async {
     if (_box != null) return _box!;
-    _inflightOpen ??= Hive.openBox<String>(_boxName).then((b) {
+    return _inflightOpen ??= Hive.openBox<String>(_boxName).then((b) {
       _box = b;
       return b;
     });
-    return _inflightOpen!;
   }
 
   /// ~5–6 km grid cell — good enough for country / city labels on a tour.
