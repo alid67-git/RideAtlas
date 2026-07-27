@@ -92,5 +92,7 @@
   "dayFilterTooltip": "Filter days",
   "dayFilterTitle": "Which days to show?",
   "dayFilterShowAll": "All days",
-  "northUpTooltip": "Reset to north"
+  "northUpTooltip": "Reset to north",
+  "showStopsTooltip": "Show stops",
+  "hideStopsTooltip": "Hide stops"
 }

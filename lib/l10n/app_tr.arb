@@ -107,5 +107,7 @@
   "dayFilterTooltip": "Günleri filtrele",
   "dayFilterTitle": "Hangi günler gösterilsin?",
   "dayFilterShowAll": "Tüm günler",
-  "northUpTooltip": "Kuzeyi yukarı al"
+  "northUpTooltip": "Kuzeyi yukarı al",
+  "showStopsTooltip": "Molaları göster",
+  "hideStopsTooltip": "Molaları gizle"
 }

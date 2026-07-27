@@ -60,6 +60,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   /// blank from the filter alone.
   Set<int>? _visibleDayNumbers;
 
+  /// Whether detected-stop pins are drawn on the map. On by default; a
+  /// button lets riders hide them if they find the map too busy.
+  bool _showStops = true;
+
   /// Current map bearing in degrees, tracked so the compass button can show
   /// which way is north and only appear once the map's been rotated off it.
   double _rotationDeg = 0;
@@ -288,6 +292,22 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                       ),
                       const SizedBox(height: 8),
                     ],
+                    if (stops.isNotEmpty) ...[
+                      FloatingActionButton.small(
+                        heroTag: 'toggleStops',
+                        tooltip: _showStops
+                            ? AppLocalizations.of(context)!.hideStopsTooltip
+                            : AppLocalizations.of(context)!.showStopsTooltip,
+                        onPressed: () =>
+                            setState(() => _showStops = !_showStops),
+                        child: Icon(
+                          _showStops
+                              ? Icons.pause_circle_filled
+                              : Icons.pause_circle_outline,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     FloatingActionButton.small(
                       heroTag: 'mapStyle',
                       onPressed: _showMapStylePicker,
@@ -400,24 +420,25 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                   child: const Icon(Icons.park, color: Colors.green, size: 28),
                 ),
               ),
-            for (final stop in stops)
-              Marker(
-                point: stop.location,
-                width: 30,
-                height: 30,
-                child: GestureDetector(
-                  onTap: () => _zoomToStop(stop.location),
-                  child: Tooltip(
-                    message:
-                        '${l10n.rest} · ${formatAnalysisDuration(l10n, stop.duration)}',
-                    child: const Icon(
-                      Icons.pause_circle_filled,
-                      color: Color(0xFFFF8F00),
-                      size: 26,
+            if (_showStops)
+              for (final stop in stops)
+                Marker(
+                  point: stop.location,
+                  width: 30,
+                  height: 30,
+                  child: GestureDetector(
+                    onTap: () => _zoomToStop(stop.location),
+                    child: Tooltip(
+                      message:
+                          '${l10n.rest} · ${formatAnalysisDuration(l10n, stop.duration)}',
+                      child: const Icon(
+                        Icons.pause_circle_filled,
+                        color: Color(0xFFFF8F00),
+                        size: 26,
+                      ),
                     ),
                   ),
                 ),
-              ),
             Marker(
               point: start,
               width: 36,
