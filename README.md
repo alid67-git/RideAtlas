@@ -10,11 +10,11 @@ Tarayıcıdan açılır; kurulum gerekmez. İçe aktardığın GPX/KML dosyalar�
 
 ## Özellikler
 
-- `.gpx` ve `.kml` dosyası içe aktarma ve cihazda saklama
+- `.gpx`, `.kml` ve `.kmz` dosyası içe aktarma ve cihazda saklama
 - Rotayı haritada kırmızı çizgi olarak gösterme, başlangıç/bitiş işaretçileri ve waypoint'ler
 - Birden fazla rota için liste ekranı (yeniden adlandırma, silme)
 - Sekmeli analiz: mesafe, süre, yükseklik profili, geçilen ülkeler, molalar, günlük hava
-- Rotayı GPX veya KML olarak paylaşma
+- Rotayı GPX, KML veya KMZ olarak paylaşma
 
 ## Geliştirme
 
