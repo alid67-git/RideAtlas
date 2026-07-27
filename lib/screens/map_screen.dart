@@ -1,16 +1,21 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:hive/hive.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
 import '../repositories/route_repository.dart';
 import '../services/track_io.dart';
 import 'analysis_sheet.dart';
+
+const _metaBoxName = 'rideatlas_meta';
+const _mapStyleKey = 'base_map_style_id';
 
 /// Shows a single imported GPX route on a map: the track as a red line,
 /// green/red start & end pins, any named waypoints, and quick access to the
@@ -30,11 +35,36 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   List<TrackPoint>? _points;
   List<Waypoint>? _waypoints;
   String? _error;
+  BaseMapStyle _mapStyle = kBaseMapStyles.first;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    _loadMapStyle();
+  }
+
+  Future<void> _loadMapStyle() async {
+    final box = await Hive.openBox<String>(_metaBoxName);
+    final savedId = box.get(_mapStyleKey);
+    if (savedId == null || !mounted) return;
+    setState(() => _mapStyle = findBaseMapStyle(savedId));
+  }
+
+  Future<void> _changeMapStyle(BaseMapStyle style) async {
+    setState(() => _mapStyle = style);
+    final box = await Hive.openBox<String>(_metaBoxName);
+    await box.put(_mapStyleKey, style.id);
+  }
+
+  void _showMapStylePicker() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _MapStylePickerDialog(
+        current: _mapStyle,
+        onSelected: _changeMapStyle,
+      ),
+    );
   }
 
   GpxRoute? get _route {
@@ -175,6 +205,12 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 child: Column(
                   children: [
                     FloatingActionButton.small(
+                      heroTag: 'mapStyle',
+                      onPressed: _showMapStylePicker,
+                      child: Icon(_mapStyle.icon),
+                    ),
+                    const SizedBox(height: 8),
+                    FloatingActionButton.small(
                       heroTag: 'zoomIn',
                       onPressed: _zoomIn,
                       child: const Icon(Icons.add),
@@ -221,9 +257,8 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       options: MapOptions(initialCenter: start, initialZoom: 12),
       children: [
         TileLayer(
-          urlTemplate:
-              'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-          subdomains: const ['a', 'b', 'c', 'd'],
+          urlTemplate: _mapStyle.urlTemplate,
+          subdomains: _mapStyle.subdomains,
           userAgentPackageName: 'com.rideatlas.app',
           maxNativeZoom: 20,
         ),
@@ -270,11 +305,8 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
             ),
           ],
         ),
-        const RichAttributionWidget(
-          attributions: [
-            TextSourceAttribution('OpenStreetMap katkıda bulunanlar'),
-            TextSourceAttribution('CARTO'),
-          ],
+        RichAttributionWidget(
+          attributions: [TextSourceAttribution(_mapStyle.attribution)],
         ),
       ],
     );
@@ -328,6 +360,81 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
               onPressed: () => _share(route),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Centered picker for the map's base tile style (street, satellite, etc.),
+/// opened from the small layers button on the map screen.
+class _MapStylePickerDialog extends StatelessWidget {
+  const _MapStylePickerDialog({
+    required this.current,
+    required this.onSelected,
+  });
+
+  final BaseMapStyle current;
+  final ValueChanged<BaseMapStyle> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360, maxHeight: 480),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Harita türü',
+                      style: theme.textTheme.headlineSmall,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Kapat',
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: kBaseMapStyles.length,
+                  itemBuilder: (context, i) {
+                    final style = kBaseMapStyles[i];
+                    final selected = style.id == current.id;
+                    return ListTile(
+                      leading: Icon(
+                        style.icon,
+                        color: selected
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.outline,
+                      ),
+                      title: Text(style.label),
+                      selected: selected,
+                      trailing: selected
+                          ? Icon(Icons.check, color: theme.colorScheme.primary)
+                          : null,
+                      onTap: () {
+                        onSelected(style);
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
