@@ -106,5 +106,6 @@
   "statusLoadingWeather": "Hava durumu yükleniyor…",
   "dayFilterTooltip": "Günleri filtrele",
   "dayFilterTitle": "Hangi günler gösterilsin?",
-  "dayFilterShowAll": "Tüm günler"
+  "dayFilterShowAll": "Tüm günler",
+  "northUpTooltip": "Kuzeyi yukarı al"
 }

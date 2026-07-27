@@ -91,5 +91,6 @@
   "statusLoadingWeather": "Wetter wird geladen…",
   "dayFilterTooltip": "Tage filtern",
   "dayFilterTitle": "Welche Tage anzeigen?",
-  "dayFilterShowAll": "Alle Tage"
+  "dayFilterShowAll": "Alle Tage",
+  "northUpTooltip": "Nach Norden ausrichten"
 }
