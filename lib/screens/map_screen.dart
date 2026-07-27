@@ -69,6 +69,21 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   double _rotationDeg = 0;
   late final StreamSubscription<MapEvent> _mapEventSub;
 
+  /// flutter_map never retries a tile once it fails to load (a flaky
+  /// connection or a tile host's rate limit can otherwise leave permanent
+  /// gray gaps) - pushing into this forces every visible tile to reload.
+  final _tileResetController = StreamController<void>.broadcast();
+  bool _tileRetryScheduled = false;
+
+  void _onTileError(TileImage tile, Object error, StackTrace? stackTrace) {
+    if (_tileRetryScheduled) return;
+    _tileRetryScheduled = true;
+    Future.delayed(const Duration(seconds: 2), () {
+      _tileRetryScheduled = false;
+      if (mounted) _tileResetController.add(null);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -85,6 +100,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   @override
   void dispose() {
     _mapEventSub.cancel();
+    _tileResetController.close();
     super.dispose();
   }
 
@@ -406,6 +422,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           subdomains: _mapStyle.subdomains,
           userAgentPackageName: 'com.rideatlas.app',
           maxNativeZoom: 20,
+          evictErrorTileStrategy: EvictErrorTileStrategy.notVisibleRespectMargin,
+          errorTileCallback: _onTileError,
+          reset: _tileResetController.stream,
         ),
         PolylineLayer(polylines: polylines),
         MarkerLayer(
