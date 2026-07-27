@@ -95,5 +95,6 @@
   "northUpTooltip": "Nach Norden ausrichten",
   "showStopsTooltip": "Stopps und Übernachtungen anzeigen",
   "hideStopsTooltip": "Stopps und Übernachtungen ausblenden",
-  "overnightLabel": "Übernachtung"
+  "overnightLabel": "Übernachtung",
+  "changelogTitle": "Versionsverlauf"
 }

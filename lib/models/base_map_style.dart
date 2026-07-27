@@ -62,10 +62,14 @@ const kBaseMapStyles = <BaseMapStyle>[
     id: 'topo',
     label: 'Topografik',
     icon: Icons.terrain,
-    urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    subdomains: ['a', 'b', 'c'],
-    attribution:
-        'OpenStreetMap katkıda bulunanlar, SRTM, OpenTopoMap (CC-BY-SA)',
+    // OpenTopoMap's own usage policy asks that apps NOT hotlink its tile
+    // server beyond light previewing - it rate-limits/blocks anything more,
+    // which is what caused the gray/missing-tile patches some riders saw.
+    // Esri's hosted World_Topo_Map is built for exactly this kind of
+    // embedding (same family as the 'satellite' style below).
+    urlTemplate:
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Esri, HERE, Garmin, FAO, NOAA, USGS, OpenStreetMap katkıda bulunanlar',
   ),
 ];
 

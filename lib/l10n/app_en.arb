@@ -95,5 +95,6 @@
   "northUpTooltip": "Reset to north",
   "showStopsTooltip": "Show stops and overnight stays",
   "hideStopsTooltip": "Hide stops and overnight stays",
-  "overnightLabel": "Overnight stay"
+  "overnightLabel": "Overnight stay",
+  "changelogTitle": "Version history"
 }
