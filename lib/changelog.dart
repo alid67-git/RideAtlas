@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.13 beta',
+    date: '2026-07-28',
+    note:
+        'Harita ekranındaki "Rotalar" penceresine de çoklu seçim eklendi: '
+        'oradan da birden fazla rotayı işaretleyip aynı haritada '
+        'gösterebilirsiniz.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.12 beta',
     date: '2026-07-28',
     note:
