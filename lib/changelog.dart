@@ -20,6 +20,13 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.12 beta',
+    date: '2026-07-28',
+    note:
+        'Üst çubuktaki çoklu seçim ikonu, sadece 2+ rota varken değil, tek '
+        'rota varken de artık görünüyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.11 beta',
     date: '2026-07-27',
     note:

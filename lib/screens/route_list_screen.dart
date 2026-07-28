@@ -186,7 +186,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
               )
             : null,
         actions: [
-          if (routes.length > 1)
+          if (routes.isNotEmpty)
             IconButton(
               icon: Icon(
                 _selectionMode ? Icons.close : Icons.checklist,
