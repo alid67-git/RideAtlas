@@ -96,5 +96,10 @@
   "showStopsTooltip": "Stopps und Übernachtungen anzeigen",
   "hideStopsTooltip": "Stopps und Übernachtungen ausblenden",
   "overnightLabel": "Übernachtung",
-  "changelogTitle": "Versionsverlauf"
+  "changelogTitle": "Versionsverlauf",
+  "selectRoutesTooltip": "Strecken auswählen",
+  "exitSelectionTooltip": "Auswahl abbrechen",
+  "selectedCountTitle": "{count} ausgewählt",
+  "showOnMapButton": "Auf Karte anzeigen ({count})",
+  "routesCountLabel": "{count} Strecken"
 }

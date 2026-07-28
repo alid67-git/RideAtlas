@@ -10,6 +10,7 @@ import '../repositories/route_repository.dart';
 import '../widgets/route_card.dart';
 import 'language_picker.dart';
 import 'map_screen.dart';
+import 'multi_route_map_screen.dart';
 
 const _metaBoxName = 'rideatlas_meta';
 const _lastSeenBuildKey = 'last_seen_build';
@@ -23,6 +24,23 @@ class RouteListScreen extends StatefulWidget {
 
 class _RouteListScreenState extends State<RouteListScreen> {
   bool _importing = false;
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+
+  void _toggleSelectionMode() {
+    setState(() {
+      _selectionMode = !_selectionMode;
+      _selectedIds.clear();
+    });
+  }
+
+  void _showSelectedOnMap() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MultiRouteMapScreen(routeIds: _selectedIds.toList()),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -150,53 +168,89 @@ class _RouteListScreenState extends State<RouteListScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final repo = context.watch<RouteRepository>();
+    final routes = repo.routes;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('RideAtlas'),
-        actions: const [LanguagePickerButton()],
-      ),
-      body: Consumer<RouteRepository>(
-        builder: (context, repo, _) {
-          if (repo.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final routes = repo.routes;
-          if (routes.isEmpty) {
-            return _EmptyState(onImport: _importing ? null : _importTrack);
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: routes.length,
-            itemBuilder: (context, i) {
-              final route = routes[i];
-              return RouteCard(
-                route: route,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => RouteMapScreen(routeId: route.id),
-                  ),
-                ),
-                onRename: () => _rename(route),
-                onDelete: () => _delete(route),
-              );
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _importing ? null : _importTrack,
-        icon: _importing
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
+        title: Text(
+          _selectionMode
+              ? l10n.selectedCountTitle(_selectedIds.length)
+              : 'RideAtlas',
+        ),
+        leading: _selectionMode
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: l10n.exitSelectionTooltip,
+                onPressed: _toggleSelectionMode,
               )
-            : const Icon(Icons.add),
-        label: Text(l10n.importTrackButton),
+            : null,
+        actions: [
+          if (routes.length > 1)
+            IconButton(
+              icon: Icon(
+                _selectionMode ? Icons.close : Icons.checklist,
+              ),
+              tooltip: _selectionMode
+                  ? l10n.exitSelectionTooltip
+                  : l10n.selectRoutesTooltip,
+              onPressed: _toggleSelectionMode,
+            ),
+          if (!_selectionMode) const LanguagePickerButton(),
+        ],
       ),
+      body: repo.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : routes.isEmpty
+          ? _EmptyState(onImport: _importing ? null : _importTrack)
+          : ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: routes.length,
+              itemBuilder: (context, i) {
+                final route = routes[i];
+                return RouteCard(
+                  route: route,
+                  selectionMode: _selectionMode,
+                  selected: _selectedIds.contains(route.id),
+                  onSelectedChanged: (selected) => setState(() {
+                    if (selected) {
+                      _selectedIds.add(route.id);
+                    } else {
+                      _selectedIds.remove(route.id);
+                    }
+                  }),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => RouteMapScreen(routeId: route.id),
+                    ),
+                  ),
+                  onRename: () => _rename(route),
+                  onDelete: () => _delete(route),
+                );
+              },
+            ),
+      floatingActionButton: _selectionMode
+          ? (_selectedIds.isEmpty
+                ? null
+                : FloatingActionButton.extended(
+                    onPressed: _showSelectedOnMap,
+                    icon: const Icon(Icons.map),
+                    label: Text(l10n.showOnMapButton(_selectedIds.length)),
+                  ))
+          : FloatingActionButton.extended(
+              onPressed: _importing ? null : _importTrack,
+              icon: _importing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.add),
+              label: Text(l10n.importTrackButton),
+            ),
     );
   }
 }

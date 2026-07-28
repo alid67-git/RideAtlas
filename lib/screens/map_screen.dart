@@ -154,7 +154,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   void _showMapStylePicker() {
     showDialog<void>(
       context: context,
-      builder: (_) => _MapStylePickerDialog(
+      builder: (_) => MapStylePickerDialog(
         current: _mapStyle,
         onSelected: _changeMapStyle,
       ),
@@ -600,8 +600,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
 
 /// Centered picker for the map's base tile style (street, satellite, etc.),
 /// opened from the small layers button on the map screen.
-class _MapStylePickerDialog extends StatelessWidget {
-  const _MapStylePickerDialog({
+class MapStylePickerDialog extends StatelessWidget {
+  const MapStylePickerDialog({
+    super.key,
     required this.current,
     required this.onSelected,
   });
