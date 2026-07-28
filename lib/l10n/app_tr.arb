@@ -111,5 +111,13 @@
   "showStopsTooltip": "Molaları ve gecelemeleri göster",
   "hideStopsTooltip": "Molaları ve gecelemeleri gizle",
   "overnightLabel": "Geceleme",
-  "changelogTitle": "Sürüm geçmişi"
+  "changelogTitle": "Sürüm geçmişi",
+  "selectRoutesTooltip": "Rotaları seç",
+  "exitSelectionTooltip": "Seçimi iptal et",
+  "selectedCountTitle": "{count} seçildi",
+  "@selectedCountTitle": {"placeholders": {"count": {"type": "int"}}},
+  "showOnMapButton": "Haritada göster ({count})",
+  "@showOnMapButton": {"placeholders": {"count": {"type": "int"}}},
+  "routesCountLabel": "{count} rota",
+  "@routesCountLabel": {"placeholders": {"count": {"type": "int"}}}
 }

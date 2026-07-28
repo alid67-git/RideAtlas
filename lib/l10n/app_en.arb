@@ -96,5 +96,10 @@
   "showStopsTooltip": "Show stops and overnight stays",
   "hideStopsTooltip": "Hide stops and overnight stays",
   "overnightLabel": "Overnight stay",
-  "changelogTitle": "Version history"
+  "changelogTitle": "Version history",
+  "selectRoutesTooltip": "Select routes",
+  "exitSelectionTooltip": "Cancel selection",
+  "selectedCountTitle": "{count} selected",
+  "showOnMapButton": "Show on map ({count})",
+  "routesCountLabel": "{count} routes"
 }

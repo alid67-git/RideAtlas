@@ -11,12 +11,21 @@ class RouteCard extends StatelessWidget {
     required this.onTap,
     required this.onRename,
     required this.onDelete,
+    this.selectionMode = false,
+    this.selected = false,
+    this.onSelectedChanged,
   });
 
   final GpxRoute route;
   final VoidCallback onTap;
   final VoidCallback onRename;
   final VoidCallback onDelete;
+
+  /// When true, tapping the card toggles [selected] instead of calling
+  /// [onTap], and a checkbox replaces the route icon / popup menu.
+  final bool selectionMode;
+  final bool selected;
+  final ValueChanged<bool>? onSelectedChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -31,19 +40,27 @@ class RouteCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap,
+        onTap: selectionMode
+            ? () => onSelectedChanged?.call(!selected)
+            : onTap,
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: theme.colorScheme.primaryContainer,
-                child: Icon(
-                  Icons.route,
-                  color: theme.colorScheme.onPrimaryContainer,
+              if (selectionMode)
+                Checkbox(
+                  value: selected,
+                  onChanged: (v) => onSelectedChanged?.call(v ?? false),
+                )
+              else
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  child: Icon(
+                    Icons.route,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
                 ),
-              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -83,16 +100,17 @@ class RouteCard extends StatelessWidget {
                   ],
                 ),
               ),
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'rename') onRename();
-                  if (value == 'delete') onDelete();
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(value: 'rename', child: Text(l10n.rename)),
-                  PopupMenuItem(value: 'delete', child: Text(l10n.delete)),
-                ],
-              ),
+              if (!selectionMode)
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'rename') onRename();
+                    if (value == 'delete') onDelete();
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(value: 'rename', child: Text(l10n.rename)),
+                    PopupMenuItem(value: 'delete', child: Text(l10n.delete)),
+                  ],
+                ),
             ],
           ),
         ),
