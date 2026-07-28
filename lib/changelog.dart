@@ -20,6 +20,13 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.14 beta',
+    date: '2026-07-28',
+    note:
+        'Birden fazla rotayı aynı haritada gösterirken de, haritayı '
+        'döndürdüğünüzde artık kuzeye dön pusulası çıkıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.13 beta',
     date: '2026-07-28',
     note:

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hive/hive.dart';
@@ -44,12 +46,31 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   String? _error;
   BaseMapStyle _mapStyle = kBaseMapStyles.first;
 
+  /// Current map bearing in degrees, tracked so the compass button can show
+  /// which way is north and only appear once the map's been rotated off it.
+  double _rotationDeg = 0;
+  late final StreamSubscription<MapEvent> _mapEventSub;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     _loadMapStyle();
+    _mapEventSub = _mapController.mapEventStream.listen((event) {
+      final rotation = event.camera.rotation;
+      if (rotation != _rotationDeg && mounted) {
+        setState(() => _rotationDeg = rotation);
+      }
+    });
   }
+
+  @override
+  void dispose() {
+    _mapEventSub.cancel();
+    super.dispose();
+  }
+
+  void _resetNorth() => _mapController.rotate(0);
 
   Future<void> _loadMapStyle() async {
     final box = await Hive.openBox<String>(_metaBoxName);
@@ -222,6 +243,18 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
                   onPressed: _zoomOut,
                   child: const Icon(Icons.remove),
                 ),
+                if (_rotationDeg.abs() > 0.5) ...[
+                  const SizedBox(height: 8),
+                  FloatingActionButton.small(
+                    heroTag: 'multiNorthUp',
+                    tooltip: l10n.northUpTooltip,
+                    onPressed: _resetNorth,
+                    child: Transform.rotate(
+                      angle: -_rotationDeg * pi / 180,
+                      child: const Icon(Icons.navigation),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 FloatingActionButton(
                   heroTag: 'multiFit',
