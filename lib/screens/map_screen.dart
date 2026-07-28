@@ -20,6 +20,7 @@ import '../services/route_geography.dart';
 import '../services/track_io.dart';
 import 'analysis_sheet.dart';
 import 'language_picker.dart';
+import 'multi_route_map_screen.dart';
 
 String _mapStyleLabel(AppLocalizations l10n, BaseMapStyle style) {
   return switch (style.id) {
@@ -809,6 +810,23 @@ class _RouteSwitcherDialog extends StatefulWidget {
 
 class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
   bool _importing = false;
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+
+  void _toggleSelectionMode() {
+    setState(() {
+      _selectionMode = !_selectionMode;
+      _selectedIds.clear();
+    });
+  }
+
+  void _showSelectedOnMap() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => MultiRouteMapScreen(routeIds: _selectedIds.toList()),
+      ),
+    );
+  }
 
   Future<void> _importTrack() async {
     final result = await FilePicker.pickFiles(
@@ -882,23 +900,38 @@ class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
             children: [
               Row(
                 children: [
+                  if (_selectionMode)
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      tooltip: l10n.exitSelectionTooltip,
+                      onPressed: _toggleSelectionMode,
+                    ),
                   Expanded(
                     child: Text(
-                      l10n.routesDialogTitle,
+                      _selectionMode
+                          ? l10n.selectedCountTitle(_selectedIds.length)
+                          : l10n.routesDialogTitle,
                       style: theme.textTheme.headlineSmall,
                     ),
                   ),
-                  IconButton(
-                    icon: _importing
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.add),
-                    tooltip: l10n.importTooltip,
-                    onPressed: _importing ? null : _importTrack,
-                  ),
+                  if (!_selectionMode && routes.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.checklist),
+                      tooltip: l10n.selectRoutesTooltip,
+                      onPressed: _toggleSelectionMode,
+                    ),
+                  if (!_selectionMode)
+                    IconButton(
+                      icon: _importing
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.add),
+                      tooltip: l10n.importTooltip,
+                      onPressed: _importing ? null : _importTrack,
+                    ),
                   IconButton(
                     icon: const Icon(Icons.close),
                     tooltip: l10n.close,
@@ -912,53 +945,90 @@ class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
                   itemCount: routes.length,
                   itemBuilder: (context, i) {
                     final r = routes[i];
-                    final selected = r.id == widget.currentRouteId;
+                    final isCurrent = r.id == widget.currentRouteId;
+                    final isChecked = _selectedIds.contains(r.id);
                     return ListTile(
-                      leading: Icon(
-                        Icons.route,
-                        color: selected
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.outline,
-                      ),
+                      leading: _selectionMode
+                          ? Checkbox(
+                              value: isChecked,
+                              onChanged: (v) => setState(() {
+                                if (v ?? false) {
+                                  _selectedIds.add(r.id);
+                                } else {
+                                  _selectedIds.remove(r.id);
+                                }
+                              }),
+                            )
+                          : Icon(
+                              Icons.route,
+                              color: isCurrent
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.outline,
+                            ),
                       title: Text(
                         r.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text('${r.distanceKm.toStringAsFixed(1)} km'),
-                      selected: selected,
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (value) {
-                          if (value == 'rename') _renameRoute(context, r);
-                          if (value == 'delete') {
-                            _deleteRoute(context, r, selected);
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            value: 'rename',
-                            child: Text(l10n.rename),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Text(l10n.delete),
-                          ),
-                        ],
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        if (!selected) {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                              builder: (_) => RouteMapScreen(routeId: r.id),
+                      selected: _selectionMode ? isChecked : isCurrent,
+                      trailing: _selectionMode
+                          ? null
+                          : PopupMenuButton<String>(
+                              onSelected: (value) {
+                                if (value == 'rename') {
+                                  _renameRoute(context, r);
+                                }
+                                if (value == 'delete') {
+                                  _deleteRoute(context, r, isCurrent);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                PopupMenuItem(
+                                  value: 'rename',
+                                  child: Text(l10n.rename),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text(l10n.delete),
+                                ),
+                              ],
                             ),
-                          );
-                        }
-                      },
+                      onTap: _selectionMode
+                          ? () => setState(() {
+                              if (isChecked) {
+                                _selectedIds.remove(r.id);
+                              } else {
+                                _selectedIds.add(r.id);
+                              }
+                            })
+                          : () {
+                              Navigator.pop(context);
+                              if (!isCurrent) {
+                                Navigator.of(context).pushReplacement(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        RouteMapScreen(routeId: r.id),
+                                  ),
+                                );
+                              }
+                            },
                     );
                   },
                 ),
               ),
+              if (_selectionMode && _selectedIds.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, right: 12),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: _showSelectedOnMap,
+                      icon: const Icon(Icons.map),
+                      label: Text(l10n.showOnMapButton(_selectedIds.length)),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
