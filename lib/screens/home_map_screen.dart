@@ -17,6 +17,11 @@ const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
 const _lastSeenBuildKey = 'last_seen_build';
 
+/// A wide, regional view (several countries visible) - the landing map
+/// starts here and stays here even once the device's location is found;
+/// only an explicit "locate me" tap zooms in close.
+const _defaultZoom = 5.0;
+
 /// The app's landing screen: a live map centered on the device's current
 /// location (like a stock maps app), with the saved-routes list one tap
 /// away via the list icon.
@@ -133,7 +138,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           });
           if (!_centeredOnce) {
             _centeredOnce = true;
-            _mapController.move(location, 14);
+            // A wide, regional view by default - just placing the dot, not
+            // zooming in close. The locate-me button still zooms in close
+            // (see _recenter) since that's a deliberate "take me there".
+            _mapController.move(location, _defaultZoom);
           }
         });
   }
@@ -270,7 +278,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       mapController: _mapController,
       options: MapOptions(
         initialCenter: _currentLocation ?? const LatLng(41.0082, 28.9784),
-        initialZoom: _currentLocation != null ? 14 : 5,
+        initialZoom: _defaultZoom,
       ),
       children: [
         TileLayer(
