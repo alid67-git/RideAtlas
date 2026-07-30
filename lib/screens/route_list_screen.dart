@@ -1,9 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
 
-import '../build_info.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
 import '../repositories/route_repository.dart';
@@ -12,9 +10,6 @@ import 'language_picker.dart';
 import 'map_screen.dart';
 import 'multi_route_map_screen.dart';
 import 'record_screen.dart';
-
-const _metaBoxName = 'rideatlas_meta';
-const _lastSeenBuildKey = 'last_seen_build';
 
 class RouteListScreen extends StatefulWidget {
   const RouteListScreen({super.key});
@@ -41,35 +36,6 @@ class _RouteListScreenState extends State<RouteListScreen> {
         builder: (_) => MultiRouteMapScreen(routeIds: _selectedIds.toList()),
       ),
     );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowWhatsNew());
-  }
-
-  Future<void> _maybeShowWhatsNew() async {
-    final box = await Hive.openBox<String>(_metaBoxName);
-    if (box.get(_lastSeenBuildKey) == kAppBuildLabel) return;
-    if (!mounted) return;
-
-    final l10n = AppLocalizations.of(context)!;
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.appRunningVersion(kAppBuildLabel)),
-        content: Text(kAppBuildNote),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(l10n.close),
-          ),
-        ],
-      ),
-    );
-    await box.put(_lastSeenBuildKey, kAppBuildLabel);
   }
 
   Future<void> _importTrack() async {

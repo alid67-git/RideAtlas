@@ -20,6 +20,13 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.16 beta',
+    date: '2026-07-30',
+    note:
+        'Uygulama artık, konumunuzu gösteren canlı bir haritayla açılıyor. '
+        'Kaydettiğiniz rotalara sol üstteki liste ikonundan ulaşabilirsiniz.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.15 beta',
     date: '2026-07-28',
     note:
