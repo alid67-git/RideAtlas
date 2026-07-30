@@ -50,6 +50,7 @@ dependencies:
   xml: ^7.0.1
   http: ^1.4.0
   archive: ^4.0.7
+  geolocator: ^14.0.2
 
 dev_dependencies:
   flutter_test:

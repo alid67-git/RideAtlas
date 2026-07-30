@@ -11,6 +11,7 @@ import '../widgets/route_card.dart';
 import 'language_picker.dart';
 import 'map_screen.dart';
 import 'multi_route_map_screen.dart';
+import 'record_screen.dart';
 
 const _metaBoxName = 'rideatlas_meta';
 const _lastSeenBuildKey = 'last_seen_build';
@@ -195,6 +196,14 @@ class _RouteListScreenState extends State<RouteListScreen> {
                   ? l10n.exitSelectionTooltip
                   : l10n.selectRoutesTooltip,
               onPressed: _toggleSelectionMode,
+            ),
+          if (!_selectionMode)
+            IconButton(
+              icon: const Icon(Icons.fiber_manual_record, color: Colors.red),
+              tooltip: l10n.recordRideTooltip,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const RecordScreen()),
+              ),
             ),
           if (!_selectionMode) const LanguagePickerButton(),
         ],

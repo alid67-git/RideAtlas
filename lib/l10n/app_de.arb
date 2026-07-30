@@ -101,5 +101,20 @@
   "exitSelectionTooltip": "Auswahl abbrechen",
   "selectedCountTitle": "{count} ausgewählt",
   "showOnMapButton": "Auf Karte anzeigen ({count})",
-  "routesCountLabel": "{count} Strecken"
+  "routesCountLabel": "{count} Strecken",
+  "recordRideTooltip": "GPS-Aufzeichnung starten",
+  "startRecordingButton": "Aufzeichnung starten",
+  "pauseRecordingButton": "Pausieren",
+  "resumeRecordingButton": "Fortsetzen",
+  "finishRecordingButton": "Beenden und speichern",
+  "discardRecordingButton": "Aufzeichnung verwerfen",
+  "discardRecordingConfirmTitle": "Aufzeichnung verwerfen?",
+  "discardRecordingConfirmMessage": "Die bisher aufgezeichnete Strecke wird gelöscht. Dies kann nicht rückgängig gemacht werden.",
+  "exitRecordingConfirmTitle": "Aufzeichnung verlassen?",
+  "exitRecordingConfirmMessage": "Die Aufzeichnung läuft noch. Beim Verlassen geht sie verloren.",
+  "locationServiceDisabledError": "Standortdienste sind deaktiviert. Bitte aktivieren.",
+  "locationPermissionDeniedError": "Standortberechtigung wurde verweigert.",
+  "saveRecordingTitle": "Aufzeichnung benennen",
+  "recordingDefaultName": "Aufzeichnung {date}",
+  "recordingForegroundNotice": "Die Aufzeichnung läuft nur, solange dieser Tab im Vordergrund und der Bildschirm an ist; sie läuft nicht im Hintergrund."
 }

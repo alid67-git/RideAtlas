@@ -101,5 +101,20 @@
   "exitSelectionTooltip": "Cancel selection",
   "selectedCountTitle": "{count} selected",
   "showOnMapButton": "Show on map ({count})",
-  "routesCountLabel": "{count} routes"
+  "routesCountLabel": "{count} routes",
+  "recordRideTooltip": "Start GPS recording",
+  "startRecordingButton": "Start recording",
+  "pauseRecordingButton": "Pause",
+  "resumeRecordingButton": "Resume",
+  "finishRecordingButton": "Finish and save",
+  "discardRecordingButton": "Discard recording",
+  "discardRecordingConfirmTitle": "Discard this recording?",
+  "discardRecordingConfirmMessage": "The route recorded so far will be deleted. This can't be undone.",
+  "exitRecordingConfirmTitle": "Leave the recording?",
+  "exitRecordingConfirmMessage": "Recording is still in progress. Leaving will lose it.",
+  "locationServiceDisabledError": "Location services are turned off. Please enable them.",
+  "locationPermissionDeniedError": "Location permission was denied.",
+  "saveRecordingTitle": "Name the recording",
+  "recordingDefaultName": "Recording {date}",
+  "recordingForegroundNotice": "Recording only continues while this tab is in the foreground and the screen is on; it doesn't run in the background."
 }

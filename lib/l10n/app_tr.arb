@@ -119,5 +119,21 @@
   "showOnMapButton": "Haritada göster ({count})",
   "@showOnMapButton": {"placeholders": {"count": {"type": "int"}}},
   "routesCountLabel": "{count} rota",
-  "@routesCountLabel": {"placeholders": {"count": {"type": "int"}}}
+  "@routesCountLabel": {"placeholders": {"count": {"type": "int"}}},
+  "recordRideTooltip": "GPS kaydı başlat",
+  "startRecordingButton": "Kayda başla",
+  "pauseRecordingButton": "Duraklat",
+  "resumeRecordingButton": "Devam et",
+  "finishRecordingButton": "Bitir ve kaydet",
+  "discardRecordingButton": "Kaydı sil",
+  "discardRecordingConfirmTitle": "Kaydı silmek istiyor musunuz?",
+  "discardRecordingConfirmMessage": "Şu ana kadar kaydedilen rota silinecek. Bu işlem geri alınamaz.",
+  "exitRecordingConfirmTitle": "Kayıttan çıkılsın mı?",
+  "exitRecordingConfirmMessage": "Hâlâ kayıt yapılıyor. Çıkarsanız bu kayıt kaybolur.",
+  "locationServiceDisabledError": "Konum servisi kapalı. Lütfen açın.",
+  "locationPermissionDeniedError": "Konum izni verilmedi.",
+  "saveRecordingTitle": "Kaydı adlandır",
+  "recordingDefaultName": "Kayıt {date}",
+  "@recordingDefaultName": {"placeholders": {"date": {"type": "String"}}},
+  "recordingForegroundNotice": "Kayıt sadece bu sekme ön planda ve ekran açıkken sürer; arka planda devam etmez."
 }
