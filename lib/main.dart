@@ -8,7 +8,7 @@ import 'l10n/gen/app_localizations.dart';
 import 'repositories/locale_controller.dart';
 import 'repositories/route_repository.dart';
 import 'screens/changelog_dialog.dart';
-import 'screens/route_list_screen.dart';
+import 'screens/home_map_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -67,7 +67,7 @@ class RideAtlasApp extends StatelessWidget {
               ),
               useMaterial3: true,
             ),
-            home: const RouteListScreen(),
+            home: const HomeMapScreen(),
             builder: (context, child) {
               return Stack(
                 children: [
