@@ -11,6 +11,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import 'language_picker.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
+import 'record_screen.dart';
 import 'route_list_screen.dart';
 
 const _metaBoxName = 'rideatlas_meta';
@@ -179,6 +180,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       body: Stack(
         children: [
@@ -237,6 +239,23 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                 ),
               ),
             ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 24,
+            child: Center(
+              child: FloatingActionButton.large(
+                heroTag: 'homeRecord',
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                tooltip: l10n.recordRideTooltip,
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const RecordScreen()),
+                ),
+                child: const Icon(Icons.fiber_manual_record, size: 32),
+              ),
+            ),
+          ),
           Positioned(
             right: 16,
             bottom: 24,

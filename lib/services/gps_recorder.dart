@@ -18,18 +18,43 @@ enum RecordingStartError { serviceDisabled, permissionDenied }
 /// is active and the screen is on - there is no background/low-power mode,
 /// since that would require a native (App Store) build rather than a web app.
 class GpsRecorder extends ChangeNotifier {
+  /// Below this speed, the rider is considered stationary (traffic light,
+  /// fuel stop, etc.) for auto-pause purposes.
+  static const _autoPauseSpeedThresholdKmh = 1.5;
+
+  /// Above this speed (with hysteresis above the pause threshold, so GPS
+  /// jitter around walking pace doesn't flicker the state), auto-pause lifts.
+  static const _autoPauseResumeThresholdKmh = 3.0;
+
+  /// How long the rider must stay under the threshold before auto-pause
+  /// kicks in - long enough that a normal stop-sign or gear shift doesn't
+  /// trigger it.
+  static const _autoPauseDelay = Duration(seconds: 15);
+
   RecordingState _state = RecordingState.idle;
   final List<TrackPoint> _points = [];
   StreamSubscription<Position>? _sub;
   DateTime? _startedAt;
   Duration _pausedDuration = Duration.zero;
   DateTime? _pauseStartedAt;
+  double _currentSpeedKmh = 0;
+  double? _currentAltitude;
+  bool _isAutoPaused = false;
+  DateTime? _stationarySince;
 
   RecordingState get state => _state;
   List<TrackPoint> get points => List.unmodifiable(_points);
   bool get isRecording => _state == RecordingState.recording;
   bool get isPaused => _state == RecordingState.paused;
   bool get isIdle => _state == RecordingState.idle;
+  double get currentSpeedKmh => _currentSpeedKmh;
+  double? get currentAltitude => _currentAltitude;
+
+  /// True while [isRecording] but the rider has been stationary long enough
+  /// that new points/time aren't being accumulated. Distinct from [isPaused]
+  /// (a manual pause) so the UI can show a lighter "auto-paused" hint
+  /// instead of the full paused state.
+  bool get isAutoPaused => _isAutoPaused;
 
   double get distanceKm {
     var total = 0.0;
@@ -66,6 +91,10 @@ class GpsRecorder extends ChangeNotifier {
     _startedAt = DateTime.now();
     _pausedDuration = Duration.zero;
     _pauseStartedAt = null;
+    _currentSpeedKmh = 0;
+    _currentAltitude = null;
+    _isAutoPaused = false;
+    _stationarySince = null;
     _state = RecordingState.recording;
     notifyListeners();
 
@@ -80,6 +109,38 @@ class GpsRecorder extends ChangeNotifier {
 
   void _onPosition(Position pos) {
     if (_state != RecordingState.recording) return;
+
+    final speedKmh = (pos.speed.isFinite && pos.speed > 0)
+        ? pos.speed * 3.6
+        : 0.0;
+    _currentSpeedKmh = speedKmh;
+    _currentAltitude = pos.altitude;
+
+    if (_isAutoPaused) {
+      if (speedKmh >= _autoPauseResumeThresholdKmh) {
+        _isAutoPaused = false;
+        _stationarySince = null;
+        final pauseStarted = _pauseStartedAt;
+        if (pauseStarted != null) {
+          _pausedDuration += DateTime.now().difference(pauseStarted);
+          _pauseStartedAt = null;
+        }
+      } else {
+        notifyListeners();
+        return;
+      }
+    } else if (speedKmh < _autoPauseSpeedThresholdKmh) {
+      _stationarySince ??= DateTime.now();
+      if (DateTime.now().difference(_stationarySince!) >= _autoPauseDelay) {
+        _isAutoPaused = true;
+        _pauseStartedAt = DateTime.now();
+        notifyListeners();
+        return;
+      }
+    } else {
+      _stationarySince = null;
+    }
+
     _points.add(
       TrackPoint(
         latLng: LatLng(pos.latitude, pos.longitude),
@@ -93,7 +154,9 @@ class GpsRecorder extends ChangeNotifier {
   void pause() {
     if (_state != RecordingState.recording) return;
     _state = RecordingState.paused;
-    _pauseStartedAt = DateTime.now();
+    // If already auto-paused, keep the original pause start so that
+    // stationary time isn't undercounted.
+    _pauseStartedAt ??= DateTime.now();
     notifyListeners();
   }
 
@@ -104,6 +167,8 @@ class GpsRecorder extends ChangeNotifier {
       _pausedDuration += DateTime.now().difference(pauseStarted);
       _pauseStartedAt = null;
     }
+    _isAutoPaused = false;
+    _stationarySince = null;
     _state = RecordingState.recording;
     notifyListeners();
   }
@@ -125,6 +190,10 @@ class GpsRecorder extends ChangeNotifier {
     _startedAt = null;
     _pauseStartedAt = null;
     _pausedDuration = Duration.zero;
+    _currentSpeedKmh = 0;
+    _currentAltitude = null;
+    _isAutoPaused = false;
+    _stationarySince = null;
     _state = RecordingState.idle;
     notifyListeners();
   }
