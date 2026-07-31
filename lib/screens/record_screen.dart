@@ -261,24 +261,58 @@ class _RecordScreenState extends State<RecordScreen> {
     final durationStr = h > 0
         ? '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
         : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    final altitude = _recorder.currentAltitude;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _StatColumn(label: l10n.duration, value: durationStr),
-          _StatColumn(
-            label: l10n.distance,
-            value: '${_recorder.distanceKm.toStringAsFixed(2)} km',
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: const [
+              BoxShadow(color: Colors.black26, blurRadius: 6),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _StatColumn(label: l10n.duration, value: durationStr),
+              _StatColumn(
+                label: l10n.distance,
+                value: '${_recorder.distanceKm.toStringAsFixed(2)} km',
+              ),
+              _StatColumn(
+                label: l10n.speedLabel,
+                value:
+                    '${_recorder.currentSpeedKmh.toStringAsFixed(0)} km/s',
+              ),
+              _StatColumn(
+                label: l10n.currentAltitudeLabel,
+                value: altitude == null ? '—' : '${altitude.round()} m',
+              ),
+            ],
+          ),
+        ),
+        if (_recorder.isAutoPaused) ...[
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.tertiaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              l10n.autoPausedLabel,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onTertiaryContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
-      ),
+      ],
     );
   }
 

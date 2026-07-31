@@ -116,5 +116,8 @@
   "locationPermissionDeniedError": "Location permission was denied.",
   "saveRecordingTitle": "Name the recording",
   "recordingDefaultName": "Recording {date}",
-  "recordingForegroundNotice": "Recording only continues while this tab is in the foreground and the screen is on; it doesn't run in the background."
+  "recordingForegroundNotice": "Recording only continues while this tab is in the foreground and the screen is on; it doesn't run in the background.",
+  "speedLabel": "Speed",
+  "currentAltitudeLabel": "Altitude",
+  "autoPausedLabel": "Auto-paused"
 }

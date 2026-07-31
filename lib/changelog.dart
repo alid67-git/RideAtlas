@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.18 beta',
+    date: '2026-07-30',
+    note:
+        'Ana ekrana büyük bir kayıt düğmesi eklendi. Kayıt sırasında artık '
+        'hız ve yükseklik de üstte gösteriliyor; uzun süre dursanız kayıt '
+        'otomatik olarak duraklıyor, hareket edince kendiliğinden devam '
+        'ediyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.17 beta',
     date: '2026-07-30',
     note:

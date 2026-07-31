@@ -135,5 +135,8 @@
   "saveRecordingTitle": "Kaydı adlandır",
   "recordingDefaultName": "Kayıt {date}",
   "@recordingDefaultName": {"placeholders": {"date": {"type": "String"}}},
-  "recordingForegroundNotice": "Kayıt sadece bu sekme ön planda ve ekran açıkken sürer; arka planda devam etmez."
+  "recordingForegroundNotice": "Kayıt sadece bu sekme ön planda ve ekran açıkken sürer; arka planda devam etmez.",
+  "speedLabel": "Hız",
+  "currentAltitudeLabel": "Yükseklik",
+  "autoPausedLabel": "Otomatik duraklatıldı"
 }

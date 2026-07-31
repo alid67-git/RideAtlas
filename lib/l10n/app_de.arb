@@ -116,5 +116,8 @@
   "locationPermissionDeniedError": "Standortberechtigung wurde verweigert.",
   "saveRecordingTitle": "Aufzeichnung benennen",
   "recordingDefaultName": "Aufzeichnung {date}",
-  "recordingForegroundNotice": "Die Aufzeichnung läuft nur, solange dieser Tab im Vordergrund und der Bildschirm an ist; sie läuft nicht im Hintergrund."
+  "recordingForegroundNotice": "Die Aufzeichnung läuft nur, solange dieser Tab im Vordergrund und der Bildschirm an ist; sie läuft nicht im Hintergrund.",
+  "speedLabel": "Geschwindigkeit",
+  "currentAltitudeLabel": "Höhe",
+  "autoPausedLabel": "Automatisch pausiert"
 }
