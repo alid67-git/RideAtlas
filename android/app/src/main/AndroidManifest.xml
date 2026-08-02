@@ -11,6 +11,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Lets the in-app "Güncelle" button hand a downloaded APK straight to
+         the system installer (see lib/services/update_checker.dart), rather
+         than only opening a browser download the user has to find and tap
+         themselves afterward. This app is distributed via GitHub releases,
+         not the Play Store, so requesting it is fine - Play Store policy is
+         the reason most apps avoid it. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
         android:label="RideAtlas"
         android:name="${applicationName}"

@@ -50,6 +50,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   bool _centeredOnce = false;
   UpdateInfo? _updateInfo;
   bool _updateDismissed = false;
+  bool _installingUpdate = false;
 
   @override
   void initState() {
@@ -194,6 +195,26 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     );
   }
 
+  Future<void> _installUpdate(UpdateInfo info) async {
+    setState(() => _installingUpdate = true);
+    try {
+      await downloadAndInstallUpdate(info);
+    } catch (_) {
+      // The in-app download+install flow didn't work on this device (no
+      // handler for the installer intent, "install unknown apps" not
+      // granted yet, etc.) - fall back to a plain browser download, which
+      // always works, just with an extra manual step.
+      if (mounted) {
+        await launchUrl(
+          Uri.parse(info.downloadUrl),
+          mode: LaunchMode.externalApplication,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _installingUpdate = false);
+    }
+  }
+
   Widget? _buildUpdateBanner(AppLocalizations l10n) {
     final info = _updateInfo;
     if (info == null || _updateDismissed) return null;
@@ -213,11 +234,17 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             ),
           ),
           TextButton(
-            onPressed: () => launchUrl(
-              Uri.parse(info.downloadUrl),
-              mode: LaunchMode.externalApplication,
-            ),
-            child: Text(l10n.updateButtonLabel),
+            onPressed: _installingUpdate ? null : () => _installUpdate(info),
+            child: _installingUpdate
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  )
+                : Text(l10n.updateButtonLabel),
           ),
           IconButton(
             icon: const Icon(Icons.close, size: 18),

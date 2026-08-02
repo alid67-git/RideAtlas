@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.26 beta',
+    date: '2026-08-02',
+    note:
+        'İki düzeltme: kayda başlarken harita artık yanlış bir konuma '
+        'zıplamıyor; ve "Güncelle" düğmesi artık APK\'yı indirip '
+        'doğrudan kurulum ekranını açıyor (önceden sadece indiriyordu, '
+        'kurmak için ayrıca dosyayı bulup açmak gerekiyordu).',
+  ),
+  ChangelogEntry(
     version: 'v1.3.25 beta',
     date: '2026-08-02',
     note:
