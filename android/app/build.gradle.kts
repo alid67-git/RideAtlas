@@ -30,11 +30,27 @@ android {
         versionName = flutter.versionName
     }
 
+    // A committed, stable keystore - NOT Android's default auto-generated
+    // debug.keystore. That default is regenerated (with a new random key)
+    // whenever it doesn't already exist on the build machine, which is
+    // every single time on a fresh CI runner - so every CI-built APK ended
+    // up signed with a different key, and Android refuses to install an
+    // update over an app signed with a different key. This is a
+    // sideload-only key (not for the Play Store), so committing it is fine,
+    // the same way Android's own debug.keystore ships with a
+    // publicly-known password.
+    signingConfigs {
+        create("release") {
+            storeFile = file("rideatlas-debug.keystore")
+            storePassword = "rideatlas123"
+            keyAlias = "rideatlas"
+            keyPassword = "rideatlas123"
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
