@@ -130,5 +130,6 @@
   "photoAddFailedGeneric": "Could not add photo: {error}",
   "recordingBackgroundNoticeAndroid": "Recording continues in the background, with a notification, even if you minimize the app.",
   "updateAvailableMessage": "A new version is available ({version}).",
-  "updateButtonLabel": "Update"
+  "updateButtonLabel": "Update",
+  "recenterTooltip": "Back to my location"
 }

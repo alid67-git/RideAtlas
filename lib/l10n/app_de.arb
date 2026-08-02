@@ -130,5 +130,6 @@
   "photoAddFailedGeneric": "Foto konnte nicht hinzugefügt werden: {error}",
   "recordingBackgroundNoticeAndroid": "Die Aufzeichnung läuft mit einer Benachrichtigung auch im Hintergrund weiter, wenn Sie die App minimieren.",
   "updateAvailableMessage": "Eine neue Version ist verfügbar ({version}).",
-  "updateButtonLabel": "Aktualisieren"
+  "updateButtonLabel": "Aktualisieren",
+  "recenterTooltip": "Zu meinem Standort"
 }

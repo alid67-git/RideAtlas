@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.25 beta',
+    date: '2026-08-02',
+    note:
+        'Kayıt ekranında haritayı elle başka bir yere sürüklediğinizde '
+        'artık konumunuza geri dönmek için bir düğme çıkıyor - önceden '
+        'harita her GPS güncellemesinde otomatik olarak eski yerine '
+        'dönüyordu.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.24 beta',
     date: '2026-08-02',
     note:
