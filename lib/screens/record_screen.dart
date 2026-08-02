@@ -42,12 +42,17 @@ class _RecordScreenState extends State<RecordScreen> {
   bool _starting = false;
   bool _saving = false;
 
-  /// The device's live position, tracked independently of [_recorder] so the
-  /// map shows "you are here" immediately on opening this screen - before
-  /// recording starts, and during the brief gap before the recorder's own
-  /// stream produces its first point. Stopped once recording actually
-  /// begins, since [_recorder.points] takes over as the map's source of
-  /// truth from there (no need for two simultaneous GPS subscriptions).
+  /// The device's live position, tracked independently of [_recorder] and
+  /// kept running for the entire lifetime of this screen (idle and
+  /// recording alike) - this is the map's one and only source of truth for
+  /// "where am I". It's tempting to switch to [_recorder.points] once
+  /// recording starts (that's a second, separate GPS subscription
+  /// [GpsRecorder] owns for the actual track), but doing that caused a
+  /// visible jump: a freshly-started stream's first fix can be a quick,
+  /// less-accurate cached location before it settles, which reads as
+  /// "teleporting" right when recording begins. Keeping one continuous
+  /// stream driving the map avoids that, at the minor cost of two GPS
+  /// subscriptions running at once while recording.
   StreamSubscription<Position>? _liveLocationSub;
   LatLng? _currentLocation;
   bool _centeredOnce = false;
@@ -75,11 +80,8 @@ class _RecordScreenState extends State<RecordScreen> {
     });
   }
 
-  LatLng? get _latestKnownLocation =>
-      _recorder.points.isNotEmpty ? _recorder.points.last.latLng : _currentLocation;
-
   void _recenter() {
-    final location = _latestKnownLocation;
+    final location = _currentLocation;
     setState(() => _followMe = true);
     if (location != null) {
       final zoom = _mapController.camera.zoom;
@@ -127,11 +129,6 @@ class _RecordScreenState extends State<RecordScreen> {
   void _onRecorderChanged() {
     if (!mounted) return;
     setState(() {});
-    final points = _recorder.points;
-    if (points.isNotEmpty && _followMe) {
-      final zoom = _mapController.camera.zoom;
-      _mapController.move(points.last.latLng, zoom < 15 ? 16 : zoom);
-    }
   }
 
   @override
@@ -161,12 +158,7 @@ class _RecordScreenState extends State<RecordScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
-      return;
     }
-    // The recorder's own GPS stream is now the map's source of truth - no
-    // need for a second, independent subscription.
-    _liveLocationSub?.cancel();
-    _liveLocationSub = null;
   }
 
   Future<bool> _confirmDiscard() async {
@@ -476,20 +468,11 @@ class _RecordScreenState extends State<RecordScreen> {
   Widget _buildMap() {
     final points = _recorder.points;
     final style = kBaseMapStyles.first;
-    // While recording, the track's own last point is the source of truth;
-    // otherwise (idle, or the brief gap before the first point lands) fall
-    // back to the independently-tracked live position.
-    final markerPoint = points.isNotEmpty
-        ? points.last.latLng
-        : _currentLocation;
 
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
-        initialCenter:
-            markerPoint ??
-            _currentLocation ??
-            const LatLng(41.0082, 28.9784),
+        initialCenter: _currentLocation ?? const LatLng(41.0082, 28.9784),
         initialZoom: 16,
       ),
       children: [
@@ -509,11 +492,11 @@ class _RecordScreenState extends State<RecordScreen> {
               ),
             ],
           ),
-        if (markerPoint != null)
+        if (_currentLocation != null)
           MarkerLayer(
             markers: [
               Marker(
-                point: markerPoint,
+                point: _currentLocation!,
                 width: 20,
                 height: 20,
                 child: Container(

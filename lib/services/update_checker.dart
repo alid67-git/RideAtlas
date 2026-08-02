@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// A newer Android build found on GitHub than the one currently running.
 class UpdateInfo {
@@ -46,5 +49,28 @@ Future<UpdateInfo?> checkForAndroidUpdate(String currentVersion) async {
     return UpdateInfo(version: releaseVersion, downloadUrl: downloadUrl);
   } catch (_) {
     return null;
+  }
+}
+
+/// Downloads [info]'s APK to a temp file and hands it to the system
+/// installer (via a content:// URI, as required on Android 7+). Throws on
+/// any failure - a failed HTTP request, a write error, or the installer
+/// rejecting the file (e.g. "install unknown apps" not yet granted for this
+/// app) - so the caller can fall back to a plain browser download.
+Future<void> downloadAndInstallUpdate(UpdateInfo info) async {
+  final response = await http
+      .get(Uri.parse(info.downloadUrl))
+      .timeout(const Duration(minutes: 2));
+  if (response.statusCode != 200) {
+    throw HttpException('HTTP ${response.statusCode}');
+  }
+
+  final dir = await getTemporaryDirectory();
+  final file = File('${dir.path}/RideAtlas-update.apk');
+  await file.writeAsBytes(response.bodyBytes);
+
+  final result = await OpenFilex.open(file.path);
+  if (result.type != ResultType.done) {
+    throw Exception(result.message);
   }
 }
