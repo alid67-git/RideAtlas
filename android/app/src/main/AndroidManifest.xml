@@ -1,5 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Live ride recording: fine-grained location plus a foreground service
+         with a persistent notification, so tracking keeps running while the
+         app is minimized. This is *not* the separate, more sensitive
+         ACCESS_BACKGROUND_LOCATION permission - an active foreground service
+         already counts as "in use" for Android's location permission model,
+         so we deliberately don't request that broader one. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="RideAtlas"
         android:name="${applicationName}"

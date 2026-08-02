@@ -138,5 +138,14 @@
   "recordingForegroundNotice": "Kayıt sadece bu sekme ön planda ve ekran açıkken sürer; arka planda devam etmez.",
   "speedLabel": "Hız",
   "currentAltitudeLabel": "Yükseklik",
-  "autoPausedLabel": "Otomatik duraklatıldı"
+  "autoPausedLabel": "Otomatik duraklatıldı",
+  "recordingNotificationTitle": "RideAtlas kayıt yapıyor",
+  "recordingNotificationText": "Rotanız arka planda kaydediliyor",
+  "addPhotoTooltip": "Fotoğraf ekle",
+  "cameraSourceLabel": "Kameradan çek",
+  "gallerySourceLabel": "Galeriden seç",
+  "deletePhotoTitle": "Fotoğrafı sil",
+  "deletePhotoConfirm": "Bu fotoğrafı silmek istediğinize emin misiniz?",
+  "photoAddFailedGeneric": "Fotoğraf eklenemedi: {error}",
+  "@photoAddFailedGeneric": {"placeholders": {"error": {"type": "String"}}}
 }
