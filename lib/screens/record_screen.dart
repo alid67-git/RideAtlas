@@ -52,15 +52,39 @@ class _RecordScreenState extends State<RecordScreen> {
   LatLng? _currentLocation;
   bool _centeredOnce = false;
 
+  /// True while the map should keep auto-centering on the live position.
+  /// Any user-driven map interaction (drag, pinch, fling, ...) turns this
+  /// off, so panning around to look at the surroundings isn't constantly
+  /// fought by the auto-follow; the recenter button turns it back on.
+  bool _followMe = true;
+  late final StreamSubscription<MapEvent> _mapEventSub;
+
   @override
   void initState() {
     super.initState();
     _recorder.addListener(_onRecorderChanged);
     _startLiveLocation();
+    _mapEventSub = _mapController.mapEventStream.listen((event) {
+      if (event.source != MapEventSource.mapController && _followMe) {
+        setState(() => _followMe = false);
+      }
+    });
     // Refreshes the elapsed-time label even between GPS fixes.
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_recorder.isRecording && mounted) setState(() {});
     });
+  }
+
+  LatLng? get _latestKnownLocation =>
+      _recorder.points.isNotEmpty ? _recorder.points.last.latLng : _currentLocation;
+
+  void _recenter() {
+    final location = _latestKnownLocation;
+    setState(() => _followMe = true);
+    if (location != null) {
+      final zoom = _mapController.camera.zoom;
+      _mapController.move(location, zoom < 15 ? 16 : zoom);
+    }
   }
 
   Future<void> _startLiveLocation() async {
@@ -94,6 +118,8 @@ class _RecordScreenState extends State<RecordScreen> {
       if (!_centeredOnce) {
         _centeredOnce = true;
         _mapController.move(location, 16);
+      } else if (_followMe) {
+        _mapController.move(location, _mapController.camera.zoom);
       }
     });
   }
@@ -102,7 +128,7 @@ class _RecordScreenState extends State<RecordScreen> {
     if (!mounted) return;
     setState(() {});
     final points = _recorder.points;
-    if (points.isNotEmpty) {
+    if (points.isNotEmpty && _followMe) {
       final zoom = _mapController.camera.zoom;
       _mapController.move(points.last.latLng, zoom < 15 ? 16 : zoom);
     }
@@ -112,6 +138,7 @@ class _RecordScreenState extends State<RecordScreen> {
   void dispose() {
     _tickTimer?.cancel();
     _liveLocationSub?.cancel();
+    _mapEventSub.cancel();
     _recorder.removeListener(_onRecorderChanged);
     _recorder.dispose();
     super.dispose();
@@ -287,6 +314,20 @@ class _RecordScreenState extends State<RecordScreen> {
                 ),
               ),
             ),
+            if (!_followMe)
+              Positioned(
+                right: 16,
+                bottom: 100,
+                child: SafeArea(
+                  top: false,
+                  child: FloatingActionButton.small(
+                    heroTag: 'recordRecenter',
+                    tooltip: l10n.recenterTooltip,
+                    onPressed: _recenter,
+                    child: const Icon(Icons.my_location),
+                  ),
+                ),
+              ),
             Positioned(
               left: 0,
               right: 0,
