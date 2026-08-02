@@ -1,5 +1,10 @@
 plugins {
     id("com.android.application")
+    // Explicitly applied (rather than relying on AGP's built-in Kotlin
+    // support) so the `kotlin { compilerOptions { ... } }` block below
+    // works with AGP 8.x - see settings.gradle.kts for why we're pinned
+    // to 8.x.
+    id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
