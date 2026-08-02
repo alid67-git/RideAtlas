@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.24 beta',
+    date: '2026-08-02',
+    note:
+        'Kayıt ekranı artık açılır açılmaz mevcut konumunuzu gösteriyor - '
+        'önceden kayıt başlayana kadar (ve ilk GPS noktası gelene kadar) '
+        'sabit bir varsayılan konumda kalıyordu.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.23 beta',
     date: '2026-08-02',
     note:

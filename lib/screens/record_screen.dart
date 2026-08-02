@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -41,13 +42,59 @@ class _RecordScreenState extends State<RecordScreen> {
   bool _starting = false;
   bool _saving = false;
 
+  /// The device's live position, tracked independently of [_recorder] so the
+  /// map shows "you are here" immediately on opening this screen - before
+  /// recording starts, and during the brief gap before the recorder's own
+  /// stream produces its first point. Stopped once recording actually
+  /// begins, since [_recorder.points] takes over as the map's source of
+  /// truth from there (no need for two simultaneous GPS subscriptions).
+  StreamSubscription<Position>? _liveLocationSub;
+  LatLng? _currentLocation;
+  bool _centeredOnce = false;
+
   @override
   void initState() {
     super.initState();
     _recorder.addListener(_onRecorderChanged);
+    _startLiveLocation();
     // Refreshes the elapsed-time label even between GPS fixes.
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_recorder.isRecording && mounted) setState(() {});
+    });
+  }
+
+  Future<void> _startLiveLocation() async {
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) return;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+    } catch (_) {
+      // No geolocation support on this platform/browser - the map still
+      // works, just centered on the fallback location until recording
+      // starts producing points.
+      return;
+    }
+
+    _liveLocationSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+      ),
+    ).listen((pos) {
+      if (!mounted) return;
+      final location = LatLng(pos.latitude, pos.longitude);
+      setState(() => _currentLocation = location);
+      if (!_centeredOnce) {
+        _centeredOnce = true;
+        _mapController.move(location, 16);
+      }
     });
   }
 
@@ -64,6 +111,7 @@ class _RecordScreenState extends State<RecordScreen> {
   @override
   void dispose() {
     _tickTimer?.cancel();
+    _liveLocationSub?.cancel();
     _recorder.removeListener(_onRecorderChanged);
     _recorder.dispose();
     super.dispose();
@@ -86,7 +134,12 @@ class _RecordScreenState extends State<RecordScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
+      return;
     }
+    // The recorder's own GPS stream is now the map's source of truth - no
+    // need for a second, independent subscription.
+    _liveLocationSub?.cancel();
+    _liveLocationSub = null;
   }
 
   Future<bool> _confirmDiscard() async {
@@ -382,13 +435,20 @@ class _RecordScreenState extends State<RecordScreen> {
   Widget _buildMap() {
     final points = _recorder.points;
     final style = kBaseMapStyles.first;
+    // While recording, the track's own last point is the source of truth;
+    // otherwise (idle, or the brief gap before the first point lands) fall
+    // back to the independently-tracked live position.
+    final markerPoint = points.isNotEmpty
+        ? points.last.latLng
+        : _currentLocation;
 
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
-        initialCenter: points.isNotEmpty
-            ? points.last.latLng
-            : const LatLng(41.0082, 28.9784),
+        initialCenter:
+            markerPoint ??
+            _currentLocation ??
+            const LatLng(41.0082, 28.9784),
         initialZoom: 16,
       ),
       children: [
@@ -408,11 +468,11 @@ class _RecordScreenState extends State<RecordScreen> {
               ),
             ],
           ),
-        if (points.isNotEmpty)
+        if (markerPoint != null)
           MarkerLayer(
             markers: [
               Marker(
-                point: points.last.latLng,
+                point: markerPoint,
                 width: 20,
                 height: 20,
                 child: Container(
