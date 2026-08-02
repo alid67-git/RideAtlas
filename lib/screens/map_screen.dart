@@ -547,6 +547,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         child: Row(
           children: [
             _RoundIconButton(
+              icon: Icons.arrow_back,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            const SizedBox(width: 8),
+            _RoundIconButton(
               icon: Icons.list,
               onPressed: () => _showList(route),
             ),
