@@ -1,14 +1,17 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../build_info.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
+import '../services/update_checker.dart';
 import 'language_picker.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 import 'record_screen.dart';
@@ -17,6 +20,11 @@ import 'route_list_screen.dart';
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
 const _lastSeenBuildKey = 'last_seen_build';
+
+/// Update checks are Android-only: the web build redeploys itself on every
+/// visit (no APK to fall behind), and there's no iOS/desktop release yet.
+final _supportsUpdateCheck =
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
 /// A wide, regional view (several countries visible) - the landing map
 /// starts here and stays here even once the device's location is found;
@@ -40,6 +48,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   String? _locationError;
   BaseMapStyle _mapStyle = kBaseMapStyles.first;
   bool _centeredOnce = false;
+  UpdateInfo? _updateInfo;
+  bool _updateDismissed = false;
 
   @override
   void initState() {
@@ -47,6 +57,12 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowWhatsNew());
     _loadMapStyle();
     _startLocationUpdates();
+    if (_supportsUpdateCheck) _checkForUpdate();
+  }
+
+  Future<void> _checkForUpdate() async {
+    final info = await checkForAndroidUpdate(kAppBuildLabel);
+    if (info != null && mounted) setState(() => _updateInfo = info);
   }
 
   Future<void> _maybeShowWhatsNew() async {
@@ -178,9 +194,44 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     );
   }
 
+  Widget? _buildUpdateBanner(AppLocalizations l10n) {
+    final info = _updateInfo;
+    if (info == null || _updateDismissed) return null;
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              l10n.updateAvailableMessage(info.version),
+              style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
+            ),
+          ),
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.parse(info.downloadUrl),
+              mode: LaunchMode.externalApplication,
+            ),
+            child: Text(l10n.updateButtonLabel),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: () => setState(() => _updateDismissed = true),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final updateBanner = _buildUpdateBanner(l10n);
     return Scaffold(
       body: Stack(
         children: [
@@ -212,7 +263,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
             ),
           ),
-          if (_locationError != null)
+          if (_locationError != null || updateBanner != null)
             Positioned(
               top: 0,
               left: 0,
@@ -220,21 +271,33 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               child: SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(64, 8, 16, 0),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      _locationError!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                      ),
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (updateBanner != null) ...[
+                        updateBanner,
+                        const SizedBox(height: 8),
+                      ],
+                      if (_locationError != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.errorContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            _locationError!,
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
