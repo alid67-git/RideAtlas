@@ -31,7 +31,10 @@ class _RouteListScreenState extends State<RouteListScreen> {
   }
 
   void _showSelectedOnMap() {
-    Navigator.of(context).push(
+    // Replace, not push: RouteListScreen sits directly on the home map, so
+    // this keeps that one-screen depth instead of stacking indefinitely -
+    // a single back/pop returns straight to the home map.
+    Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => MultiRouteMapScreen(routeIds: _selectedIds.toList()),
       ),
@@ -62,7 +65,9 @@ class _RouteListScreenState extends State<RouteListScreen> {
         suggestedFileName: file.name,
       );
       if (!mounted) return;
-      Navigator.of(context).push(
+      Navigator.of(
+        context,
+      ).pushReplacement(
         MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)),
       );
     } on FormatException catch (_) {
@@ -167,7 +172,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
             IconButton(
               icon: const Icon(Icons.fiber_manual_record, color: Colors.red),
               tooltip: l10n.recordRideTooltip,
-              onPressed: () => Navigator.of(context).push(
+              onPressed: () => Navigator.of(context).pushReplacement(
                 MaterialPageRoute(builder: (_) => const RecordScreen()),
               ),
             ),
@@ -194,7 +199,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
                       _selectedIds.remove(route.id);
                     }
                   }),
-                  onTap: () => Navigator.of(context).push(
+                  onTap: () => Navigator.of(context).pushReplacement(
                     MaterialPageRoute(
                       builder: (_) => RouteMapScreen(routeId: route.id),
                     ),

@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.19 beta',
+    date: '2026-08-02',
+    note:
+        'Rota haritasına geri dönüş oku eklendi (eksikti) ve rota '
+        'listesinden bir rotaya girmek artık geçmişte liste ekranını '
+        'bırakmıyor - böylece geri dönmek tek dokunuşla ana ekrana '
+        'ulaşıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.18 beta',
     date: '2026-07-30',
     note:
