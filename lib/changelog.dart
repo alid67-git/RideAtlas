@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.20 beta',
+    date: '2026-08-02',
+    note:
+        'Android tarafında kayıt artık arka planda (uygulama küçültülse '
+        'bile) bir bildirimle birlikte devam edebiliyor. Web tarafı '
+        'değişmedi - hâlâ sekme ön plandayken kaydediyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.19 beta',
     date: '2026-08-02',
     note:

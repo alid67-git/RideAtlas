@@ -74,7 +74,14 @@ class GpsRecorder extends ChangeNotifier {
   }
 
   /// Returns null on success, or the reason it couldn't start.
-  Future<RecordingStartError?> start() async {
+  ///
+  /// [androidNotificationTitle]/[androidNotificationText] are only used on
+  /// Android, where a foreground service with a persistent notification is
+  /// required to keep tracking while the app is minimized.
+  Future<RecordingStartError?> start({
+    String androidNotificationTitle = 'RideAtlas',
+    String androidNotificationText = 'Recording your ride',
+  }) async {
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) return RecordingStartError.serviceDisabled;
 
@@ -99,12 +106,39 @@ class GpsRecorder extends ChangeNotifier {
     notifyListeners();
 
     _sub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
+      locationSettings: _buildLocationSettings(
+        notificationTitle: androidNotificationTitle,
+        notificationText: androidNotificationText,
       ),
     ).listen(_onPosition);
     return null;
+  }
+
+  /// On Android, wraps the location settings with a foreground-service
+  /// notification so tracking survives the app being minimized. Other
+  /// platforms (including web) get the plain settings, since only Android's
+  /// federated geolocator plugin supports this.
+  LocationSettings _buildLocationSettings({
+    required String notificationTitle,
+    required String notificationText,
+  }) {
+    const accuracy = LocationAccuracy.high;
+    const distanceFilter = 5;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: accuracy,
+        distanceFilter: distanceFilter,
+        foregroundNotificationConfig: ForegroundNotificationConfig(
+          notificationTitle: notificationTitle,
+          notificationText: notificationText,
+          enableWakeLock: true,
+        ),
+      );
+    }
+    return const LocationSettings(
+      accuracy: accuracy,
+      distanceFilter: distanceFilter,
+    );
   }
 
   void _onPosition(Position pos) {

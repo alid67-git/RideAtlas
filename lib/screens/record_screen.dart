@@ -63,7 +63,11 @@ class _RecordScreenState extends State<RecordScreen> {
 
   Future<void> _start() async {
     setState(() => _starting = true);
-    final error = await _recorder.start();
+    final l10nForStart = AppLocalizations.of(context)!;
+    final error = await _recorder.start(
+      androidNotificationTitle: l10nForStart.recordingNotificationTitle,
+      androidNotificationText: l10nForStart.recordingNotificationText,
+    );
     if (!mounted) return;
     setState(() => _starting = false);
     if (error != null) {

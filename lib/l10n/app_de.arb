@@ -119,5 +119,7 @@
   "recordingForegroundNotice": "Die Aufzeichnung läuft nur, solange dieser Tab im Vordergrund und der Bildschirm an ist; sie läuft nicht im Hintergrund.",
   "speedLabel": "Geschwindigkeit",
   "currentAltitudeLabel": "Höhe",
-  "autoPausedLabel": "Automatisch pausiert"
+  "autoPausedLabel": "Automatisch pausiert",
+  "recordingNotificationTitle": "RideAtlas zeichnet auf",
+  "recordingNotificationText": "Ihre Fahrt wird im Hintergrund aufgezeichnet"
 }
