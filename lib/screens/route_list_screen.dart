@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
+import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../widgets/route_card.dart';
 import 'language_picker.dart';
@@ -134,6 +135,8 @@ class _RouteListScreenState extends State<RouteListScreen> {
     );
     if (confirmed == true && mounted) {
       await context.read<RouteRepository>().delete(route.id);
+      if (!mounted) return;
+      await context.read<PhotoRepository>().deleteForRoute(route.id);
     }
   }
 

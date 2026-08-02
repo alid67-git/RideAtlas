@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.21 beta',
+    date: '2026-08-02',
+    note:
+        'Rota haritasına fotoğraf ekleyebilme özelliği geldi: kameradan '
+        'çekip veya galeriden seçip ekleyebilirsiniz. Konum bilgisi olan '
+        'fotoğraflar haritada da küçük bir işaret olarak gösteriliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.20 beta',
     date: '2026-08-02',
     note:

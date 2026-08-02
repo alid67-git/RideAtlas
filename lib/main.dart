@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'build_info.dart';
 import 'l10n/gen/app_localizations.dart';
 import 'repositories/locale_controller.dart';
+import 'repositories/photo_repository.dart';
 import 'repositories/route_repository.dart';
 import 'screens/changelog_dialog.dart';
 import 'screens/home_map_screen.dart';
@@ -30,6 +31,7 @@ class RideAtlasApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => RouteRepository()..load()),
+        ChangeNotifierProvider(create: (_) => PhotoRepository()..load()),
         ChangeNotifierProvider(create: (_) => LocaleController()..load()),
       ],
       child: Consumer<LocaleController>(

@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hive/hive.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -14,10 +15,13 @@ import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
+import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart';
+import '../services/exif_gps.dart';
 import '../services/route_geography.dart';
 import '../services/track_io.dart';
+import '../widgets/route_photo_strip.dart';
 import 'analysis_sheet.dart';
 import 'language_picker.dart';
 import 'multi_route_map_screen.dart';
@@ -288,6 +292,69 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
   }
 
+  Future<void> _addPhoto(GpxRoute route) async {
+    final l10n = AppLocalizations.of(context)!;
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera),
+              title: Text(l10n.cameraSourceLabel),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: Text(l10n.gallerySourceLabel),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    try {
+      final picker = ImagePicker();
+      final files = source == ImageSource.camera
+          ? [
+              ?await picker.pickImage(
+                source: ImageSource.camera,
+                imageQuality: 85,
+              ),
+            ]
+          : await picker.pickMultiImage(imageQuality: 85);
+      for (final file in files) {
+        if (!mounted) return;
+        final bytes = await file.readAsBytes();
+        final gps = await extractExifGps(bytes);
+        if (!mounted) return;
+        await context.read<PhotoRepository>().add(
+          routeId: route.id,
+          bytes: bytes,
+          lat: gps?.latitude,
+          lng: gps?.longitude,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.photoAddFailedGeneric('$e'))),
+      );
+    }
+  }
+
+  void _openPhotoViewer(GpxRoute route, String photoId) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black,
+      builder: (_) =>
+          PhotoViewerDialog(routeId: route.id, initialPhotoId: photoId),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<RouteRepository>(
@@ -325,6 +392,21 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 left: 0,
                 right: 0,
                 child: _buildTopBar(context, route),
+              ),
+              Positioned(
+                left: 0,
+                right: 88,
+                bottom: 0,
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: RoutePhotoStrip(
+                      routeId: route.id,
+                      onAddPhoto: () => _addPhoto(route),
+                    ),
+                  ),
+                ),
               ),
               Positioned(
                 right: 16,
@@ -531,6 +613,31 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 size: 36,
               ),
             ),
+            for (final photo
+                in context
+                    .watch<PhotoRepository>()
+                    .photosFor(route.id)
+                    .where((p) => p.hasLocation))
+              Marker(
+                point: photo.latLng!,
+                width: 44,
+                height: 44,
+                child: GestureDetector(
+                  onTap: () => _openPhotoViewer(route, photo.id),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.fromBorderSide(
+                        BorderSide(color: Colors.white, width: 2),
+                      ),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black38, blurRadius: 4),
+                      ],
+                    ),
+                    child: PhotoThumb(photoId: photo.id, size: 40, circle: true),
+                  ),
+                ),
+              ),
           ],
         ),
         RichAttributionWidget(
@@ -586,6 +693,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
             _RoundIconButton(
               icon: Icons.insights,
               onPressed: _points == null ? null : () => _openAnalysis(route),
+            ),
+            const SizedBox(width: 8),
+            _RoundIconButton(
+              icon: Icons.add_a_photo,
+              onPressed: () => _addPhoto(route),
             ),
             const SizedBox(width: 8),
             _RoundIconButton(
@@ -1093,6 +1205,8 @@ Future<void> _deleteRoute(
   if (confirmed != true || !context.mounted) return;
 
   await context.read<RouteRepository>().delete(route.id);
+  if (!context.mounted) return;
+  await context.read<PhotoRepository>().deleteForRoute(route.id);
   if (!context.mounted) return;
 
   if (isCurrentlyOpen) {
