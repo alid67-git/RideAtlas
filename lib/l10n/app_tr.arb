@@ -148,5 +148,8 @@
   "deletePhotoConfirm": "Bu fotoğrafı silmek istediğinize emin misiniz?",
   "photoAddFailedGeneric": "Fotoğraf eklenemedi: {error}",
   "@photoAddFailedGeneric": {"placeholders": {"error": {"type": "String"}}},
-  "recordingBackgroundNoticeAndroid": "Kayıt, bildirim çubuğunda bir bildirimle birlikte uygulama küçültülse de arka planda devam eder."
+  "recordingBackgroundNoticeAndroid": "Kayıt, bildirim çubuğunda bir bildirimle birlikte uygulama küçültülse de arka planda devam eder.",
+  "updateAvailableMessage": "Yeni bir sürüm var ({version}).",
+  "@updateAvailableMessage": {"placeholders": {"version": {"type": "String"}}},
+  "updateButtonLabel": "Güncelle"
 }

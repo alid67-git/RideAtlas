@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.23 beta',
+    date: '2026-08-02',
+    note:
+        'Android uygulaması artık açılışta yeni bir sürüm olup olmadığını '
+        'GitHub\'dan sessizce kontrol ediyor; varsa haritanın üstünde bir '
+        '"Güncelle" düğmesi çıkıyor ve tek dokunuşla indirme sayfasını '
+        'açıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.22 beta',
     date: '2026-08-02',
     note:

@@ -36,6 +36,16 @@ jobs:
       - name: Rename APK
         run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/RideAtlas.apk
 
+      # Embeds the build's own version label into the release name so the
+      # app itself (see lib/services/update_checker.dart) can tell whether
+      # this release is newer than the one currently running, without
+      # needing a separate version-tagging scheme.
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep -oP "(?<=kAppBuildLabel = ')[^']+" lib/build_info.dart)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       # Overwrites a single rolling "android-latest" release on every push, so
       # there's always one stable download link with the newest build -
       # rather than accumulating a new release per push. Uses the debug
@@ -45,7 +55,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-latest
-          name: RideAtlas Android (latest)
+          name: "RideAtlas Android (latest) - ${{ steps.version.outputs.version }}"
           body: |
             Otomatik olarak main dalındaki en son koddan derlendi.
             Kurmak için RideAtlas.apk dosyasını telefonunuza indirip açın
