@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
@@ -15,10 +15,18 @@ import '../services/gps_recorder.dart';
 import '../services/track_io.dart';
 import 'map_screen.dart' show RouteMapScreen;
 
-/// Records a ride live using the browser's Geolocation API (via
-/// [GpsRecorder]) and, once finished, saves it through the same import
-/// pipeline as a regular GPX file. Foreground-only: see
-/// AppLocalizations.recordingForegroundNotice for the reason.
+/// True on a native Android build, where [GpsRecorder] runs a foreground
+/// service and recording survives the app being minimized. Everywhere else
+/// (web, other platforms) recording only continues while this screen is the
+/// active, visible tab/app.
+final _supportsBackgroundRecording =
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+/// Records a ride live using [GpsRecorder] and, once finished, saves it
+/// through the same import pipeline as a regular GPX file. On Android this
+/// keeps recording while the app is minimized (a foreground service); on
+/// other platforms it only runs while this screen stays in the foreground -
+/// see AppLocalizations.recordingForegroundNotice for that case.
 class RecordScreen extends StatefulWidget {
   const RecordScreen({super.key});
 
@@ -252,7 +260,9 @@ class _RecordScreenState extends State<RecordScreen> {
           boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
         ),
         child: Text(
-          l10n.recordingForegroundNotice,
+          _supportsBackgroundRecording
+              ? l10n.recordingBackgroundNoticeAndroid
+              : l10n.recordingForegroundNotice,
           style: theme.textTheme.bodySmall,
         ),
       );
