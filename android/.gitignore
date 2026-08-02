@@ -12,3 +12,8 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+# Exception: app/rideatlas-debug.keystore is intentionally committed - it's
+# a sideload-only signing key (not for the Play Store), needed so every CI
+# build is signed identically and installs cleanly as an update. See the
+# comment next to its use in app/build.gradle.kts.
+!app/rideatlas-debug.keystore
