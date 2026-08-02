@@ -127,5 +127,6 @@
   "gallerySourceLabel": "Choose from gallery",
   "deletePhotoTitle": "Delete photo",
   "deletePhotoConfirm": "Are you sure you want to delete this photo?",
-  "photoAddFailedGeneric": "Could not add photo: {error}"
+  "photoAddFailedGeneric": "Could not add photo: {error}",
+  "recordingBackgroundNoticeAndroid": "Recording continues in the background, with a notification, even if you minimize the app."
 }

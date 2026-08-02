@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.22 beta',
+    date: '2026-08-02',
+    note:
+        'Android uygulamasında kayıt ekranındaki "sadece ön planda sürer" '
+        'uyarısı artık yanlıştı - Android\'de arka planda da kaydettiğini '
+        'doğru şekilde belirtiyor (web sürümünde uyarı hâlâ geçerli).',
+  ),
+  ChangelogEntry(
     version: 'v1.3.21 beta',
     date: '2026-08-02',
     note:
