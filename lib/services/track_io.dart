@@ -192,3 +192,9 @@ String stripTrackExtension(String fileName) {
     '',
   );
 }
+
+/// Trims stray trailing separators (underscores, dashes, whitespace) left
+/// over from a source filename, e.g. "Kapadokya_Turu_" -> "Kapadokya_Turu".
+String cleanRouteName(String name) {
+  return name.trim().replaceAll(RegExp(r'[\s_\-]+$'), '');
+}
