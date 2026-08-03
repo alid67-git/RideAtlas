@@ -152,5 +152,13 @@
   "updateAvailableMessage": "Yeni bir sürüm var ({version}).",
   "@updateAvailableMessage": {"placeholders": {"version": {"type": "String"}}},
   "updateButtonLabel": "Güncelle",
-  "recenterTooltip": "Konumuma dön"
+  "recenterTooltip": "Konumuma dön",
+  "videoCameraSourceLabel": "Video çek",
+  "videoGallerySourceLabel": "Galeriden video seç",
+  "noLocationFoundTitle": "Konum bulunamadı",
+  "noLocationFoundMessage": "Bu fotoğraf veya videoda konum bilgisi yok. Haritada nereye ait olduğunu işaretlemek ister misiniz?",
+  "skipLocationButton": "Atla",
+  "pickOnMapButton": "Haritada göster",
+  "pickLocationInstruction": "Konumu ayarlamak için haritayı kaydırın, sonra onaylayın.",
+  "confirmLocationButton": "Onayla"
 }

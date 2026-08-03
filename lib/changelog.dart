@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.27 beta',
+    date: '2026-08-02',
+    note:
+        'Rotalara artık video da eklenebiliyor (kameradan veya '
+        'galeriden). Fotoğraf veya videoda konum bilgisi bulunamazsa, '
+        'haritada nereye ait olduğunu elle işaretleyebiliyorsunuz.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.26 beta',
     date: '2026-08-02',
     note:

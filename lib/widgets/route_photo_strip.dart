@@ -1,24 +1,32 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:video_player/video_player.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/route_photo.dart';
 import '../repositories/photo_repository.dart';
 
-/// A small preview of a route photo, backed by [PhotoRepository]'s in-memory
-/// bytes cache (fetching lazily on first build). Used both in the filmstrip
-/// and as photo markers on the map.
+/// A small preview of a route photo or video, backed by [PhotoRepository]'s
+/// in-memory bytes cache (fetching lazily on first build). Used both in the
+/// filmstrip and as markers on the map. Videos show a plain placeholder
+/// icon rather than a decoded frame - generating a real video thumbnail
+/// needs a native plugin of its own, not worth it for a filmstrip icon.
 class PhotoThumb extends StatefulWidget {
   const PhotoThumb({
     super.key,
     required this.photoId,
     this.size = 64,
     this.circle = false,
+    this.isVideo = false,
   });
 
   final String photoId;
   final double size;
   final bool circle;
+  final bool isVideo;
 
   @override
   State<PhotoThumb> createState() => _PhotoThumbState();
@@ -28,13 +36,15 @@ class _PhotoThumbState extends State<PhotoThumb> {
   @override
   void initState() {
     super.initState();
-    _ensureLoaded();
+    if (!widget.isVideo) _ensureLoaded();
   }
 
   @override
   void didUpdateWidget(covariant PhotoThumb oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.photoId != widget.photoId) _ensureLoaded();
+    if (!widget.isVideo && oldWidget.photoId != widget.photoId) {
+      _ensureLoaded();
+    }
   }
 
   void _ensureLoaded() {
@@ -46,12 +56,22 @@ class _PhotoThumbState extends State<PhotoThumb> {
 
   @override
   Widget build(BuildContext context) {
-    final bytes = context.watch<PhotoRepository>().cachedBytes(
-      widget.photoId,
-    );
-    final content = bytes == null
-        ? const ColoredBox(color: Colors.black12)
-        : Image.memory(bytes, fit: BoxFit.cover);
+    Widget content;
+    if (widget.isVideo) {
+      content = const ColoredBox(
+        color: Colors.black87,
+        child: Center(
+          child: Icon(Icons.videocam, color: Colors.white70, size: 26),
+        ),
+      );
+    } else {
+      final bytes = context.watch<PhotoRepository>().cachedBytes(
+        widget.photoId,
+      );
+      content = bytes == null
+          ? const ColoredBox(color: Colors.black12)
+          : Image.memory(bytes, fit: BoxFit.cover);
+    }
     return SizedBox(
       width: widget.size,
       height: widget.size,
@@ -62,17 +82,17 @@ class _PhotoThumbState extends State<PhotoThumb> {
   }
 }
 
-/// Horizontal filmstrip of a route's attached photos, with a leading "add"
-/// tile. Tapping a thumbnail opens a full-screen viewer.
+/// Horizontal filmstrip of a route's attached photos/videos, with a leading
+/// "add" tile. Tapping a thumbnail opens a full-screen viewer.
 class RoutePhotoStrip extends StatelessWidget {
   const RoutePhotoStrip({
     super.key,
     required this.routeId,
-    required this.onAddPhoto,
+    required this.onAddMedia,
   });
 
   final String routeId;
-  final VoidCallback onAddPhoto;
+  final VoidCallback onAddMedia;
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +115,7 @@ class RoutePhotoStrip extends StatelessWidget {
               elevation: 2,
               child: InkWell(
                 borderRadius: BorderRadius.circular(10),
-                onTap: onAddPhoto,
+                onTap: onAddMedia,
                 child: SizedBox(
                   width: 56,
                   height: 56,
@@ -119,7 +139,11 @@ class RoutePhotoStrip extends StatelessWidget {
                   initialPhotoId: photo.id,
                 ),
               ),
-              child: PhotoThumb(photoId: photo.id, size: 56),
+              child: PhotoThumb(
+                photoId: photo.id,
+                size: 56,
+                isVideo: photo.isVideo,
+              ),
             ),
           ],
         ],
@@ -128,7 +152,8 @@ class RoutePhotoStrip extends StatelessWidget {
   }
 }
 
-/// Full-screen swipeable viewer for a route's photos, with a delete action.
+/// Full-screen swipeable viewer for a route's photos and videos, with a
+/// delete action.
 class PhotoViewerDialog extends StatefulWidget {
   const PhotoViewerDialog({
     super.key,
@@ -213,10 +238,16 @@ class _PhotoViewerDialogState extends State<PhotoViewerDialog> {
             itemCount: photos.length,
             onPageChanged: (i) => setState(() => _index = i),
             itemBuilder: (context, i) {
-              final bytes = photoRepo.cachedBytes(photos[i].id);
+              final photo = photos[i];
+              final bytes = photoRepo.cachedBytes(photo.id);
+              if (bytes == null) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                );
+              }
               return Center(
-                child: bytes == null
-                    ? const CircularProgressIndicator(color: Colors.white)
+                child: photo.isVideo
+                    ? _VideoPlayerView(photoId: photo.id, bytes: bytes)
                     : InteractiveViewer(child: Image.memory(bytes)),
               );
             },
@@ -242,6 +273,86 @@ class _PhotoViewerDialogState extends State<PhotoViewerDialog> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Plays a video from in-memory bytes by first writing them to a temp file -
+/// [VideoPlayerController] needs a file path (or network URL), not raw
+/// bytes. Tap to toggle play/pause.
+class _VideoPlayerView extends StatefulWidget {
+  const _VideoPlayerView({required this.photoId, required this.bytes});
+
+  final String photoId;
+  final List<int> bytes;
+
+  @override
+  State<_VideoPlayerView> createState() => _VideoPlayerViewState();
+}
+
+class _VideoPlayerViewState extends State<_VideoPlayerView> {
+  VideoPlayerController? _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/route_media_${widget.photoId}.mp4');
+    if (!await file.exists()) {
+      await file.writeAsBytes(widget.bytes);
+    }
+    final controller = VideoPlayerController.file(file);
+    await controller.initialize();
+    if (!mounted) {
+      await controller.dispose();
+      return;
+    }
+    setState(() => _controller = controller..play());
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      return const CircularProgressIndicator(color: Colors.white);
+    }
+    return GestureDetector(
+      onTap: () => setState(() {
+        if (controller.value.isPlaying) {
+          controller.pause();
+        } else {
+          controller.play();
+        }
+      }),
+      child: AspectRatio(
+        aspectRatio: controller.value.aspectRatio,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            VideoPlayer(controller),
+            ValueListenableBuilder<VideoPlayerValue>(
+              valueListenable: controller,
+              builder: (context, value, _) => value.isPlaying
+                  ? const SizedBox.shrink()
+                  : const Icon(
+                      Icons.play_arrow,
+                      color: Colors.white,
+                      size: 64,
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

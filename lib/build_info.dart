@@ -1,10 +1,9 @@
 /// Bumped by hand on every push so the running build can be eyeballed on
 /// screen (Chrome tabs / dev servers can otherwise silently serve stale JS).
-const String kAppBuildLabel = 'v1.3.26 beta';
+const String kAppBuildLabel = 'v1.3.27 beta';
 
 /// Shown once, in a dialog, the first time this build label is seen.
 const String kAppBuildNote =
-    'İki düzeltme: kayda başlarken harita artık yanlış bir konuma '
-    'zıplamıyor; ve "Güncelle" düğmesi artık APK\'yı indirip doğrudan '
-    'kurulum ekranını açıyor (önceden sadece indiriyordu, kurmak için '
-    'ayrıca dosyayı bulup açmak gerekiyordu).';
+    'Rotalara artık video da eklenebiliyor (kameradan veya galeriden). '
+    'Fotoğraf veya videoda konum bilgisi bulunamazsa, haritada nereye ait '
+    'olduğunu elle işaretleyebiliyorsunuz.';
