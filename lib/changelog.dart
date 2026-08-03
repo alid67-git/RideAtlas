@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.29 beta',
+    date: '2026-08-03',
+    note:
+        'Rota isminin altında artık ayın ve yılın (gün olmadan) yazdığı '
+        'bir tarih gösteriliyor. Dosya adından gelen rota isimlerinin '
+        'sonundaki gereksiz alt çizgi/tire gibi karakterler artık '
+        'otomatik temizleniyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.28 beta',
     date: '2026-08-03',
     note:

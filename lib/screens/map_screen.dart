@@ -780,6 +780,22 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
   }
 
+  /// The ride's month and year (no day) - e.g. "Ocak 2023" - taken from the
+  /// track's own first point, not [GpxRoute.importedAt] (which is just when
+  /// the file was added to the app, often long after the actual ride). Null
+  /// until points have loaded.
+  String? _routeDateLabel(BuildContext context) {
+    final points = _points;
+    final firstPointTime = (points != null && points.isNotEmpty)
+        ? points.first.time
+        : null;
+    if (firstPointTime == null) return null;
+    return DateFormat(
+      'MMMM yyyy',
+      Localizations.localeOf(context).languageCode,
+    ).format(firstPointTime);
+  }
+
   Widget _buildTopBar(BuildContext context, GpxRoute route) {
     return SafeArea(
       child: Padding(
@@ -837,14 +853,27 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                   BoxShadow(color: Colors.black26, blurRadius: 6),
                 ],
               ),
-              child: Text(
-                route.name,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    cleanRouteName(route.name),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (_routeDateLabel(context) case final dateLabel?)
+                    Text(
+                      dateLabel,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                    ),
+                ],
               ),
             ),
           ],

@@ -68,11 +68,11 @@ class RouteRepository extends ChangeNotifier {
     // (Garmin, "GPX Tracker", etc.) embed a generic auto-generated name like
     // "Track 219" inside the file's own metadata, which isn't what the user
     // meant when they renamed the file to something meaningful before import.
-    final baseName = stripTrackExtension(suggestedFileName);
+    final baseName = cleanRouteName(stripTrackExtension(suggestedFileName));
     final name = baseName.isNotEmpty
         ? baseName
         : (parsed.suggestedName?.isNotEmpty == true
-              ? parsed.suggestedName!
+              ? cleanRouteName(parsed.suggestedName!)
               : 'Adsız rota');
 
     final route = buildRouteMetadata(
