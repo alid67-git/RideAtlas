@@ -28,8 +28,20 @@ import 'language_picker.dart';
 import 'location_picker_screen.dart';
 import 'multi_route_map_screen.dart';
 
-/// Which media type + source the user picked from the "add media" sheet.
-enum _MediaPick { photoCamera, photoGallery, videoCamera, videoGallery }
+/// Videos picked from the gallery come back as a plain [XFile] alongside
+/// photos, with no separate list to tell them apart - this is how we sort
+/// them back out.
+bool _looksLikeVideo(XFile file) {
+  final mime = file.mimeType;
+  if (mime != null) return mime.startsWith('video/');
+  final name = file.name.toLowerCase();
+  return name.endsWith('.mp4') ||
+      name.endsWith('.mov') ||
+      name.endsWith('.m4v') ||
+      name.endsWith('.avi') ||
+      name.endsWith('.webm') ||
+      name.endsWith('.3gp');
+}
 
 String _mapStyleLabel(AppLocalizations l10n, BaseMapStyle style) {
   return switch (style.id) {
@@ -95,9 +107,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   /// blank from the filter alone.
   Set<int>? _visibleDayNumbers;
 
-  /// Whether detected-stop pins are drawn on the map. On by default; a
-  /// button lets riders hide them if they find the map too busy.
-  bool _showStops = true;
+  /// Whether detected-stop pins (rest stops and overnight stays) are drawn
+  /// on the map. Off by default so a ride's first view is uncluttered; a
+  /// button lets riders reveal them when they want the detail.
+  bool _showStops = false;
 
   /// Current map bearing in degrees, tracked so the compass button can show
   /// which way is north and only appear once the map's been rotated off it.
@@ -297,9 +310,15 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
   }
 
+  /// A single entry point for adding either photos or videos: picking from
+  /// the gallery uses one unified picker that returns a mix of both, no
+  /// separate "photo" vs "video" menu needed. The camera is the one
+  /// unavoidable exception - Android/iOS only offer separate photo-capture
+  /// and video-capture intents, so that still needs one quick follow-up
+  /// question, but it's the only place that does.
   Future<void> _addMedia(GpxRoute route) async {
     final l10n = AppLocalizations.of(context)!;
-    final choice = await showModalBottomSheet<_MediaPick>(
+    final source = await showModalBottomSheet<ImageSource>(
       context: context,
       builder: (context) => SafeArea(
         child: Column(
@@ -308,51 +327,44 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
             ListTile(
               leading: const Icon(Icons.photo_camera),
               title: Text(l10n.cameraSourceLabel),
-              onTap: () => Navigator.pop(context, _MediaPick.photoCamera),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
             ),
             ListTile(
               leading: const Icon(Icons.photo_library),
               title: Text(l10n.gallerySourceLabel),
-              onTap: () => Navigator.pop(context, _MediaPick.photoGallery),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.videocam),
-              title: Text(l10n.videoCameraSourceLabel),
-              onTap: () => Navigator.pop(context, _MediaPick.videoCamera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.video_library),
-              title: Text(l10n.videoGallerySourceLabel),
-              onTap: () => Navigator.pop(context, _MediaPick.videoGallery),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
             ),
           ],
         ),
       ),
     );
-    if (choice == null || !mounted) return;
+    if (source == null || !mounted) return;
 
     try {
       final picker = ImagePicker();
-      switch (choice) {
-        case _MediaPick.photoCamera:
+      if (source == ImageSource.camera) {
+        final mediaType = await _pickCameraMediaType();
+        if (mediaType == null || !mounted) return;
+        if (mediaType == RouteMediaType.video) {
+          final file = await picker.pickVideo(source: ImageSource.camera);
+          if (file != null) await _saveVideo(route, file);
+        } else {
           final file = await picker.pickImage(
             source: ImageSource.camera,
             imageQuality: 85,
           );
           if (file != null) await _savePhoto(route, file);
-        case _MediaPick.photoGallery:
-          final files = await picker.pickMultiImage(imageQuality: 85);
-          for (final file in files) {
-            if (!mounted) return;
+        }
+      } else {
+        final files = await picker.pickMultipleMedia(imageQuality: 85);
+        for (final file in files) {
+          if (!mounted) return;
+          if (_looksLikeVideo(file)) {
+            await _saveVideo(route, file);
+          } else {
             await _savePhoto(route, file);
           }
-        case _MediaPick.videoCamera:
-          final file = await picker.pickVideo(source: ImageSource.camera);
-          if (file != null) await _saveVideo(route, file);
-        case _MediaPick.videoGallery:
-          final file = await picker.pickVideo(source: ImageSource.gallery);
-          if (file != null) await _saveVideo(route, file);
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -360,6 +372,30 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         SnackBar(content: Text(l10n.photoAddFailedGeneric('$e'))),
       );
     }
+  }
+
+  Future<RouteMediaType?> _pickCameraMediaType() {
+    final l10n = AppLocalizations.of(context)!;
+    return showModalBottomSheet<RouteMediaType>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera),
+              title: Text(l10n.photoMediaTypeLabel),
+              onTap: () => Navigator.pop(context, RouteMediaType.photo),
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam),
+              title: Text(l10n.videoMediaTypeLabel),
+              onTap: () => Navigator.pop(context, RouteMediaType.video),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Tries the photo's own EXIF GPS first; if that comes up empty (common on
@@ -748,63 +784,68 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _RoundIconButton(
-              icon: Icons.arrow_back,
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            const SizedBox(width: 8),
-            _RoundIconButton(
-              icon: Icons.list,
-              onPressed: () => _showList(route),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
+            Row(
+              children: [
+                _RoundIconButton(
+                  icon: Icons.arrow_back,
+                  onPressed: () => Navigator.of(context).pop(),
                 ),
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.surface.withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black26, blurRadius: 6),
-                  ],
+                const SizedBox(width: 8),
+                _RoundIconButton(
+                  icon: Icons.list,
+                  onPressed: () => _showList(route),
                 ),
-                child: Text(
-                  route.name,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                const Spacer(),
+                _RoundIconButton(
+                  icon: Icons.insights,
+                  onPressed: _points == null
+                      ? null
+                      : () => _openAnalysis(route),
+                ),
+                const SizedBox(width: 8),
+                _RoundIconButton(
+                  icon: Icons.add_a_photo,
+                  onPressed: () => _addMedia(route),
+                ),
+                const SizedBox(width: 8),
+                _RoundIconButton(
+                  icon: Icons.ios_share,
+                  onPressed: () => _share(route),
+                ),
+                const SizedBox(width: 8),
+                _RoundIconButton(
+                  icon: Icons.language,
+                  onPressed: () => showLanguagePicker(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 10,
+              ),
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.surface.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 6),
+                ],
+              ),
+              child: Text(
+                route.name,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            _RoundIconButton(
-              icon: Icons.insights,
-              onPressed: _points == null ? null : () => _openAnalysis(route),
-            ),
-            const SizedBox(width: 8),
-            _RoundIconButton(
-              icon: Icons.add_a_photo,
-              onPressed: () => _addMedia(route),
-            ),
-            const SizedBox(width: 8),
-            _RoundIconButton(
-              icon: Icons.ios_share,
-              onPressed: () => _share(route),
-            ),
-            const SizedBox(width: 8),
-            _RoundIconButton(
-              icon: Icons.language,
-              onPressed: () => showLanguagePicker(context),
             ),
           ],
         ),

@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.28 beta',
+    date: '2026-08-03',
+    note:
+        'Fotoğraf/video ekleme artık tek noktadan (galeriden ikisi '
+        'birden seçilebiliyor). Rota adı artık üst çubuğun altında tam '
+        'genişlikte, kesilmeden gözüküyor. Mola ve geceleme işaretleri '
+        'artık rota ilk açıldığında gizli - istenirse düğmeyle '
+        'açılıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.27 beta',
     date: '2026-08-02',
     note:
