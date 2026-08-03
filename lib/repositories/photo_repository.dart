@@ -75,6 +75,7 @@ class PhotoRepository extends ChangeNotifier {
     required Uint8List bytes,
     double? lat,
     double? lng,
+    RouteMediaType type = RouteMediaType.photo,
   }) async {
     final photo = RoutePhoto(
       id: _uuid.v4(),
@@ -82,6 +83,7 @@ class PhotoRepository extends ChangeNotifier {
       addedAt: DateTime.now(),
       lat: lat,
       lng: lng,
+      type: type,
     );
 
     final bytesBox = await _openBytesBox();

@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
+import '../models/route_photo.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
 import '../repositories/photo_repository.dart';
@@ -24,7 +25,11 @@ import '../services/track_io.dart';
 import '../widgets/route_photo_strip.dart';
 import 'analysis_sheet.dart';
 import 'language_picker.dart';
+import 'location_picker_screen.dart';
 import 'multi_route_map_screen.dart';
+
+/// Which media type + source the user picked from the "add media" sheet.
+enum _MediaPick { photoCamera, photoGallery, videoCamera, videoGallery }
 
 String _mapStyleLabel(AppLocalizations l10n, BaseMapStyle style) {
   return switch (style.id) {
@@ -292,9 +297,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
   }
 
-  Future<void> _addPhoto(GpxRoute route) async {
+  Future<void> _addMedia(GpxRoute route) async {
     final l10n = AppLocalizations.of(context)!;
-    final source = await showModalBottomSheet<ImageSource>(
+    final choice = await showModalBottomSheet<_MediaPick>(
       context: context,
       builder: (context) => SafeArea(
         child: Column(
@@ -303,40 +308,51 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
             ListTile(
               leading: const Icon(Icons.photo_camera),
               title: Text(l10n.cameraSourceLabel),
-              onTap: () => Navigator.pop(context, ImageSource.camera),
+              onTap: () => Navigator.pop(context, _MediaPick.photoCamera),
             ),
             ListTile(
               leading: const Icon(Icons.photo_library),
               title: Text(l10n.gallerySourceLabel),
-              onTap: () => Navigator.pop(context, ImageSource.gallery),
+              onTap: () => Navigator.pop(context, _MediaPick.photoGallery),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.videocam),
+              title: Text(l10n.videoCameraSourceLabel),
+              onTap: () => Navigator.pop(context, _MediaPick.videoCamera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.video_library),
+              title: Text(l10n.videoGallerySourceLabel),
+              onTap: () => Navigator.pop(context, _MediaPick.videoGallery),
             ),
           ],
         ),
       ),
     );
-    if (source == null || !mounted) return;
+    if (choice == null || !mounted) return;
 
     try {
       final picker = ImagePicker();
-      final files = source == ImageSource.camera
-          ? [
-              ?await picker.pickImage(
-                source: ImageSource.camera,
-                imageQuality: 85,
-              ),
-            ]
-          : await picker.pickMultiImage(imageQuality: 85);
-      for (final file in files) {
-        if (!mounted) return;
-        final bytes = await file.readAsBytes();
-        final gps = await extractExifGps(bytes);
-        if (!mounted) return;
-        await context.read<PhotoRepository>().add(
-          routeId: route.id,
-          bytes: bytes,
-          lat: gps?.latitude,
-          lng: gps?.longitude,
-        );
+      switch (choice) {
+        case _MediaPick.photoCamera:
+          final file = await picker.pickImage(
+            source: ImageSource.camera,
+            imageQuality: 85,
+          );
+          if (file != null) await _savePhoto(route, file);
+        case _MediaPick.photoGallery:
+          final files = await picker.pickMultiImage(imageQuality: 85);
+          for (final file in files) {
+            if (!mounted) return;
+            await _savePhoto(route, file);
+          }
+        case _MediaPick.videoCamera:
+          final file = await picker.pickVideo(source: ImageSource.camera);
+          if (file != null) await _saveVideo(route, file);
+        case _MediaPick.videoGallery:
+          final file = await picker.pickVideo(source: ImageSource.gallery);
+          if (file != null) await _saveVideo(route, file);
       }
     } catch (e) {
       if (!mounted) return;
@@ -344,6 +360,82 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         SnackBar(content: Text(l10n.photoAddFailedGeneric('$e'))),
       );
     }
+  }
+
+  /// Tries the photo's own EXIF GPS first; if that comes up empty (common on
+  /// the web build, where browsers often strip it), offers manual placement.
+  Future<void> _savePhoto(GpxRoute route, XFile file) async {
+    final bytes = await file.readAsBytes();
+    final gps = await extractExifGps(bytes);
+    if (!mounted) return;
+
+    var location = gps;
+    if (location == null) {
+      location = await _pickLocationManually(route);
+      if (!mounted) return;
+    }
+
+    await context.read<PhotoRepository>().add(
+      routeId: route.id,
+      bytes: bytes,
+      lat: location?.latitude,
+      lng: location?.longitude,
+    );
+  }
+
+  /// Videos don't get automatic location detection at all - reading GPS
+  /// metadata out of a video container reliably across formats/platforms
+  /// isn't something we can do with a simple, robust library - so this
+  /// always offers manual placement instead.
+  Future<void> _saveVideo(GpxRoute route, XFile file) async {
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+
+    final location = await _pickLocationManually(route);
+    if (!mounted) return;
+
+    await context.read<PhotoRepository>().add(
+      routeId: route.id,
+      bytes: bytes,
+      lat: location?.latitude,
+      lng: location?.longitude,
+      type: RouteMediaType.video,
+    );
+  }
+
+  /// Asks whether the user wants to place a pin for a photo/video with no
+  /// known location, and if so opens [LocationPickerScreen] centered on the
+  /// route. Returns null if they skip, or don't confirm a point.
+  Future<LatLng?> _pickLocationManually(GpxRoute route) async {
+    final l10n = AppLocalizations.of(context)!;
+    final wantsToPlace = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.noLocationFoundTitle),
+        content: Text(l10n.noLocationFoundMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.skipLocationButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.pickOnMapButton),
+          ),
+        ],
+      ),
+    );
+    if (wantsToPlace != true || !mounted) return null;
+
+    final center = LatLng(
+      (route.north + route.south) / 2,
+      (route.east + route.west) / 2,
+    );
+    return Navigator.of(context).push<LatLng>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(initialCenter: center),
+      ),
+    );
   }
 
   void _openPhotoViewer(GpxRoute route, String photoId) {
@@ -403,7 +495,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: RoutePhotoStrip(
                       routeId: route.id,
-                      onAddPhoto: () => _addPhoto(route),
+                      onAddMedia: () => _addMedia(route),
                     ),
                   ),
                 ),
@@ -634,7 +726,12 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                         BoxShadow(color: Colors.black38, blurRadius: 4),
                       ],
                     ),
-                    child: PhotoThumb(photoId: photo.id, size: 40, circle: true),
+                    child: PhotoThumb(
+                      photoId: photo.id,
+                      size: 40,
+                      circle: true,
+                      isVideo: photo.isVideo,
+                    ),
                   ),
                 ),
               ),
@@ -697,7 +794,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
             const SizedBox(width: 8),
             _RoundIconButton(
               icon: Icons.add_a_photo,
-              onPressed: () => _addPhoto(route),
+              onPressed: () => _addMedia(route),
             ),
             const SizedBox(width: 8),
             _RoundIconButton(
