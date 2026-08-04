@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.35 beta',
+    date: '2026-08-04',
+    note:
+        'Kayıt ekranındaki konum tuşu artık gerçek bir mod anahtarı: zaten '
+        'ortalanmışken her basış kuzey-sabit (harita hiç dönmez, araç '
+        'ikonu gittiği yönü gösterecek şekilde döner) ile yön-takip '
+        '(harita gittiğiniz yöne döner, araç ikonu hep yukarı bakar) '
+        'arasında geçiş yapıyor. REC göstergesi artık ekranın hemen '
+        'köşesinde, tüm kutusuyla yanıp sönerek duruyor - fark edilmesi '
+        'daha kolay.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.34 beta',
     date: '2026-08-04',
     note:
