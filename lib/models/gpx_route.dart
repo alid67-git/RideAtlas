@@ -13,11 +13,14 @@ class GpxRoute {
     required this.minElevation,
     required this.maxElevation,
     required this.durationSeconds,
+    this.movingDurationSeconds,
     required this.pointCount,
     required this.north,
     required this.south,
     required this.east,
     required this.west,
+    this.batteryStartPercent,
+    this.batteryEndPercent,
   });
 
   final String id;
@@ -28,17 +31,38 @@ class GpxRoute {
   final double elevationLossMeters;
   final double? minElevation;
   final double? maxElevation;
+
+  /// Wall-clock span from the first to the last GPS point - includes every
+  /// stop and wait along the way.
   final int? durationSeconds;
+
+  /// Sum of only the consecutive-point gaps short enough to count as still
+  /// riding (see buildRouteMetadata in gpx_parser.dart) - the same idea as
+  /// [durationSeconds] but with pauses subtracted out. Works for any GPX,
+  /// not just ones recorded in-app: a long gap between two points means the
+  /// rider wasn't moving (or wasn't being tracked) for that stretch,
+  /// recorded or not.
+  final int? movingDurationSeconds;
   final int pointCount;
   final double north;
   final double south;
   final double east;
   final double west;
 
+  /// Device battery percentage (0-100) when an in-app recording started/
+  /// finished. Null for routes imported from a file, or if the platform
+  /// couldn't report a battery level.
+  final int? batteryStartPercent;
+  final int? batteryEndPercent;
+
   double get distanceKm => distanceMeters / 1000;
 
   Duration? get duration =>
       durationSeconds == null ? null : Duration(seconds: durationSeconds!);
+
+  Duration? get movingDuration => movingDurationSeconds == null
+      ? null
+      : Duration(seconds: movingDurationSeconds!);
 
   double? get averageSpeedKmh {
     final d = duration;
@@ -57,11 +81,14 @@ class GpxRoute {
       minElevation: minElevation,
       maxElevation: maxElevation,
       durationSeconds: durationSeconds,
+      movingDurationSeconds: movingDurationSeconds,
       pointCount: pointCount,
       north: north,
       south: south,
       east: east,
       west: west,
+      batteryStartPercent: batteryStartPercent,
+      batteryEndPercent: batteryEndPercent,
     );
   }
 
@@ -75,11 +102,14 @@ class GpxRoute {
     'minElevation': minElevation,
     'maxElevation': maxElevation,
     'durationSeconds': durationSeconds,
+    'movingDurationSeconds': movingDurationSeconds,
     'pointCount': pointCount,
     'north': north,
     'south': south,
     'east': east,
     'west': west,
+    'batteryStartPercent': batteryStartPercent,
+    'batteryEndPercent': batteryEndPercent,
   };
 
   factory GpxRoute.fromJson(Map<String, dynamic> json) {
@@ -93,11 +123,14 @@ class GpxRoute {
       minElevation: (json['minElevation'] as num?)?.toDouble(),
       maxElevation: (json['maxElevation'] as num?)?.toDouble(),
       durationSeconds: json['durationSeconds'] as int?,
+      movingDurationSeconds: json['movingDurationSeconds'] as int?,
       pointCount: json['pointCount'] as int,
       north: (json['north'] as num).toDouble(),
       south: (json['south'] as num).toDouble(),
       east: (json['east'] as num).toDouble(),
       west: (json['west'] as num).toDouble(),
+      batteryStartPercent: json['batteryStartPercent'] as int?,
+      batteryEndPercent: json['batteryEndPercent'] as int?,
     );
   }
 }

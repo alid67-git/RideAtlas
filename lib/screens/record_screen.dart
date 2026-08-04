@@ -12,8 +12,12 @@ import 'package:provider/provider.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import '../repositories/route_repository.dart';
+import '../repositories/vehicle_icon_controller.dart';
+import '../services/battery_info.dart';
 import '../services/gps_recorder.dart';
 import '../services/track_io.dart';
+import '../widgets/recording_indicator.dart';
+import '../widgets/vehicle_marker.dart';
 import 'map_screen.dart' show RouteMapScreen;
 
 /// True on a native Android build, where [GpsRecorder] runs a foreground
@@ -24,10 +28,14 @@ final _supportsBackgroundRecording =
     !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
 /// Records a ride live using [GpsRecorder] and, once finished, saves it
-/// through the same import pipeline as a regular GPX file. On Android this
-/// keeps recording while the app is minimized (a foreground service); on
-/// other platforms it only runs while this screen stays in the foreground -
-/// see AppLocalizations.recordingForegroundNotice for that case.
+/// through the same import pipeline as a regular GPX file. [GpsRecorder]
+/// lives above the Navigator (see main.dart's providers), so leaving this
+/// screen - back button, navigating elsewhere - never stops a recording in
+/// progress; [RecordingIndicatorOverlay] shows a floating pill back to it
+/// from anywhere in the app. On Android, the recording itself also survives
+/// the whole app being minimized (a foreground service); on other platforms
+/// it only runs while some tab/window of the app stays open - see
+/// AppLocalizations.recordingForegroundNotice for that case.
 class RecordScreen extends StatefulWidget {
   const RecordScreen({super.key});
 
@@ -36,16 +44,17 @@ class RecordScreen extends StatefulWidget {
 }
 
 class _RecordScreenState extends State<RecordScreen> {
-  final _recorder = GpsRecorder();
   final _mapController = MapController();
   Timer? _tickTimer;
   bool _starting = false;
   bool _saving = false;
 
-  /// The device's live position, tracked independently of [_recorder] and
+  GpsRecorder get _recorder => context.read<GpsRecorder>();
+
+  /// The device's live position, tracked independently of [GpsRecorder] and
   /// kept running for the entire lifetime of this screen (idle and
   /// recording alike) - this is the map's one and only source of truth for
-  /// "where am I". It's tempting to switch to [_recorder.points] once
+  /// "where am I". It's tempting to switch to the recorder's own points once
   /// recording starts (that's a second, separate GPS subscription
   /// [GpsRecorder] owns for the actual track), but doing that caused a
   /// visible jump: a freshly-started stream's first fix can be a quick,
@@ -60,14 +69,16 @@ class _RecordScreenState extends State<RecordScreen> {
   /// True while the map should keep auto-centering on the live position.
   /// Any user-driven map interaction (drag, pinch, fling, ...) turns this
   /// off, so panning around to look at the surroundings isn't constantly
-  /// fought by the auto-follow; the recenter button turns it back on.
+  /// fought by the auto-follow; the recenter button turns it back on - and,
+  /// if it's tapped again while already following, resets the map's
+  /// rotation back to north-up instead (see [_recenter]).
   bool _followMe = true;
   late final StreamSubscription<MapEvent> _mapEventSub;
 
   @override
   void initState() {
     super.initState();
-    _recorder.addListener(_onRecorderChanged);
+    recordScreenVisible.value = true;
     _startLiveLocation();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       if (event.source != MapEventSource.mapController && _followMe) {
@@ -76,11 +87,18 @@ class _RecordScreenState extends State<RecordScreen> {
     });
     // Refreshes the elapsed-time label even between GPS fixes.
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_recorder.isRecording && mounted) setState(() {});
+      if (mounted && _recorder.isRecording) setState(() {});
     });
   }
 
+  /// Recenters and resumes following the live position - unless the map is
+  /// already following it, in which case a repeat tap instead resets any
+  /// rotation from a pinch-twist gesture back to north-up.
   void _recenter() {
+    if (_followMe) {
+      _mapController.rotate(0);
+      return;
+    }
     final location = _currentLocation;
     setState(() => _followMe = true);
     if (location != null) {
@@ -126,18 +144,12 @@ class _RecordScreenState extends State<RecordScreen> {
     });
   }
 
-  void _onRecorderChanged() {
-    if (!mounted) return;
-    setState(() {});
-  }
-
   @override
   void dispose() {
+    recordScreenVisible.value = false;
     _tickTimer?.cancel();
     _liveLocationSub?.cancel();
     _mapEventSub.cancel();
-    _recorder.removeListener(_onRecorderChanged);
-    _recorder.dispose();
     super.dispose();
   }
 
@@ -158,7 +170,13 @@ class _RecordScreenState extends State<RecordScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
+      return;
     }
+    // Recording always starts with the vehicle centered on screen, even if
+    // the map had been panned away from it beforehand.
+    final location = _currentLocation;
+    setState(() => _followMe = true);
+    if (location != null) _mapController.move(location, 16);
   }
 
   Future<bool> _confirmDiscard() async {
@@ -219,6 +237,9 @@ class _RecordScreenState extends State<RecordScreen> {
     if (name == null || name.isEmpty || !mounted) return;
 
     setState(() => _saving = true);
+    final repo = context.read<RouteRepository>();
+    final batteryStart = _recorder.batteryStartPercent;
+    final batteryEnd = await currentBatteryPercent();
     final points = _recorder.stop();
     final gpx = exportTrack(
       name: name,
@@ -227,10 +248,11 @@ class _RecordScreenState extends State<RecordScreen> {
       format: TrackFormat.gpx,
     );
     final bytes = Uint8List.fromList(utf8.encode(gpx));
-    final repo = context.read<RouteRepository>();
     final route = await repo.importFromBytes(
       bytes: bytes,
       suggestedFileName: '$name.gpx',
+      batteryStartPercent: batteryStart,
+      batteryEndPercent: batteryEnd,
     );
     if (!mounted) return;
     Navigator.of(
@@ -238,106 +260,79 @@ class _RecordScreenState extends State<RecordScreen> {
     ).pushReplacement(MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)));
   }
 
-  Future<bool> _confirmExit() async {
-    if (_recorder.isIdle) return true;
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.exitRecordingConfirmTitle),
-        content: Text(l10n.exitRecordingConfirmMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancel),
+    final recorder = context.watch<GpsRecorder>();
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          Positioned.fill(child: _buildMap()),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _RoundIconButton(
+                      icon: Icons.arrow_back,
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: _buildStats(context, l10n, recorder)),
+                  ],
+                ),
+              ),
+            ),
           ),
-          FilledButton.tonal(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.discardRecordingButton),
+          Positioned(
+            right: 16,
+            bottom: 100,
+            child: SafeArea(
+              top: false,
+              child: FloatingActionButton.small(
+                heroTag: 'recordRecenter',
+                tooltip: l10n.recenterTooltip,
+                backgroundColor: _followMe
+                    ? Theme.of(context).colorScheme.primary
+                    : null,
+                foregroundColor: _followMe
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : null,
+                onPressed: _currentLocation == null ? null : _recenter,
+                child: const Icon(Icons.my_location),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 24,
+            child: SafeArea(
+              top: false,
+              child: Center(child: _buildControls(l10n, recorder)),
+            ),
           ),
         ],
       ),
     );
-    return confirmed ?? false;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
-    return PopScope(
-      canPop: _recorder.isIdle,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        final confirmed = await _confirmExit();
-        if (!confirmed || !context.mounted) return;
-        _recorder.discard();
-        Navigator.pop(context);
-      },
-      child: Scaffold(
-        body: Stack(
-          children: [
-            Positioned.fill(child: _buildMap()),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      _RoundIconButton(
-                        icon: Icons.arrow_back,
-                        onPressed: () async {
-                          final confirmed = await _confirmExit();
-                          if (!confirmed || !context.mounted) return;
-                          _recorder.discard();
-                          Navigator.pop(context);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(child: _buildStats(context, l10n)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            if (!_followMe)
-              Positioned(
-                right: 16,
-                bottom: 100,
-                child: SafeArea(
-                  top: false,
-                  child: FloatingActionButton.small(
-                    heroTag: 'recordRecenter',
-                    tooltip: l10n.recenterTooltip,
-                    onPressed: _recenter,
-                    child: const Icon(Icons.my_location),
-                  ),
-                ),
-              ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 24,
-              child: SafeArea(
-                top: false,
-                child: Center(child: _buildControls(l10n)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStats(BuildContext context, AppLocalizations l10n) {
+  Widget _buildStats(
+    BuildContext context,
+    AppLocalizations l10n,
+    GpsRecorder recorder,
+  ) {
     final theme = Theme.of(context);
-    if (_recorder.isIdle) {
+    if (recorder.isIdle) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
@@ -354,60 +349,98 @@ class _RecordScreenState extends State<RecordScreen> {
       );
     }
 
-    final d = _recorder.elapsed;
+    final d = recorder.elapsed;
     final h = d.inHours;
     final m = d.inMinutes % 60;
     final s = d.inSeconds % 60;
     final durationStr = h > 0
         ? '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
         : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-    final altitude = _recorder.currentAltitude;
+    final altitude = recorder.currentAltitude;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: const [
-              BoxShadow(color: Colors.black26, blurRadius: 6),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _StatColumn(label: l10n.duration, value: durationStr),
-              _StatColumn(
-                label: l10n.distance,
-                value: '${_recorder.distanceKm.toStringAsFixed(2)} km',
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // The current speed is the one number a rider actually needs to
+            // read at a glance while moving, so it gets its own big display;
+            // everything else is secondary and stays small.
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 6),
+                ],
               ),
-              _StatColumn(
-                label: l10n.speedLabel,
-                value:
-                    '${_recorder.currentSpeedKmh.toStringAsFixed(0)} km/s',
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    recorder.currentSpeedKmh.toStringAsFixed(0),
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      height: 1,
+                    ),
+                  ),
+                  Text(l10n.speedLabel, style: theme.textTheme.labelSmall),
+                ],
               ),
-              _StatColumn(
-                label: l10n.currentAltitudeLabel,
-                value: altitude == null ? '—' : '${altitude.round()} m',
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 6),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _StatColumn(label: l10n.duration, value: durationStr),
+                    _StatColumn(
+                      label: l10n.distance,
+                      value: '${recorder.distanceKm.toStringAsFixed(2)} km',
+                    ),
+                    _StatColumn(
+                      label: l10n.currentAltitudeLabel,
+                      value: altitude == null ? '—' : '${altitude.round()} m',
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        if (_recorder.isAutoPaused) ...[
-          const SizedBox(height: 6),
+        if (recorder.isAutoPaused) ...[
+          const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
               color: theme.colorScheme.tertiaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: const [
+                BoxShadow(color: Colors.black26, blurRadius: 6),
+              ],
             ),
             child: Text(
               l10n.autoPausedLabel,
-              style: theme.textTheme.bodySmall?.copyWith(
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleSmall?.copyWith(
                 color: theme.colorScheme.onTertiaryContainer,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -416,8 +449,8 @@ class _RecordScreenState extends State<RecordScreen> {
     );
   }
 
-  Widget _buildControls(AppLocalizations l10n) {
-    if (_recorder.isIdle) {
+  Widget _buildControls(AppLocalizations l10n, GpsRecorder recorder) {
+    if (recorder.isIdle) {
       return FilledButton.icon(
         onPressed: _starting ? null : _start,
         icon: _starting
@@ -436,8 +469,8 @@ class _RecordScreenState extends State<RecordScreen> {
       children: [
         FloatingActionButton(
           heroTag: 'recordPauseResume',
-          onPressed: _recorder.isPaused ? _recorder.resume : _recorder.pause,
-          child: Icon(_recorder.isPaused ? Icons.play_arrow : Icons.pause),
+          onPressed: recorder.isPaused ? recorder.resume : recorder.pause,
+          child: Icon(recorder.isPaused ? Icons.play_arrow : Icons.pause),
         ),
         const SizedBox(width: 16),
         FilledButton.icon(
@@ -466,8 +499,11 @@ class _RecordScreenState extends State<RecordScreen> {
   }
 
   Widget _buildMap() {
-    final points = _recorder.points;
+    final recorder = context.watch<GpsRecorder>();
+    final vehicleIcon = context.watch<VehicleIconController>().option;
+    final points = recorder.points;
     final style = kBaseMapStyles.first;
+    final markerSize = vehicleMarkerSize(vehicleIcon);
 
     return FlutterMap(
       mapController: _mapController,
@@ -497,15 +533,9 @@ class _RecordScreenState extends State<RecordScreen> {
             markers: [
               Marker(
                 point: _currentLocation!,
-                width: 20,
-                height: 20,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.blueAccent,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                  ),
-                ),
+                width: markerSize,
+                height: markerSize,
+                child: buildVehicleMarker(vehicleIcon),
               ),
             ],
           ),
@@ -529,8 +559,8 @@ class _StatColumn extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(value, style: theme.textTheme.titleMedium),
-        Text(label, style: theme.textTheme.bodySmall),
+        Text(value, style: theme.textTheme.titleSmall),
+        Text(label, style: theme.textTheme.labelSmall),
       ],
     );
   }

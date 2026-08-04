@@ -144,5 +144,16 @@
   "helpTitle": "Hilfe",
   "aboutTitle": "Über die App",
   "aboutDeveloper": "Entwickler: Ali Dinçer",
-  "aboutVersionHistoryTitle": "Versionsverlauf"
+  "aboutVersionHistoryTitle": "Versionsverlauf",
+  "netDurationLabel": "Nettodauer",
+  "totalDurationLabel": "Gesamtdauer",
+  "batteryLabel": "Akku",
+  "batteryRangeLabel": "{start}% → {end}%",
+  "vehicleIconTitle": "Fahrzeugsymbol",
+  "vehicleIconClassic": "Klassischer Punkt",
+  "vehicleIconMotorcycleCategory": "Motorrad",
+  "vehicleIconCarCategory": "Auto",
+  "vehicleIconOptionLabel": "Option {number}",
+  "recordingTapToReturn": "Aufzeichnung läuft - zum Zurückkehren tippen",
+  "backToMapTooltip": "Zurück zur Karte"
 }

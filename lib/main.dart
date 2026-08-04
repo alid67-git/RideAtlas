@@ -7,13 +7,21 @@ import 'l10n/gen/app_localizations.dart';
 import 'repositories/locale_controller.dart';
 import 'repositories/photo_repository.dart';
 import 'repositories/route_repository.dart';
+import 'repositories/vehicle_icon_controller.dart';
 import 'screens/home_map_screen.dart';
+import 'services/gps_recorder.dart';
+import 'widgets/recording_indicator.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   runApp(const RideAtlasApp());
 }
+
+/// Above the app's Navigator (set via [MaterialApp.navigatorKey]) so the
+/// floating recording indicator can push [RecordScreen] back onto the stack
+/// from outside it - see [RecordingIndicatorOverlay].
+final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 class RideAtlasApp extends StatelessWidget {
   const RideAtlasApp({super.key});
@@ -25,12 +33,18 @@ class RideAtlasApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => RouteRepository()..load()),
         ChangeNotifierProvider(create: (_) => PhotoRepository()..load()),
         ChangeNotifierProvider(create: (_) => LocaleController()..load()),
+        ChangeNotifierProvider(create: (_) => VehicleIconController()..load()),
+        // Lives above the Navigator so an active recording survives
+        // navigating away from RecordScreen - only an explicit "discard"
+        // or "finish" call ever stops it.
+        ChangeNotifierProvider(create: (_) => GpsRecorder()),
       ],
       child: Consumer<LocaleController>(
         builder: (context, localeController, _) {
           return MaterialApp(
             title: 'RideAtlas',
             debugShowCheckedModeBanner: false,
+            navigatorKey: rootNavigatorKey,
             locale: localeController.locale,
             localizationsDelegates: const [
               AppLocalizations.delegate,
@@ -61,6 +75,8 @@ class RideAtlasApp extends StatelessWidget {
               useMaterial3: true,
             ),
             home: const HomeMapScreen(),
+            builder: (context, child) =>
+                RecordingIndicatorOverlay(child: child ?? const SizedBox.shrink()),
           );
         },
       ),
