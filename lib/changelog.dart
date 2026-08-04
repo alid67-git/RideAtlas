@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.33 beta',
+    date: '2026-08-04',
+    note:
+        'Önemli düzeltme: v1.3.32\'de kayıt ekranındaki hız/süre/mesafe/'
+        'yükseklik kutusu bir düzen hatası yüzünden hiç görünmüyordu - '
+        'düzeltildi. REC göstergesi sağ üst köşeye taşındı, artık kırmızı '
+        'yanıp sönüyor ve "REC" yazısı içeriyor. Kayıt sürerken ana '
+        'ekrandaki büyük "kayıt yap" düğmesi artık gizleniyor - geri dönmek '
+        'için REC göstergesine dokunun.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.32 beta',
     date: '2026-08-04',
     note:
