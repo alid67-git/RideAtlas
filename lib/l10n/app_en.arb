@@ -144,5 +144,16 @@
   "helpTitle": "Help",
   "aboutTitle": "About",
   "aboutDeveloper": "Developer: Ali Dinçer",
-  "aboutVersionHistoryTitle": "Version history"
+  "aboutVersionHistoryTitle": "Version history",
+  "netDurationLabel": "Net duration",
+  "totalDurationLabel": "Total duration",
+  "batteryLabel": "Battery",
+  "batteryRangeLabel": "{start}% → {end}%",
+  "vehicleIconTitle": "Vehicle icon",
+  "vehicleIconClassic": "Classic dot",
+  "vehicleIconMotorcycleCategory": "Motorcycle",
+  "vehicleIconCarCategory": "Car",
+  "vehicleIconOptionLabel": "Option {number}",
+  "recordingTapToReturn": "Recording in progress - tap to return",
+  "backToMapTooltip": "Back to map"
 }

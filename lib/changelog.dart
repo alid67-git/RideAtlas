@@ -20,6 +20,21 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.32 beta',
+    date: '2026-08-04',
+    note:
+        'Kayıt ekranı yenilendi: hız büyük punto ile öne çıkarıldı, süre/'
+        'mesafe/yükseklik yanında küçük gösteriliyor, oto-duraklama rozeti '
+        'büyütüldü. Geri tuşu artık kaydı durdurmuyor - kayıt arka planda '
+        'sürerken ekran kenarında bir REC düğmesi beliriyor, dokununca '
+        'kayıt ekranına dönülüyor. Kayıt başlarken araç ekranın ortasında '
+        'başlıyor; konum tuşuna 2. kez basınca harita kuzeye dönüyor. Rota '
+        'özetine net sürüş süresi, toplam süre ve pil başlangıç/bitiş '
+        'yüzdesi eklendi. Ayarlar > Araç ikonu ile haritadaki "buradayım" '
+        'işaretini motosiklet veya araba simgesiyle (5\'er ölçek/renk '
+        'seçeneği) değiştirebilirsiniz.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.31 beta',
     date: '2026-08-04',
     note:

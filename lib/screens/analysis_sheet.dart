@@ -285,7 +285,7 @@ class _OverviewTab extends StatelessWidget {
             ),
             Expanded(
               child: AnalysisHeroStat(
-                label: l10n.duration,
+                label: l10n.totalDurationLabel,
                 value: route.duration == null
                     ? '—'
                     : formatAnalysisDuration(l10n, route.duration!),
@@ -317,6 +317,13 @@ class _OverviewTab extends StatelessWidget {
               value: times.end == null ? '—' : timeFmt.format(times.end!),
             ),
             AnalysisStatCard(
+              icon: Icons.timelapse,
+              label: l10n.netDurationLabel,
+              value: route.movingDuration == null
+                  ? '—'
+                  : formatAnalysisDuration(l10n, route.movingDuration!),
+            ),
+            AnalysisStatCard(
               icon: Icons.gps_fixed,
               label: l10n.gpsPoints,
               value: '${route.pointCount}',
@@ -326,6 +333,16 @@ class _OverviewTab extends StatelessWidget {
               label: l10n.climb,
               value: '${route.elevationGainMeters.round()} m',
             ),
+            if (route.batteryStartPercent != null &&
+                route.batteryEndPercent != null)
+              AnalysisStatCard(
+                icon: Icons.battery_std,
+                label: l10n.batteryLabel,
+                value: l10n.batteryRangeLabel(
+                  route.batteryStartPercent!,
+                  route.batteryEndPercent!,
+                ),
+              ),
           ],
         ),
       ],

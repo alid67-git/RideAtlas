@@ -75,12 +75,29 @@ const _helpSectionsTr = <HelpSection>[
     body:
         'Ana ekrandaki büyük kırmızı düğmeyle canlı GPS kaydı başlatabilir, '
         'konumunuzu gerçek zamanlı olarak haritada takip edebilirsiniz. '
-        'Kayıt sırasında hız ve yükseklik gibi anlık istatistikler ekranda '
-        'gösterilir; istediğiniz zaman duraklatıp devam edebilir, bitirip '
-        'bir isimle kaydedebilir veya tamamen silebilirsiniz. Android\'de '
-        'kayıt, uygulama küçültülse bile bir bildirimle arka planda devam '
-        'eder; web tarayıcısında ise kayıt sadece sekme ön plandayken ve '
-        'ekran açıkken sürer.',
+        'Kayıt ekranında güncel hızınız büyük puntoyla, süre/mesafe/'
+        'yükseklik ise yanında küçük olarak gösterilir. Kayıt başlar '
+        'başlamaz araç konumu ekranın ortasına alınır; konum düğmesine bir '
+        'kez daha basarsanız harita kuzeye dönük hale gelir. İstediğiniz '
+        'zaman duraklatıp devam edebilir, bitirip bir isimle kaydedebilir '
+        'veya tamamen silebilirsiniz. Kayıt ekranından geri çıkmak kaydı '
+        'durdurmaz; kayıt arka planda sürerken ekranın kenarında küçük bir '
+        'kırmızı "REC" düğmesi belirir, dokunduğunuzda kayıt ekranına geri '
+        'dönersiniz. Android\'de kayıt, uygulama küçültülse bile bir '
+        'bildirimle arka planda devam eder; web tarayıcısında ise kayıt '
+        'sadece sekme ön plandayken ve ekran açıkken sürer. Kaydettiğiniz '
+        'rotanın Özet sekmesinde hem net sürüş süresi (bekleme hariç) hem '
+        'toplam süre (tüm molalar dahil), hem de kayıt başlangıç/bitiş pil '
+        'yüzdeleri görüntülenir.',
+  ),
+  HelpSection(
+    title: 'Araç ikonu',
+    body:
+        'Ayarlar > Araç ikonu bölümünden haritadaki "buradayım" '
+        'işaretçisini klasik nokta yerine bir motosiklet veya araba '
+        'simgesiyle değiştirebilirsiniz; her biri 5 farklı ölçek ve '
+        'renk seçeneğiyle gelir. Seçtiğiniz ikon siz değiştirene kadar '
+        'kalıcı olarak kullanılır.',
   ),
   HelpSection(
     title: 'Dışa aktarma',
@@ -163,14 +180,30 @@ const _helpSectionsEn = <HelpSection>[
     title: 'Live GPS recording',
     body:
         'The large red button on the home screen starts a live GPS '
-        'recording, tracking your position on the map in real time. While '
-        'recording, live stats like speed and altitude are shown on '
-        'screen; you can pause and resume at any time, finish and save '
-        'the ride under a name, or discard it entirely. On Android, '
-        'recording keeps running in the background with a notification '
-        'even if you minimize the app; in a web browser, recording only '
-        'continues while the tab is in the foreground and the screen is '
-        'on.',
+        'recording, tracking your position on the map in real time. The '
+        'recording screen shows your current speed in large type, with '
+        'duration/distance/altitude smaller alongside it. Recording always '
+        'starts with your position centered on screen; tapping the locate '
+        'button a second time rotates the map back to north-up. You can '
+        'pause and resume at any time, finish and save the ride under a '
+        'name, or discard it entirely. Leaving the recording screen doesn\'t '
+        'stop the recording - while it runs in the background, a small red '
+        '"REC" button appears on the edge of the screen; tap it to jump '
+        'back. On Android, recording keeps running in the background with '
+        'a notification even if you minimize the app; in a web browser, '
+        'recording only continues while the tab is in the foreground and '
+        'the screen is on. The saved ride\'s Overview tab shows both a net '
+        'riding time (waits excluded) and a total time (every stop '
+        'included), plus the battery percentage at the start and end of '
+        'the recording.',
+  ),
+  HelpSection(
+    title: 'Vehicle icon',
+    body:
+        'Settings > Vehicle icon lets you replace the "you are here" '
+        'marker on the map with a motorcycle or car icon instead of the '
+        'classic dot, each in 5 different scale/color presets. Your choice '
+        'stays until you change it again.',
   ),
   HelpSection(
     title: 'Exporting',
@@ -258,13 +291,32 @@ const _helpSectionsDe = <HelpSection>[
     body:
         'Die große rote Schaltfläche auf dem Startbildschirm startet eine '
         'Live-GPS-Aufzeichnung und verfolgt Ihre Position in Echtzeit auf '
-        'der Karte. Während der Aufzeichnung werden Live-Werte wie '
-        'Geschwindigkeit und Höhe angezeigt; Sie können jederzeit '
+        'der Karte. Auf dem Aufzeichnungsbildschirm wird Ihre aktuelle '
+        'Geschwindigkeit groß angezeigt, Dauer/Distanz/Höhe daneben kleiner. '
+        'Die Aufzeichnung startet immer mit Ihrer Position in der '
+        'Bildschirmmitte; ein zweites Tippen auf die Standort-Schaltfläche '
+        'dreht die Karte zurück nach Norden. Sie können jederzeit '
         'pausieren und fortsetzen, die Fahrt unter einem Namen speichern '
-        'oder verwerfen. Unter Android läuft die Aufzeichnung mit einer '
-        'Benachrichtigung auch im Hintergrund weiter, wenn Sie die App '
-        'minimieren; im Webbrowser läuft sie nur, solange der Tab im '
-        'Vordergrund und der Bildschirm an ist.',
+        'oder verwerfen. Das Verlassen des Aufzeichnungsbildschirms stoppt '
+        'die Aufzeichnung nicht - während sie im Hintergrund weiterläuft, '
+        'erscheint eine kleine rote "REC"-Schaltfläche am Bildschirmrand; '
+        'tippen Sie darauf, um zurückzukehren. Unter Android läuft die '
+        'Aufzeichnung mit einer Benachrichtigung auch im Hintergrund '
+        'weiter, wenn Sie die App minimieren; im Webbrowser läuft sie nur, '
+        'solange der Tab im Vordergrund und der Bildschirm an ist. Im '
+        'Übersicht-Tab der gespeicherten Fahrt werden sowohl eine '
+        'Nettofahrzeit (ohne Wartezeiten) als auch eine Gesamtzeit (mit '
+        'allen Pausen) sowie der Akkustand bei Start und Ende der '
+        'Aufzeichnung angezeigt.',
+  ),
+  HelpSection(
+    title: 'Fahrzeugsymbol',
+    body:
+        'Unter Einstellungen > Fahrzeugsymbol können Sie den '
+        '"Hier bin ich"-Marker auf der Karte statt des klassischen Punkts '
+        'durch ein Motorrad- oder Autosymbol ersetzen, jeweils in 5 '
+        'verschiedenen Größen-/Farbvarianten. Ihre Wahl bleibt bestehen, '
+        'bis Sie sie erneut ändern.',
   ),
   HelpSection(
     title: 'Exportieren',

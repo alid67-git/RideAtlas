@@ -56,6 +56,8 @@ class RouteRepository extends ChangeNotifier {
   Future<GpxRoute> importFromBytes({
     required Uint8List bytes,
     required String suggestedFileName,
+    int? batteryStartPercent,
+    int? batteryEndPercent,
   }) async {
     final xml = decodeTrackBytes(bytes, fileName: suggestedFileName);
     final parsed = parseTrackXml(xml);
@@ -80,6 +82,8 @@ class RouteRepository extends ChangeNotifier {
       name: name,
       importedAt: DateTime.now(),
       parsed: parsed,
+      batteryStartPercent: batteryStartPercent,
+      batteryEndPercent: batteryEndPercent,
     );
 
     final box = await _openBox();

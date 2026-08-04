@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/track_point.dart';
+import 'battery_info.dart';
 
 const _distance = Distance();
 
@@ -41,8 +42,13 @@ class GpsRecorder extends ChangeNotifier {
   double? _currentAltitude;
   bool _isAutoPaused = false;
   DateTime? _stationarySince;
+  int? _batteryStartPercent;
 
   RecordingState get state => _state;
+  /// Battery level (0-100) when [start] was called, or null if it couldn't
+  /// be read on this platform. Captured once and kept through pause/resume;
+  /// the matching end-of-ride reading is taken by the caller when finishing.
+  int? get batteryStartPercent => _batteryStartPercent;
   List<TrackPoint> get points => List.unmodifiable(_points);
   bool get isRecording => _state == RecordingState.recording;
   bool get isPaused => _state == RecordingState.paused;
@@ -102,6 +108,7 @@ class GpsRecorder extends ChangeNotifier {
     _currentAltitude = null;
     _isAutoPaused = false;
     _stationarySince = null;
+    _batteryStartPercent = await currentBatteryPercent();
     _state = RecordingState.recording;
     notifyListeners();
 
@@ -228,6 +235,7 @@ class GpsRecorder extends ChangeNotifier {
     _currentAltitude = null;
     _isAutoPaused = false;
     _stationarySince = null;
+    _batteryStartPercent = null;
     _state = RecordingState.idle;
     notifyListeners();
   }

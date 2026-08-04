@@ -8,6 +8,14 @@ import '../models/waypoint.dart';
 
 const _distance = Distance();
 
+/// A gap between two consecutive points longer than this is treated as a
+/// stop/wait rather than riding, and excluded from [GpxRoute.movingDuration].
+/// Chosen to comfortably clear normal GPS fix spacing and short traffic-light
+/// stops while still catching real breaks; matches the order of magnitude of
+/// [GpsRecorder]'s own auto-pause delay, so a recording made in-app and a
+/// plain GPX both land on roughly the same "were they moving" answer.
+const _movingGapThreshold = Duration(seconds: 60);
+
 /// Parses raw GPX XML into track points and waypoints.
 ///
 /// Track points come from `<trk>/<trkseg>` segments (all segments of all
@@ -79,6 +87,8 @@ GpxRoute buildRouteMetadata({
   required String name,
   required DateTime importedAt,
   required ParsedTrack parsed,
+  int? batteryStartPercent,
+  int? batteryEndPercent,
 }) {
   final points = parsed.points;
 
@@ -131,6 +141,18 @@ GpxRoute buildRouteMetadata({
     }
   }
 
+  Duration movingDuration = Duration.zero;
+  var hasTimedGap = false;
+  for (var i = 1; i < points.length; i++) {
+    final t0 = points[i - 1].time;
+    final t1 = points[i].time;
+    if (t0 == null || t1 == null || !t1.isAfter(t0)) continue;
+    final gap = t1.difference(t0);
+    hasTimedGap = true;
+    if (gap <= _movingGapThreshold) movingDuration += gap;
+  }
+  final movingDurationSeconds = hasTimedGap ? movingDuration.inSeconds : null;
+
   if (points.isEmpty) {
     north = 0;
     south = 0;
@@ -148,11 +170,14 @@ GpxRoute buildRouteMetadata({
     minElevation: minEle,
     maxElevation: maxEle,
     durationSeconds: durationSeconds,
+    movingDurationSeconds: movingDurationSeconds,
     pointCount: points.length,
     north: north,
     south: south,
     east: east,
     west: west,
+    batteryStartPercent: batteryStartPercent,
+    batteryEndPercent: batteryEndPercent,
   );
 }
 

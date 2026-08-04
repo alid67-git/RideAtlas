@@ -6,12 +6,15 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../build_info.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
+import '../repositories/vehicle_icon_controller.dart';
 import '../services/update_checker.dart';
+import '../widgets/vehicle_marker.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 import 'record_screen.dart';
 import 'route_list_screen.dart';
@@ -383,6 +386,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   Widget _buildMap() {
+    final vehicleIcon = context.watch<VehicleIconController>().option;
+    final markerSize = vehicleMarkerSize(vehicleIcon);
+
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
@@ -401,15 +407,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             markers: [
               Marker(
                 point: _currentLocation!,
-                width: 24,
-                height: 24,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.blueAccent,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                  ),
-                ),
+                width: markerSize,
+                height: markerSize,
+                child: buildVehicleMarker(vehicleIcon),
               ),
             ],
           ),

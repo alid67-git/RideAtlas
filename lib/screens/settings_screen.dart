@@ -3,9 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../repositories/locale_controller.dart';
+import '../repositories/vehicle_icon_controller.dart';
+import '../widgets/vehicle_marker.dart';
 import 'about_screen.dart';
 import 'help_screen.dart';
 import 'language_picker.dart';
+import 'vehicle_icon_picker_screen.dart';
 
 /// App-bar-style icon that opens [SettingsScreen]. Replaces the old
 /// language-only icon: language is now one entry inside settings, alongside
@@ -38,6 +41,7 @@ class SettingsScreen extends StatelessWidget {
       'de' => l10n.languageGerman,
       _ => l10n.languageTurkish,
     };
+    final vehicleIcon = context.watch<VehicleIconController>().option;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle)),
@@ -48,6 +52,25 @@ class SettingsScreen extends StatelessWidget {
             title: Text(l10n.languagePickerTitle),
             subtitle: Text(currentLanguageLabel),
             onTap: () => showLanguagePicker(context),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: SizedBox(
+              width: 40,
+              height: 40,
+              child: Center(
+                child: SizedBox(
+                  width: vehicleMarkerSize(vehicleIcon),
+                  height: vehicleMarkerSize(vehicleIcon),
+                  child: buildVehicleMarker(vehicleIcon),
+                ),
+              ),
+            ),
+            title: Text(l10n.vehicleIconTitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const VehicleIconPickerScreen()),
+            ),
           ),
           const Divider(height: 1),
           ListTile(

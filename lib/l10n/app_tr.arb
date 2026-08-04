@@ -165,5 +165,18 @@
   "helpTitle": "Yardım",
   "aboutTitle": "Hakkında",
   "aboutDeveloper": "Geliştiren: Ali Dinçer",
-  "aboutVersionHistoryTitle": "Sürüm geçmişi"
+  "aboutVersionHistoryTitle": "Sürüm geçmişi",
+  "netDurationLabel": "Net süre",
+  "totalDurationLabel": "Toplam süre",
+  "batteryLabel": "Pil",
+  "batteryRangeLabel": "%{start} → %{end}",
+  "@batteryRangeLabel": {"placeholders": {"start": {"type": "int"}, "end": {"type": "int"}}},
+  "vehicleIconTitle": "Araç ikonu",
+  "vehicleIconClassic": "Klasik nokta",
+  "vehicleIconMotorcycleCategory": "Motosiklet",
+  "vehicleIconCarCategory": "Araba",
+  "vehicleIconOptionLabel": "Seçenek {number}",
+  "@vehicleIconOptionLabel": {"placeholders": {"number": {"type": "int"}}},
+  "recordingTapToReturn": "Kayıt sürüyor - dönmek için dokun",
+  "backToMapTooltip": "Haritaya dön"
 }
