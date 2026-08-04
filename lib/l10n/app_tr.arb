@@ -160,5 +160,10 @@
   "skipLocationButton": "Atla",
   "pickOnMapButton": "Haritada göster",
   "pickLocationInstruction": "Konumu ayarlamak için haritayı kaydırın, sonra onaylayın.",
-  "confirmLocationButton": "Onayla"
+  "confirmLocationButton": "Onayla",
+  "settingsTitle": "Ayarlar",
+  "helpTitle": "Yardım",
+  "aboutTitle": "Hakkında",
+  "aboutDeveloper": "Geliştiren: Ali Dinçer",
+  "aboutVersionHistoryTitle": "Sürüm geçmişi"
 }

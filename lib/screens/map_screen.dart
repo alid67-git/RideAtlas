@@ -24,9 +24,9 @@ import '../services/route_geography.dart';
 import '../services/track_io.dart';
 import '../widgets/route_photo_strip.dart';
 import 'analysis_sheet.dart';
-import 'language_picker.dart';
 import 'location_picker_screen.dart';
 import 'multi_route_map_screen.dart';
+import 'settings_screen.dart';
 
 /// Videos picked from the gallery come back as a plain [XFile] alongside
 /// photos, with no separate list to tell them apart - this is how we sort
@@ -833,8 +833,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 ),
                 const SizedBox(width: 8),
                 _RoundIconButton(
-                  icon: Icons.language,
-                  onPressed: () => showLanguagePicker(context),
+                  icon: Icons.settings,
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  ),
                 ),
               ],
             ),

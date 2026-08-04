@@ -139,5 +139,10 @@
   "skipLocationButton": "Skip",
   "pickOnMapButton": "Show on map",
   "pickLocationInstruction": "Pan the map to set the location, then confirm.",
-  "confirmLocationButton": "Confirm"
+  "confirmLocationButton": "Confirm",
+  "settingsTitle": "Settings",
+  "helpTitle": "Help",
+  "aboutTitle": "About",
+  "aboutDeveloper": "Developer: Ali Dinçer",
+  "aboutVersionHistoryTitle": "Version history"
 }

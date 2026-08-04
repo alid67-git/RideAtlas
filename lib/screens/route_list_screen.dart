@@ -7,10 +7,10 @@ import '../models/gpx_route.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../widgets/route_card.dart';
-import 'language_picker.dart';
 import 'map_screen.dart';
 import 'multi_route_map_screen.dart';
 import 'record_screen.dart';
+import 'settings_screen.dart';
 
 class RouteListScreen extends StatefulWidget {
   const RouteListScreen({super.key});
@@ -179,7 +179,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
                 MaterialPageRoute(builder: (_) => const RecordScreen()),
               ),
             ),
-          if (!_selectionMode) const LanguagePickerButton(),
+          if (!_selectionMode) const SettingsButton(),
         ],
       ),
       body: repo.isLoading

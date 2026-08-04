@@ -1,4 +1,4 @@
-/// Full version history, shown when the user taps the build badge.
+/// Full version history, shown in Settings > About.
 ///
 /// Keep this in sync with [kAppBuildLabel]/[kAppBuildNote] in build_info.dart:
 /// every time those are bumped for a push, add a new entry here too (newest
@@ -19,6 +19,15 @@ class ChangelogEntry {
 }
 
 const kChangelog = <ChangelogEntry>[
+  ChangelogEntry(
+    version: 'v1.3.31 beta',
+    date: '2026-08-04',
+    note:
+        'Dil ikonu yerine Ayarlar ikonu geldi; içine Dil, Yardım (tüm '
+        'özelliklerin detaylı anlatımı) ve Hakkında (güncel sürüm + sürüm '
+        'geçmişi) bölümleri eklendi. Ekranda dolaşan versiyon rozeti '
+        'kaldırıldı.',
+  ),
   ChangelogEntry(
     version: 'v1.3.30 beta',
     date: '2026-08-03',
