@@ -74,7 +74,20 @@ class RideAtlasApp extends StatelessWidget {
               return Stack(
                 children: [
                   ?child,
-                  const Positioned(left: 8, bottom: 8, child: _BuildBadge()),
+                  // Vertically centered on the left edge, not a corner: every
+                  // screen puts real controls (back/list buttons, FABs, the
+                  // photo/video filmstrip) in the corners, but never in the
+                  // middle of an edge - this is the one spot guaranteed not
+                  // to collide with anything.
+                  const Positioned(
+                    left: 8,
+                    top: 0,
+                    bottom: 0,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _BuildBadge(),
+                    ),
+                  ),
                 ],
               );
             },
