@@ -66,13 +66,25 @@ class _RecordScreenState extends State<RecordScreen> {
   LatLng? _currentLocation;
   bool _centeredOnce = false;
 
+  /// GPS course-over-ground in degrees (0-360, clockwise from north), from
+  /// the same position stream - null until the device reports one (it
+  /// needs to actually be moving to be meaningful).
+  double? _currentHeading;
+
   /// True while the map should keep auto-centering on the live position.
   /// Any user-driven map interaction (drag, pinch, fling, ...) turns this
   /// off, so panning around to look at the surroundings isn't constantly
   /// fought by the auto-follow; the recenter button turns it back on - and,
-  /// if it's tapped again while already following, resets the map's
-  /// rotation back to north-up instead (see [_recenter]).
+  /// if it's tapped again while already following, toggles [_headingUp]
+  /// instead (see [_recenter]).
   bool _followMe = true;
+
+  /// False (default): north is always up, map never rotates on its own -
+  /// the vehicle marker itself rotates to show which way it's facing.
+  /// True: the map rotates to keep the direction of travel pointing up
+  /// (course-up), so the marker stays fixed pointing "forward" instead.
+  bool _headingUp = false;
+
   late final StreamSubscription<MapEvent> _mapEventSub;
 
   @override
@@ -92,11 +104,12 @@ class _RecordScreenState extends State<RecordScreen> {
   }
 
   /// Recenters and resumes following the live position - unless the map is
-  /// already following it, in which case a repeat tap instead resets any
-  /// rotation from a pinch-twist gesture back to north-up.
+  /// already following it, in which case a repeat tap instead switches
+  /// between north-up and course-up (see [_headingUp]).
   void _recenter() {
     if (_followMe) {
-      _mapController.rotate(0);
+      setState(() => _headingUp = !_headingUp);
+      _applyRotation();
       return;
     }
     final location = _currentLocation;
@@ -105,6 +118,18 @@ class _RecordScreenState extends State<RecordScreen> {
       final zoom = _mapController.camera.zoom;
       _mapController.move(location, zoom < 15 ? 16 : zoom);
     }
+    _applyRotation();
+  }
+
+  /// Rotates the map to match [_headingUp]'s current mode - north-up
+  /// (rotation 0) or course-up (rotation = live heading, if known yet).
+  void _applyRotation() {
+    if (!_headingUp) {
+      _mapController.rotate(0);
+      return;
+    }
+    final heading = _currentHeading;
+    if (heading != null) _mapController.rotate(heading);
   }
 
   Future<void> _startLiveLocation() async {
@@ -135,12 +160,24 @@ class _RecordScreenState extends State<RecordScreen> {
         ).listen((pos) {
           if (!mounted) return;
           final location = LatLng(pos.latitude, pos.longitude);
-          setState(() => _currentLocation = location);
+          // A heading reading near 0 accuracy/while stationary is noisy
+          // GPS jitter, not a real course - ignore it rather than let the
+          // map twitch around when stopped.
+          final heading = (pos.heading >= 0 && pos.speed > 0.5)
+              ? pos.heading
+              : _currentHeading;
+          setState(() {
+            _currentLocation = location;
+            _currentHeading = heading;
+          });
           if (!_centeredOnce) {
             _centeredOnce = true;
             _mapController.move(location, 16);
           } else if (_followMe) {
             _mapController.move(location, _mapController.camera.zoom);
+          }
+          if (_followMe && _headingUp && heading != null) {
+            _mapController.rotate(heading);
           }
         });
   }
@@ -178,6 +215,7 @@ class _RecordScreenState extends State<RecordScreen> {
     final location = _currentLocation;
     setState(() => _followMe = true);
     if (location != null) _mapController.move(location, 16);
+    _applyRotation();
   }
 
   Future<bool> _confirmDiscard() async {
@@ -309,7 +347,14 @@ class _RecordScreenState extends State<RecordScreen> {
                     ? Theme.of(context).colorScheme.onPrimary
                     : null,
                 onPressed: _currentLocation == null ? null : _recenter,
-                child: const Icon(Icons.my_location),
+                // A compass-needle icon while following the direction of
+                // travel (course-up), the plain dot while north stays up -
+                // the same visual language most map/nav apps use for this.
+                child: Icon(
+                  _followMe && _headingUp
+                      ? Icons.navigation
+                      : Icons.my_location,
+                ),
               ),
             ),
           ),
@@ -549,7 +594,18 @@ class _RecordScreenState extends State<RecordScreen> {
                 point: _currentLocation!,
                 width: markerSize,
                 height: markerSize,
-                child: buildVehicleMarker(vehicleIcon),
+                // North-up: the map never rotates, so the marker rotates
+                // instead to show which way it's actually facing.
+                // Course-up: the map itself rotates to keep the direction
+                // of travel pointing up, so the marker stays fixed
+                // pointing straight up ("forward") and needs no rotation
+                // of its own.
+                child: Transform.rotate(
+                  angle: (!_headingUp && _currentHeading != null)
+                      ? _currentHeading! * pi / 180
+                      : 0,
+                  child: buildVehicleMarker(vehicleIcon),
+                ),
               ),
             ],
           ),

@@ -15,9 +15,10 @@ final recordScreenVisible = ValueNotifier<bool>(false);
 /// top-right corner of every other screen while a ride is being tracked -
 /// since [GpsRecorder] now lives above the Navigator (see main.dart),
 /// leaving [RecordScreen] no longer stops the recording, so there needs to
-/// be a way back to it from wherever the user ends up. Sits below each
-/// screen's own top icon row (they all put real controls, like the settings
-/// gear, in the very top-right corner) rather than on top of it.
+/// be a way back to it from wherever the user ends up. Pinned right at the
+/// safe-area corner (not further down, below each screen's own icon row)
+/// so it's the first thing visible, not something to notice among other
+/// controls.
 class RecordingIndicatorOverlay extends StatelessWidget {
   const RecordingIndicatorOverlay({super.key, required this.child});
 
@@ -39,7 +40,7 @@ class RecordingIndicatorOverlay extends StatelessWidget {
                 right: 0,
                 child: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 60, right: 12),
+                    padding: const EdgeInsets.only(top: 8, right: 8),
                     child: _RecordingPill(isPaused: recorder.isPaused),
                   ),
                 ),
@@ -69,7 +70,7 @@ class _RecordingPillState extends State<_RecordingPill>
     super.initState();
     _blink = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 650),
+      duration: const Duration(milliseconds: 700),
     )..repeat(reverse: true);
   }
 
@@ -82,51 +83,55 @@ class _RecordingPillState extends State<_RecordingPill>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Tooltip(
-      message: l10n.recordingTapToReturn,
-      child: Material(
-        color: Colors.black87,
+    final pill = Material(
+      color: Colors.red.shade700,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        elevation: 4,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => rootNavigatorKey.currentState?.push(
-            MaterialPageRoute(builder: (_) => const RecordScreen()),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                widget.isPaused
-                    ? const Icon(
-                        Icons.fiber_manual_record,
-                        color: Colors.white38,
-                        size: 16,
-                      )
-                    : FadeTransition(
-                        opacity: Tween(begin: 1.0, end: 0.25).animate(_blink),
-                        child: const Icon(
-                          Icons.fiber_manual_record,
-                          color: Colors.red,
-                          size: 16,
-                        ),
-                      ),
-                const SizedBox(width: 6),
-                const Text(
-                  'REC',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                    letterSpacing: 0.5,
-                  ),
+        side: const BorderSide(color: Colors.white, width: 1.5),
+      ),
+      elevation: 6,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => rootNavigatorKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => const RecordScreen()),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                widget.isPaused ? Icons.pause : Icons.fiber_manual_record,
+                color: Colors.white,
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'REC',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  letterSpacing: 0.5,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
+    );
+
+    return Tooltip(
+      message: l10n.recordingTapToReturn,
+      // The whole pill blinks (not just an icon inside it) so it reads as
+      // "notice me" against literally any background - a map, a plain
+      // white settings list, a photo - rather than blending in.
+      child: widget.isPaused
+          ? pill
+          : FadeTransition(
+              opacity: Tween(begin: 1.0, end: 0.45).animate(_blink),
+              child: pill,
+            ),
     );
   }
 }
