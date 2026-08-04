@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Declares RideAtlas as a template-based (androidx.car.app) car app,
+     required alongside the com.google.android.gms.car.application
+     meta-data entry in AndroidManifest.xml for Android Auto to find it. -->
+<automotiveApp>
+    <uses name="template" />
+</automotiveApp>

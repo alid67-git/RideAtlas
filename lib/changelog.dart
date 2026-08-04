@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.34 beta',
+    date: '2026-08-04',
+    note:
+        'Android Auto desteği eklendi: telefonda başlatılan bir kayıt, '
+        'arabanın ekranından da görülüp kontrol edilebiliyor - hız, süre, '
+        'mesafe orada da gösteriliyor; duraklat/devam et ve bitir '
+        'düğmeleri çalışıyor (sürüş güvenliği kuralları gereği araba '
+        'ekranından isim yazılamıyor, kayıt otomatik bir isimle '
+        'kaydediliyor). Telefon uygulamasının en az bir kez açılmış olması '
+        'yeterli. CarPlay için Apple\'dan özel izin (entitlement) '
+        'gerekiyor, henüz eklenmedi.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.33 beta',
     date: '2026-08-04',
     note:
