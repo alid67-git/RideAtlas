@@ -6,6 +6,8 @@ import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
+import '../services/gps_recorder.dart';
+import '../widgets/recording_indicator.dart';
 import '../widgets/route_card.dart';
 import 'map_screen.dart';
 import 'multi_route_map_screen.dart';
@@ -66,9 +68,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
         suggestedFileName: file.name,
       );
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pushReplacement(
+      Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)),
       );
     } on FormatException catch (_) {
@@ -145,6 +145,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
     final l10n = AppLocalizations.of(context)!;
     final repo = context.watch<RouteRepository>();
     final routes = repo.routes;
+    final recordingInProgress = !context.watch<GpsRecorder>().isIdle;
 
     return Scaffold(
       appBar: AppBar(
@@ -163,15 +164,13 @@ class _RouteListScreenState extends State<RouteListScreen> {
         actions: [
           if (routes.isNotEmpty)
             IconButton(
-              icon: Icon(
-                _selectionMode ? Icons.close : Icons.checklist,
-              ),
+              icon: Icon(_selectionMode ? Icons.close : Icons.checklist),
               tooltip: _selectionMode
                   ? l10n.exitSelectionTooltip
                   : l10n.selectRoutesTooltip,
               onPressed: _toggleSelectionMode,
             ),
-          if (!_selectionMode)
+          if (!_selectionMode && !recordingInProgress)
             IconButton(
               icon: const Icon(Icons.fiber_manual_record, color: Colors.red),
               tooltip: l10n.recordRideTooltip,
@@ -180,6 +179,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
               ),
             ),
           if (!_selectionMode) const SettingsButton(),
+          if (!_selectionMode) const RecordingRowIcon(),
         ],
       ),
       body: repo.isLoading

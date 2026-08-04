@@ -15,6 +15,7 @@ import '../models/base_map_style.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/gps_recorder.dart';
 import '../services/update_checker.dart';
+import '../widgets/recording_indicator.dart';
 import '../widgets/vehicle_marker.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 import 'record_screen.dart';
@@ -112,8 +113,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       if (!enabled) {
         if (mounted) {
           setState(
-            () => _locationError =
-                AppLocalizations.of(context)!.locationServiceDisabledError,
+            () => _locationError = AppLocalizations.of(
+              context,
+            )!.locationServiceDisabledError,
           );
         }
         return;
@@ -127,8 +129,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           permission == LocationPermission.deniedForever) {
         if (mounted) {
           setState(
-            () => _locationError =
-                AppLocalizations.of(context)!.locationPermissionDeniedError,
+            () => _locationError = AppLocalizations.of(
+              context,
+            )!.locationPermissionDeniedError,
           );
         }
         return;
@@ -138,8 +141,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       // works, just without a "you are here" marker.
       if (mounted) {
         setState(
-          () => _locationError =
-              AppLocalizations.of(context)!.locationPermissionDeniedError,
+          () => _locationError = AppLocalizations.of(
+            context,
+          )!.locationPermissionDeniedError,
         );
       }
       return;
@@ -192,10 +196,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   void _showMapStylePicker() {
     showDialog<void>(
       context: context,
-      builder: (_) => MapStylePickerDialog(
-        current: _mapStyle,
-        onSelected: _changeMapStyle,
-      ),
+      builder: (_) =>
+          MapStylePickerDialog(current: _mapStyle, onSelected: _changeMapStyle),
     );
   }
 
@@ -290,6 +292,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                     ),
                     const Spacer(),
                     const SettingsButton(),
+                    const SizedBox(width: 8),
+                    const RecordingRowIcon(),
                   ],
                 ),
               ),

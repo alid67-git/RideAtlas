@@ -11,7 +11,6 @@ import 'repositories/vehicle_icon_controller.dart';
 import 'screens/home_map_screen.dart';
 import 'services/car_bridge.dart';
 import 'services/gps_recorder.dart';
-import 'widgets/recording_indicator.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,9 +18,8 @@ Future<void> main() async {
   runApp(const RideAtlasApp());
 }
 
-/// Above the app's Navigator (set via [MaterialApp.navigatorKey]) so the
-/// floating recording indicator can push [RecordScreen] back onto the stack
-/// from outside it - see [RecordingIndicatorOverlay].
+/// Above the app's Navigator, for anything that needs to push/show
+/// something without its own [BuildContext].
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 class RideAtlasApp extends StatelessWidget {
@@ -81,9 +79,6 @@ class RideAtlasApp extends StatelessWidget {
                 useMaterial3: true,
               ),
               home: const HomeMapScreen(),
-              builder: (context, child) => RecordingIndicatorOverlay(
-                child: child ?? const SizedBox.shrink(),
-              ),
             );
           },
         ),
