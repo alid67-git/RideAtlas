@@ -139,5 +139,10 @@
   "skipLocationButton": "Überspringen",
   "pickOnMapButton": "Auf der Karte zeigen",
   "pickLocationInstruction": "Verschieben Sie die Karte, um den Standort festzulegen, und bestätigen Sie dann.",
-  "confirmLocationButton": "Bestätigen"
+  "confirmLocationButton": "Bestätigen",
+  "settingsTitle": "Einstellungen",
+  "helpTitle": "Hilfe",
+  "aboutTitle": "Über die App",
+  "aboutDeveloper": "Entwickler: Ali Dinçer",
+  "aboutVersionHistoryTitle": "Versionsverlauf"
 }

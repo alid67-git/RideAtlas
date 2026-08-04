@@ -12,10 +12,10 @@ import '../build_info.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import '../services/update_checker.dart';
-import 'language_picker.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 import 'record_screen.dart';
 import 'route_list_screen.dart';
+import 'settings_screen.dart';
 
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
@@ -284,7 +284,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                       ),
                     ),
                     const Spacer(),
-                    const LanguagePickerButton(),
+                    const SettingsButton(),
                   ],
                 ),
               ),
