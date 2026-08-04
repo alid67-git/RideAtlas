@@ -22,6 +22,7 @@ import '../services/daily_analysis.dart';
 import '../services/exif_gps.dart';
 import '../services/route_geography.dart';
 import '../services/track_io.dart';
+import '../widgets/recording_indicator.dart';
 import '../widgets/route_photo_strip.dart';
 import 'analysis_sheet.dart';
 import 'location_picker_screen.dart';
@@ -177,10 +178,8 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   void _showMapStylePicker() {
     showDialog<void>(
       context: context,
-      builder: (_) => MapStylePickerDialog(
-        current: _mapStyle,
-        onSelected: _changeMapStyle,
-      ),
+      builder: (_) =>
+          MapStylePickerDialog(current: _mapStyle, onSelected: _changeMapStyle),
     );
   }
 
@@ -368,9 +367,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.photoAddFailedGeneric('$e'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.photoAddFailedGeneric('$e'))));
     }
   }
 
@@ -497,7 +496,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         }
 
         final points = _points;
-        final days = points == null ? const <DayStats>[] : splitIntoDays(points);
+        final days = points == null
+            ? const <DayStats>[]
+            : splitIntoDays(points);
         // Cheap, local-only clustering (no reverse geocoding) - just enough
         // to drop a pin at each dwell stop; the full geography analysis with
         // city/country still only runs lazily from the analysis sheet.
@@ -665,7 +666,8 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           subdomains: _mapStyle.subdomains,
           userAgentPackageName: 'com.rideatlas.app',
           maxNativeZoom: 20,
-          evictErrorTileStrategy: EvictErrorTileStrategy.notVisibleRespectMargin,
+          evictErrorTileStrategy:
+              EvictErrorTileStrategy.notVisibleRespectMargin,
           errorTileCallback: _onTileError,
           reset: _tileResetController.stream,
         ),
@@ -823,11 +825,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 ),
                 const SizedBox(width: 8),
                 _RoundIconButton(
-                  icon: Icons.add_a_photo,
-                  onPressed: () => _addMedia(route),
-                ),
-                const SizedBox(width: 8),
-                _RoundIconButton(
                   icon: Icons.ios_share,
                   onPressed: () => _share(route),
                 ),
@@ -838,14 +835,13 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                     MaterialPageRoute(builder: (_) => const SettingsScreen()),
                   ),
                 ),
+                const SizedBox(width: 8),
+                const RecordingRowIcon(),
               ],
             ),
             const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 color: Theme.of(
                   context,
@@ -987,8 +983,7 @@ class _DayFilterDialogState extends State<_DayFilterDialog> {
   void initState() {
     super.initState();
     _checked =
-        widget.selected?.toSet() ??
-        widget.days.map((d) => d.dayNumber).toSet();
+        widget.selected?.toSet() ?? widget.days.map((d) => d.dayNumber).toSet();
   }
 
   void _toggle(int dayNumber, bool? value) {

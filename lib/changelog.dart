@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.36 beta',
+    date: '2026-08-04',
+    note:
+        'REC göstergesi artık bağımsız bir kutu olarak ekranın üstünde '
+        'yüzmüyor - ayarlar ikonunun hemen sağında, üst çubuktaki diğer '
+        'ikonlarla aynı satırda, küçük yanıp sönen bir ikon olarak '
+        'duruyor (önceden ayarlar ikonunun üstüne biniyordu). Rota '
+        'haritasının üst çubuğundaki foto ekleme ikonu kaldırıldı - '
+        'ekranın altındaki foto/video şeridinde zaten aynı işi yapan bir '
+        'düğme var.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.35 beta',
     date: '2026-08-04',
     note:
