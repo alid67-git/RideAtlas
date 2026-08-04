@@ -20,6 +20,13 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.30 beta',
+    date: '2026-08-03',
+    note:
+        'Versiyon etiketi artık ekranın sol kenarının ortasında - '
+        'fotoğraf/video şeridiyle sol alt köşede üst üste binmiyordu.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.29 beta',
     date: '2026-08-03',
     note:
