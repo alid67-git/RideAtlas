@@ -13,6 +13,7 @@ import '../build_info.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import '../repositories/vehicle_icon_controller.dart';
+import '../services/gps_recorder.dart';
 import '../services/update_checker.dart';
 import '../widgets/vehicle_marker.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
@@ -262,6 +263,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final updateBanner = _buildUpdateBanner(l10n);
+    final recordingInProgress = !context.watch<GpsRecorder>().isIdle;
     return Scaffold(
       body: Stack(
         children: [
@@ -332,23 +334,28 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                 ),
               ),
             ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 24,
-            child: Center(
-              child: FloatingActionButton.large(
-                heroTag: 'homeRecord',
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                tooltip: l10n.recordRideTooltip,
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const RecordScreen()),
+          // A recording already running (elsewhere, in the background) has
+          // its own way back in - the blinking REC pill from
+          // RecordingIndicatorOverlay - so this button doesn't double up as
+          // a second, confusing "start" invitation while one is live.
+          if (!recordingInProgress)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 24,
+              child: Center(
+                child: FloatingActionButton.large(
+                  heroTag: 'homeRecord',
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  tooltip: l10n.recordRideTooltip,
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const RecordScreen()),
+                  ),
+                  child: const Icon(Icons.fiber_manual_record, size: 32),
                 ),
-                child: const Icon(Icons.fiber_manual_record, size: 32),
               ),
             ),
-          ),
           Positioned(
             right: 16,
             bottom: 24,

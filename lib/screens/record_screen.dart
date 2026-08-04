@@ -126,22 +126,23 @@ class _RecordScreenState extends State<RecordScreen> {
       return;
     }
 
-    _liveLocationSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
-      ),
-    ).listen((pos) {
-      if (!mounted) return;
-      final location = LatLng(pos.latitude, pos.longitude);
-      setState(() => _currentLocation = location);
-      if (!_centeredOnce) {
-        _centeredOnce = true;
-        _mapController.move(location, 16);
-      } else if (_followMe) {
-        _mapController.move(location, _mapController.camera.zoom);
-      }
-    });
+    _liveLocationSub =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 5,
+          ),
+        ).listen((pos) {
+          if (!mounted) return;
+          final location = LatLng(pos.latitude, pos.longitude);
+          setState(() => _currentLocation = location);
+          if (!_centeredOnce) {
+            _centeredOnce = true;
+            _mapController.move(location, 16);
+          } else if (_followMe) {
+            _mapController.move(location, _mapController.camera.zoom);
+          }
+        });
   }
 
   @override
@@ -255,9 +256,9 @@ class _RecordScreenState extends State<RecordScreen> {
       batteryEndPercent: batteryEnd,
     );
     if (!mounted) return;
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)));
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)),
+    );
   }
 
   @override
@@ -362,42 +363,25 @@ class _RecordScreenState extends State<RecordScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // The current speed is the one number a rider actually needs to
-            // read at a glance while moving, so it gets its own big display;
-            // everything else is secondary and stays small.
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface.withValues(alpha: 0.92),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 6),
-                ],
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    recorder.currentSpeedKmh.toStringAsFixed(0),
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      height: 1,
-                    ),
-                  ),
-                  Text(l10n.speedLabel, style: theme.textTheme.labelSmall),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Container(
+        // IntrinsicHeight resolves the height both boxes stretch to before
+        // laying them out - without it, CrossAxisAlignment.stretch here asks
+        // the Row to be as tall as its own children while also stretching
+        // those children to the Row's height, a circular size dependency
+        // that made this whole section silently fail to lay out at all
+        // (the top bar rendered with nothing in it, next to the back
+        // button) because this Row sits inside a Positioned with no bottom
+        // edge, which leaves incoming height constraints unbounded.
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // The current speed is the one number a rider actually needs to
+              // read at a glance while moving, so it gets its own big display;
+              // everything else is secondary and stays small.
+              Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 10,
+                  horizontal: 14,
+                  vertical: 6,
                 ),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surface.withValues(alpha: 0.92),
@@ -406,23 +390,53 @@ class _RecordScreenState extends State<RecordScreen> {
                     BoxShadow(color: Colors.black26, blurRadius: 6),
                   ],
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _StatColumn(label: l10n.duration, value: durationStr),
-                    _StatColumn(
-                      label: l10n.distance,
-                      value: '${recorder.distanceKm.toStringAsFixed(2)} km',
+                    Text(
+                      recorder.currentSpeedKmh.toStringAsFixed(0),
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                      ),
                     ),
-                    _StatColumn(
-                      label: l10n.currentAltitudeLabel,
-                      value: altitude == null ? '—' : '${altitude.round()} m',
-                    ),
+                    Text(l10n.speedLabel, style: theme.textTheme.labelSmall),
                   ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black26, blurRadius: 6),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _StatColumn(label: l10n.duration, value: durationStr),
+                      _StatColumn(
+                        label: l10n.distance,
+                        value: '${recorder.distanceKm.toStringAsFixed(2)} km',
+                      ),
+                      _StatColumn(
+                        label: l10n.currentAltitudeLabel,
+                        value: altitude == null ? '—' : '${altitude.round()} m',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         if (recorder.isAutoPaused) ...[
           const SizedBox(height: 8),
