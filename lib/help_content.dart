@@ -100,6 +100,17 @@ const _helpSectionsTr = <HelpSection>[
         'kalıcı olarak kullanılır.',
   ),
   HelpSection(
+    title: 'Android Auto',
+    body:
+        'Telefonda başlattığınız bir kaydı, arabanın ekranından da '
+        'görüp kontrol edebilirsiniz: hız, süre ve mesafe orada da '
+        'gösterilir; duraklat/devam et ve bitir düğmeleri de çalışır '
+        '(sürüş güvenliği kuralları gereği araba ekranından isim '
+        'yazılamaz, kayıt otomatik bir isimle kaydedilir). Bunun için '
+        'telefon uygulamasının en az bir kez açılmış olması yeterli. '
+        'CarPlay desteği şu an yok - Apple\'ın özel izni gerekiyor.',
+  ),
+  HelpSection(
     title: 'Dışa aktarma',
     body:
         'Harita ekranındaki paylaş ikonuyla açık olan rotayı GPX, KML veya '
@@ -204,6 +215,18 @@ const _helpSectionsEn = <HelpSection>[
         'marker on the map with a motorcycle or car icon instead of the '
         'classic dot, each in 5 different scale/color presets. Your choice '
         'stays until you change it again.',
+  ),
+  HelpSection(
+    title: 'Android Auto',
+    body:
+        'A recording started on the phone can also be viewed and '
+        'controlled from the car\'s own screen: speed, duration and '
+        'distance show there too, and pause/resume and finish work as '
+        'well (driver-safety rules mean the car screen can\'t type a '
+        'name, so it saves under an automatic one). The phone app just '
+        'needs to have been opened at least once first. There\'s no '
+        'CarPlay support yet - that needs a special entitlement from '
+        'Apple.',
   ),
   HelpSection(
     title: 'Exporting',
@@ -317,6 +340,19 @@ const _helpSectionsDe = <HelpSection>[
         'durch ein Motorrad- oder Autosymbol ersetzen, jeweils in 5 '
         'verschiedenen Größen-/Farbvarianten. Ihre Wahl bleibt bestehen, '
         'bis Sie sie erneut ändern.',
+  ),
+  HelpSection(
+    title: 'Android Auto',
+    body:
+        'Eine auf dem Telefon gestartete Aufzeichnung kann auch über den '
+        'Bildschirm des Autos angezeigt und gesteuert werden: '
+        'Geschwindigkeit, Dauer und Distanz werden dort ebenfalls '
+        'angezeigt, Pausieren/Fortsetzen und Beenden funktionieren auch '
+        '(aus Gründen der Fahrsicherheit kann am Autobildschirm kein Name '
+        'eingegeben werden, die Aufzeichnung wird automatisch benannt '
+        'gespeichert). Die Telefon-App muss dafür nur einmal geöffnet '
+        'worden sein. CarPlay wird noch nicht unterstützt - dafür ist '
+        'eine besondere Berechtigung von Apple nötig.',
   ),
   HelpSection(
     title: 'Exportieren',

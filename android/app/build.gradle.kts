@@ -61,6 +61,13 @@ kotlin {
     }
 }
 
+dependencies {
+    // Android Auto: lets a recording be started/paused/finished and its
+    // live stats be read from the car's head unit screen, via the native
+    // screens in android/app/src/main/kotlin/.../car/.
+    implementation("androidx.car.app:app:1.4.0")
+}
+
 flutter {
     source = "../.."
 }

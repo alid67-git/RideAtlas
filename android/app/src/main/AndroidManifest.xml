@@ -22,6 +22,27 @@
         android:label="RideAtlas"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Android Auto: lets a recording already running on the phone be
+             viewed and controlled (start/pause/resume/finish) from the
+             car's own screen. See android/app/src/main/kotlin/.../car/. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+        <service
+            android:name=".car.RideAtlasCarAppService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.car.app.CarAppService" />
+                <!-- RideAtlas doesn't do turn-by-turn navigation, but the
+                     NAVIGATION category is what unlocks the general-purpose
+                     Pane/Grid templates this screen uses (the other public
+                     categories - parking/charging/IoT - restrict to their
+                     own narrow POI templates). Fine for a sideloaded,
+                     personal-use app; a Play Store listing would need to
+                     either add real navigation or pick a different fit. -->
+                <category android:name="androidx.car.app.category.NAVIGATION" />
+            </intent-filter>
+        </service>
         <activity
             android:name=".MainActivity"
             android:exported="true"
