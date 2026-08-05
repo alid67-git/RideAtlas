@@ -151,6 +151,8 @@
   "batteryRangeLabel": "{start}% → {end}%",
   "batteryOptimizationTitle": "GPS im Hintergrund erlauben",
   "batteryOptimizationSubtitle": "RideAtlas von der Akkuoptimierung ausnehmen, damit die Aufzeichnung bei ausgeschaltetem Bildschirm nicht stoppt",
+  "satelliteCountTitle": "Satellitenanzahl anzeigen",
+  "satelliteCountSubtitle": "Anzahl der verbundenen Satelliten neben der Aufnahmetaste und auf dem Aufnahmebildschirm anzeigen",
   "vehicleIconTitle": "Fahrzeugsymbol",
   "vehicleIconClassic": "Klassischer Punkt",
   "vehicleIconMotorcycleCategory": "Motorrad",

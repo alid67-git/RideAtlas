@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.41 beta',
+    date: '2026-08-05',
+    note:
+        'Araç ve motor haritada artık emoji yerine gerçek, üstten çekilmiş '
+        'araç fotoğraflarıyla gösteriliyor - her ikisi için de 5 renk ve '
+        '5 ölçek seçeneği var (Ayarlar > Araç ikonu). Ana ekrandaki kayıt '
+        'tuşunun altında ve kayıt ekranında, bağlı GPS uydu sayısını '
+        'gösteren küçük bir rozet eklendi; Ayarlar > "Uydu sayısını göster" '
+        'ile istenirse kapatılabilir.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.40 beta',
     date: '2026-08-05',
     note:

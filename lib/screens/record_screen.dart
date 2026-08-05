@@ -20,6 +20,7 @@ import '../services/gps_recorder.dart';
 import '../services/track_io.dart';
 import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
+import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
 import 'map_screen.dart' show RouteMapScreen;
 
@@ -343,6 +344,11 @@ class _RecordScreenState extends State<RecordScreen> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(child: _buildStats(context, l10n, recorder)),
+                    const SizedBox(width: 8),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: SatelliteCountBadge(),
+                    ),
                   ],
                 ),
               ),

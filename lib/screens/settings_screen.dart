@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../repositories/locale_controller.dart';
+import '../repositories/satellite_visibility_controller.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/battery_optimization.dart';
 import '../widgets/vehicle_marker.dart';
@@ -44,6 +45,7 @@ class SettingsScreen extends StatelessWidget {
       _ => l10n.languageTurkish,
     };
     final vehicleIcon = context.watch<VehicleIconController>().option;
+    final satelliteController = context.watch<SatelliteVisibilityController>();
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle)),
@@ -62,6 +64,14 @@ class SettingsScreen extends StatelessWidget {
               title: Text(l10n.batteryOptimizationTitle),
               subtitle: Text(l10n.batteryOptimizationSubtitle),
               onTap: requestIgnoreBatteryOptimizations,
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              secondary: const Icon(Icons.satellite_alt_outlined),
+              title: Text(l10n.satelliteCountTitle),
+              subtitle: Text(l10n.satelliteCountSubtitle),
+              value: satelliteController.visible,
+              onChanged: satelliteController.setVisible,
             ),
           ],
           const Divider(height: 1),
