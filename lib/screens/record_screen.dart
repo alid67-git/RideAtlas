@@ -243,6 +243,37 @@ class _RecordScreenState extends State<RecordScreen> {
     if (!await isIgnoringBatteryOptimizations()) {
       await requestIgnoreBatteryOptimizations();
     }
+
+    // Only "while in use" access can't survive the screen locking, no
+    // matter what else is granted (foreground service, battery exemption,
+    // ...) - GpsRecorder.start() already tries to escalate to "always" via
+    // a second permission request, but the user may have declined it, or
+    // the OS may have routed straight to Settings without a direct prompt.
+    // Flag it explicitly rather than let recording silently drop points.
+    if (!mounted || !_supportsBackgroundRecording) return;
+    final permission = await Geolocator.checkPermission();
+    if (!mounted || permission == LocationPermission.always) return;
+    final l10n = AppLocalizations.of(context)!;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.backgroundLocationDialogTitle),
+        content: Text(l10n.backgroundLocationDialogMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Geolocator.openAppSettings();
+            },
+            child: Text(l10n.openSettings),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<bool> _confirmDiscard() async {

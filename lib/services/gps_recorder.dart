@@ -104,6 +104,15 @@ class GpsRecorder extends ChangeNotifier {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
+    // Android refuses to grant "always" (background) access in the same
+    // request as foreground access - it has to be asked for as a distinct
+    // second step, once foreground is already confirmed. Skipping this
+    // second call is exactly why recording used to silently stop the
+    // moment the screen locked: the app never actually had background
+    // location access, foreground service or not.
+    if (permission == LocationPermission.whileInUse) {
+      permission = await Geolocator.requestPermission();
+    }
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       return RecordingStartError.permissionDenied;

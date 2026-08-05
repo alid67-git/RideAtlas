@@ -2,12 +2,19 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Live ride recording: fine-grained location plus a foreground service
          with a persistent notification, so tracking keeps running while the
-         app is minimized. This is *not* the separate, more sensitive
-         ACCESS_BACKGROUND_LOCATION permission - an active foreground service
-         already counts as "in use" for Android's location permission model,
-         so we deliberately don't request that broader one. -->
+         app is minimized. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Without this, Android's Settings > App info > Permissions > Location
+         screen never even offers an "Allow all the time" choice for this
+         app - it caps out at "only while using", which the OS is free to
+         suspend once the app isn't in the foreground, foreground service or
+         not. (An earlier version of this file assumed the foreground
+         service alone was enough to skip requesting this; real-device
+         testing on Android proved that assumption wrong - the recorded
+         track gained a gap for exactly as long as the screen stayed
+         locked.) -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>

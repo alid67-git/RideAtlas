@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
@@ -58,6 +59,13 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => showLanguagePicker(context),
           ),
           if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) ...[
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.location_on_outlined),
+              title: Text(l10n.locationAlwaysAllowTitle),
+              subtitle: Text(l10n.locationAlwaysAllowSubtitle),
+              onTap: Geolocator.openAppSettings,
+            ),
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.battery_saver_outlined),
