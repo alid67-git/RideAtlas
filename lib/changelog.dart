@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.37 beta',
+    date: '2026-08-04',
+    note:
+        'Önemli düzeltme: v1.3.34\'te Android Auto eklenirken '
+        'MainActivity\'nin Flutter motorunu ele alış şekli değişmişti, bu '
+        'da Android\'de arka planda (uygulama küçültülünce) konum '
+        'alınmasını bozmuştu - geri alındı, arka plan takibi eskisi gibi '
+        'çalışıyor. Kayıt ekranındaki araç ikonu artık her zaman yukarı '
+        'bakıyor; kuzey-sabit moddayken de artık kendi etrafında '
+        'dönmüyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.36 beta',
     date: '2026-08-04',
     note:

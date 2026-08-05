@@ -594,18 +594,12 @@ class _RecordScreenState extends State<RecordScreen> {
                 point: _currentLocation!,
                 width: markerSize,
                 height: markerSize,
-                // North-up: the map never rotates, so the marker rotates
-                // instead to show which way it's actually facing.
-                // Course-up: the map itself rotates to keep the direction
-                // of travel pointing up, so the marker stays fixed
-                // pointing straight up ("forward") and needs no rotation
-                // of its own.
-                child: Transform.rotate(
-                  angle: (!_headingUp && _currentHeading != null)
-                      ? _currentHeading! * pi / 180
-                      : 0,
-                  child: buildVehicleMarker(vehicleIcon),
-                ),
+                // Always points straight up, regardless of north-up vs.
+                // course-up mode: in course-up mode that's because the map
+                // itself rotates to keep the direction of travel pointing
+                // up, and in north-up mode it's simply the app's chosen
+                // vehicle icon, not a compass needle.
+                child: buildVehicleMarker(vehicleIcon),
               ),
             ],
           ),
