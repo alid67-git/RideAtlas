@@ -3,21 +3,24 @@ import 'package:flutter/material.dart';
 enum VehicleIconCategory { classic, motorcycle, car }
 
 /// A selectable icon for the "you are here" marker on the map. [classic]
-/// (the plain blue dot) has no icon/color/scale - those only apply to the
-/// motorcycle/car options.
+/// (the plain blue dot) has no emoji/badgeColor/scale - those only apply to
+/// the motorcycle/car options. Vehicles render as an emoji glyph (full-color,
+/// detailed on both Android and web) over a colored circular badge, since
+/// the badge color is what gives each of the 5 variants per category its
+/// distinct look - the emoji itself can't be recolored.
 class VehicleIconOption {
   const VehicleIconOption({
     required this.id,
     required this.category,
-    this.icon,
-    this.color,
+    this.emoji,
+    this.badgeColor,
     this.scale = 1.0,
   });
 
   final String id;
   final VehicleIconCategory category;
-  final IconData? icon;
-  final Color? color;
+  final String? emoji;
+  final Color? badgeColor;
 
   /// Multiplier applied to the marker's base size.
   final double scale;
@@ -29,72 +32,72 @@ const kVehicleIconOptions = <VehicleIconOption>[
   VehicleIconOption(
     id: 'moto_1',
     category: VehicleIconCategory.motorcycle,
-    icon: Icons.two_wheeler,
-    color: Color(0xFFE53935),
+    emoji: '🏍️',
+    badgeColor: Color(0xFFE53935),
     scale: 0.8,
   ),
   VehicleIconOption(
     id: 'moto_2',
     category: VehicleIconCategory.motorcycle,
-    icon: Icons.two_wheeler,
-    color: Color(0xFF1E88E5),
+    emoji: '🏍️',
+    badgeColor: Color(0xFF1E88E5),
     scale: 1.0,
   ),
   VehicleIconOption(
     id: 'moto_3',
     category: VehicleIconCategory.motorcycle,
-    icon: Icons.two_wheeler,
-    color: Color(0xFF43A047),
+    emoji: '🏍️',
+    badgeColor: Color(0xFF43A047),
     scale: 1.2,
   ),
   VehicleIconOption(
     id: 'moto_4',
     category: VehicleIconCategory.motorcycle,
-    icon: Icons.two_wheeler,
-    color: Color(0xFFFB8C00),
+    emoji: '🏍️',
+    badgeColor: Color(0xFFFB8C00),
     scale: 1.0,
   ),
   VehicleIconOption(
     id: 'moto_5',
     category: VehicleIconCategory.motorcycle,
-    icon: Icons.two_wheeler,
-    color: Color(0xFF8E24AA),
+    emoji: '🏍️',
+    badgeColor: Color(0xFF8E24AA),
     scale: 1.4,
   ),
 
   VehicleIconOption(
     id: 'car_1',
     category: VehicleIconCategory.car,
-    icon: Icons.directions_car,
-    color: Color(0xFFE53935),
+    emoji: '🚗',
+    badgeColor: Color(0xFFE53935),
     scale: 0.8,
   ),
   VehicleIconOption(
     id: 'car_2',
     category: VehicleIconCategory.car,
-    icon: Icons.directions_car,
-    color: Color(0xFF1E88E5),
+    emoji: '🚗',
+    badgeColor: Color(0xFF1E88E5),
     scale: 1.0,
   ),
   VehicleIconOption(
     id: 'car_3',
     category: VehicleIconCategory.car,
-    icon: Icons.directions_car,
-    color: Color(0xFF43A047),
+    emoji: '🚗',
+    badgeColor: Color(0xFF43A047),
     scale: 1.2,
   ),
   VehicleIconOption(
     id: 'car_4',
     category: VehicleIconCategory.car,
-    icon: Icons.directions_car,
-    color: Color(0xFFFB8C00),
+    emoji: '🚗',
+    badgeColor: Color(0xFFFB8C00),
     scale: 1.0,
   ),
   VehicleIconOption(
     id: 'car_5',
     category: VehicleIconCategory.car,
-    icon: Icons.directions_car,
-    color: Color(0xFF8E24AA),
+    emoji: '🚗',
+    badgeColor: Color(0xFF8E24AA),
     scale: 1.4,
   ),
 ];

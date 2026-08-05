@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.39 beta',
+    date: '2026-08-05',
+    note:
+        'Oto-duraklama hassasiyeti düzeltildi: artık tekil GPS sıçramaları '
+        'yerine son birkaç okumanın ortalamasına göre karar veriyor, '
+        'durma/kalkma eşikleri de ayrı tutuldu (titreme olmasın diye). '
+        'Araç ve motor işaretçileri renkli rozetli, gerçek emoji '
+        'görsellerine geçti. Kayıt ekranındaki konum işaretçisine, '
+        'MotionX-GPS\'teki gibi GPS yönünü gösteren yarı saydam bir '
+        '"yön konisi" eklendi - kuzey-sabit moddayken de yön artık '
+        'görülebiliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.38 beta',
     date: '2026-08-05',
     note:
