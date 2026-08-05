@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -26,18 +27,25 @@ class CarBridge {
   final RouteRepository _routeRepository;
 
   void _pushState() {
-    _channel.invokeMethod('updateState', {
-      'state': _recorder.isRecording
-          ? 'recording'
-          : _recorder.isPaused
-          ? 'paused'
-          : 'idle',
-      'speedKmh': _recorder.currentSpeedKmh,
-      'distanceKm': _recorder.distanceKm,
-      'durationSeconds': _recorder.elapsed.inSeconds,
-      'altitudeMeters': _recorder.currentAltitude,
-      'isAutoPaused': _recorder.isAutoPaused,
-    });
+    // Fire-and-forget: nothing on the Dart side needs the result, and in
+    // widget tests (which default to TargetPlatform.android) there's no
+    // native handler registered at all, which throws MissingPluginException.
+    unawaited(
+      _channel
+          .invokeMethod('updateState', {
+            'state': _recorder.isRecording
+                ? 'recording'
+                : _recorder.isPaused
+                ? 'paused'
+                : 'idle',
+            'speedKmh': _recorder.currentSpeedKmh,
+            'distanceKm': _recorder.distanceKm,
+            'durationSeconds': _recorder.elapsed.inSeconds,
+            'altitudeMeters': _recorder.currentAltitude,
+            'isAutoPaused': _recorder.isAutoPaused,
+          })
+          .catchError((_) {}),
+    );
   }
 
   Future<void> _handleCarCommand(MethodCall call) async {

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import '../repositories/vehicle_icon_controller.dart';
 import '../services/battery_info.dart';
 import '../services/gps_recorder.dart';
 import '../services/track_io.dart';
+import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/vehicle_marker.dart';
 import 'map_screen.dart' show RouteMapScreen;
@@ -44,6 +46,10 @@ class RecordScreen extends StatefulWidget {
 }
 
 class _RecordScreenState extends State<RecordScreen> {
+  /// How much bigger than the vehicle marker itself the heading cone's
+  /// bounding box is, so the cone has room to fan out beyond the icon.
+  static const _coneMarkerScale = 2.3;
+
   final _mapController = MapController();
   Timer? _tickTimer;
   bool _starting = false;
@@ -80,9 +86,10 @@ class _RecordScreenState extends State<RecordScreen> {
   bool _followMe = true;
 
   /// False (default): north is always up, map never rotates on its own -
-  /// the vehicle marker itself rotates to show which way it's facing.
-  /// True: the map rotates to keep the direction of travel pointing up
-  /// (course-up), so the marker stays fixed pointing "forward" instead.
+  /// the translucent heading cone (see [HeadingCone]) rotates instead to
+  /// show which way the rider is facing. True: the map rotates to keep the
+  /// direction of travel pointing up (course-up), so the cone stays fixed
+  /// pointing "forward" instead.
   bool _headingUp = false;
 
   late final StreamSubscription<MapEvent> _mapEventSub;
@@ -592,14 +599,40 @@ class _RecordScreenState extends State<RecordScreen> {
             markers: [
               Marker(
                 point: _currentLocation!,
-                width: markerSize,
-                height: markerSize,
-                // Always points straight up, regardless of north-up vs.
-                // course-up mode: in course-up mode that's because the map
-                // itself rotates to keep the direction of travel pointing
-                // up, and in north-up mode it's simply the app's chosen
-                // vehicle icon, not a compass needle.
-                child: buildVehicleMarker(vehicleIcon),
+                width: markerSize * _coneMarkerScale,
+                height: markerSize * _coneMarkerScale,
+                alignment: Alignment.center,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // MotionX-GPS-style translucent "cone of light" showing
+                    // the GPS heading. Rotated to point up in course-up
+                    // mode (where the map itself already turned to put the
+                    // heading up), or to the actual compass heading in
+                    // north-up mode (where the map stays fixed, so the cone
+                    // is the only thing that shows direction of travel).
+                    if (_currentHeading != null)
+                      Transform.rotate(
+                        angle: _headingUp
+                            ? 0
+                            : _currentHeading! * math.pi / 180,
+                        child: HeadingCone(
+                          size: markerSize * _coneMarkerScale,
+                          color: const Color(0xFFFFA726),
+                        ),
+                      ),
+                    // Always points straight up, regardless of north-up vs.
+                    // course-up mode: in course-up mode that's because the
+                    // map itself rotates to keep the direction of travel
+                    // pointing up, and in north-up mode it's simply the
+                    // app's chosen vehicle icon, not a compass needle.
+                    SizedBox(
+                      width: markerSize,
+                      height: markerSize,
+                      child: buildVehicleMarker(vehicleIcon),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

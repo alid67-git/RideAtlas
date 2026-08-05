@@ -20,17 +20,25 @@ enum RecordingStartError { serviceDisabled, permissionDenied }
 /// since that would require a native (App Store) build rather than a web app.
 class GpsRecorder extends ChangeNotifier {
   /// Below this speed, the rider is considered stationary (traffic light,
-  /// fuel stop, etc.) for auto-pause purposes.
-  static const _autoPauseSpeedThresholdKmh = 1.5;
+  /// fuel stop, etc.) for auto-pause purposes. Compared against a smoothed
+  /// speed (see [_smoothedSpeedKmh]), not the raw GPS reading - a stationary
+  /// phone's instantaneous GPS speed routinely jitters anywhere from 0 up to
+  /// 2-3 km/h on positional noise alone, so comparing the raw value against
+  /// a low threshold made real stops inconsistent to detect (a single noisy
+  /// spike above the threshold reset the stationary timer).
+  static const _autoPauseSpeedThresholdKmh = 3.0;
 
   /// Above this speed (with hysteresis above the pause threshold, so GPS
   /// jitter around walking pace doesn't flicker the state), auto-pause lifts.
-  static const _autoPauseResumeThresholdKmh = 3.0;
+  static const _autoPauseResumeThresholdKmh = 6.0;
 
   /// How long the rider must stay under the threshold before auto-pause
   /// kicks in - long enough that a normal stop-sign or gear shift doesn't
   /// trigger it.
   static const _autoPauseDelay = Duration(seconds: 15);
+
+  /// How many recent speed readings [_smoothedSpeedKmh] averages over.
+  static const _speedSmoothingWindow = 4;
 
   RecordingState _state = RecordingState.idle;
   final List<TrackPoint> _points = [];
@@ -43,6 +51,7 @@ class GpsRecorder extends ChangeNotifier {
   bool _isAutoPaused = false;
   DateTime? _stationarySince;
   int? _batteryStartPercent;
+  final List<double> _recentSpeedsKmh = [];
 
   RecordingState get state => _state;
   /// Battery level (0-100) when [start] was called, or null if it couldn't
@@ -108,6 +117,7 @@ class GpsRecorder extends ChangeNotifier {
     _currentAltitude = null;
     _isAutoPaused = false;
     _stationarySince = null;
+    _recentSpeedsKmh.clear();
     _batteryStartPercent = await currentBatteryPercent();
     _state = RecordingState.recording;
     notifyListeners();
@@ -148,6 +158,17 @@ class GpsRecorder extends ChangeNotifier {
     );
   }
 
+  /// Appends [reading] to the rolling window and returns its average, so
+  /// auto-pause decisions react to sustained speed rather than a single
+  /// noisy GPS sample.
+  double _smoothedSpeedKmh(double reading) {
+    _recentSpeedsKmh.add(reading);
+    if (_recentSpeedsKmh.length > _speedSmoothingWindow) {
+      _recentSpeedsKmh.removeAt(0);
+    }
+    return _recentSpeedsKmh.reduce((a, b) => a + b) / _recentSpeedsKmh.length;
+  }
+
   void _onPosition(Position pos) {
     if (_state != RecordingState.recording) return;
 
@@ -156,9 +177,10 @@ class GpsRecorder extends ChangeNotifier {
         : 0.0;
     _currentSpeedKmh = speedKmh;
     _currentAltitude = pos.altitude;
+    final smoothedSpeedKmh = _smoothedSpeedKmh(speedKmh);
 
     if (_isAutoPaused) {
-      if (speedKmh >= _autoPauseResumeThresholdKmh) {
+      if (smoothedSpeedKmh >= _autoPauseResumeThresholdKmh) {
         _isAutoPaused = false;
         _stationarySince = null;
         final pauseStarted = _pauseStartedAt;
@@ -170,7 +192,7 @@ class GpsRecorder extends ChangeNotifier {
         notifyListeners();
         return;
       }
-    } else if (speedKmh < _autoPauseSpeedThresholdKmh) {
+    } else if (smoothedSpeedKmh < _autoPauseSpeedThresholdKmh) {
       _stationarySince ??= DateTime.now();
       if (DateTime.now().difference(_stationarySince!) >= _autoPauseDelay) {
         _isAutoPaused = true;
@@ -235,6 +257,7 @@ class GpsRecorder extends ChangeNotifier {
     _currentAltitude = null;
     _isAutoPaused = false;
     _stationarySince = null;
+    _recentSpeedsKmh.clear();
     _batteryStartPercent = null;
     _state = RecordingState.idle;
     notifyListeners();
