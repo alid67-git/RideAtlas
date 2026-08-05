@@ -11,6 +11,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Many OEM Android skins (MIUI, ColorOS, OneUI, ...) throttle or kill
+         GPS updates once the screen turns off, even for a proper foreground
+         service, unless the app is exempted from battery optimization. This
+         lets RecordScreen prompt the user for that exemption directly (see
+         MainActivity.kt's battery method channel) instead of only working
+         while the screen stays on. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <!-- Lets the in-app "Güncelle" button hand a downloaded APK straight to
          the system installer (see lib/services/update_checker.dart), rather
          than only opening a browser download the user has to find and tap

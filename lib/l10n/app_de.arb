@@ -149,6 +149,8 @@
   "totalDurationLabel": "Gesamtdauer",
   "batteryLabel": "Akku",
   "batteryRangeLabel": "{start}% → {end}%",
+  "batteryOptimizationTitle": "GPS im Hintergrund erlauben",
+  "batteryOptimizationSubtitle": "RideAtlas von der Akkuoptimierung ausnehmen, damit die Aufzeichnung bei ausgeschaltetem Bildschirm nicht stoppt",
   "vehicleIconTitle": "Fahrzeugsymbol",
   "vehicleIconClassic": "Klassischer Punkt",
   "vehicleIconMotorcycleCategory": "Motorrad",

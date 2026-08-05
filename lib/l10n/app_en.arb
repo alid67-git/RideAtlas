@@ -149,6 +149,8 @@
   "totalDurationLabel": "Total duration",
   "batteryLabel": "Battery",
   "batteryRangeLabel": "{start}% → {end}%",
+  "batteryOptimizationTitle": "Background GPS permission",
+  "batteryOptimizationSubtitle": "Exempt RideAtlas from battery optimization so recording doesn't stop with the screen off",
   "vehicleIconTitle": "Vehicle icon",
   "vehicleIconClassic": "Classic dot",
   "vehicleIconMotorcycleCategory": "Motorcycle",
