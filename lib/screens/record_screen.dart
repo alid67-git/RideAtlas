@@ -162,10 +162,20 @@ class _RecordScreenState extends State<RecordScreen> {
 
     _liveLocationSub =
         Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 5,
-          ),
+          locationSettings: _supportsBackgroundRecording
+              ? AndroidSettings(
+                  accuracy: LocationAccuracy.high,
+                  distanceFilter: 5,
+                  // See GpsRecorder._buildLocationSettings for why: the
+                  // Play-Services-backed provider gets throttled by some
+                  // OEM battery managers while the screen is locked, even
+                  // with every recommended exemption already granted.
+                  forceLocationManager: true,
+                )
+              : const LocationSettings(
+                  accuracy: LocationAccuracy.high,
+                  distanceFilter: 5,
+                ),
         ).listen((pos) {
           if (!mounted) return;
           final location = LatLng(pos.latitude, pos.longitude);

@@ -145,6 +145,15 @@ class GpsRecorder extends ChangeNotifier {
       return AndroidSettings(
         accuracy: accuracy,
         distanceFilter: distanceFilter,
+        // Google Play Services' FusedLocationProviderClient (the default)
+        // gets throttled/paused by some OEM battery managers (confirmed:
+        // MIUI) while the screen is locked, even with battery-optimization
+        // exemption, autostart, and a foreground service all already
+        // granted - the recorded track shows a straight-line gap for the
+        // locked period. The plain Android LocationManager/GPS_PROVIDER
+        // isn't tied to Play Services staying unthrottled, so it holds up
+        // much better under the same OEM restrictions.
+        forceLocationManager: true,
         foregroundNotificationConfig: ForegroundNotificationConfig(
           notificationTitle: notificationTitle,
           notificationText: notificationText,

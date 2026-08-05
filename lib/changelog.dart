@@ -20,6 +20,20 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.43 beta',
+    date: '2026-08-05',
+    note:
+        'Ekran kilitliyken GPS kaydının kesilmesi sorunu için ek bir '
+        'düzeltme: pil optimizasyonu muafiyeti ve otomatik başlatma izni '
+        'verilmesine rağmen bazı telefonlarda (Xiaomi/MIUI doğrulandı) '
+        'kayıt sırasında konum güncellemeleri hâlâ duruyordu - rota '
+        'haritada düz bir çizgiyle "atlıyordu". Konum artık Google Play '
+        'Servisleri\'nin FusedLocationProviderClient\'ı yerine Android\'in '
+        'kendi GPS sağlayıcısı (LocationManager) üzerinden alınıyor; '
+        'üretici pil yöneticileri genellikle Play Servisleri konumunu çok '
+        'daha agresif kısıtlıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.42 beta',
     date: '2026-08-05',
     note:
