@@ -57,13 +57,48 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   bool _updateDismissed = false;
   bool _installingUpdate = false;
 
+  /// Brief non-interactive status under the record button (offline / online).
+  String? _gpsFlashMessage;
+  Timer? _gpsFlashTimer;
+  bool _hadGpsFix = false;
+  bool _offlineHintShown = false;
+
+  static const _gpsFlashDuration = Duration(seconds: 4);
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowWhatsNew());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeShowWhatsNew();
+      // If a fix hasn't arrived yet, tell the user recording would start offline.
+      if (!_hadGpsFix && mounted) _showOfflineGpsHint();
+    });
     _loadMapStyle();
     _startLocationUpdates();
     if (_supportsUpdateCheck) _checkForUpdate();
+  }
+
+  void _showGpsFlash(String message) {
+    _gpsFlashTimer?.cancel();
+    if (!mounted) return;
+    setState(() => _gpsFlashMessage = message);
+    _gpsFlashTimer = Timer(_gpsFlashDuration, () {
+      if (mounted) setState(() => _gpsFlashMessage = null);
+    });
+  }
+
+  void _showOfflineGpsHint() {
+    if (_offlineHintShown || _hadGpsFix || !mounted) return;
+    _offlineHintShown = true;
+    _showGpsFlash(AppLocalizations.of(context)!.gpsOfflineRecordingHint);
+  }
+
+  void _showOnlineGpsFlash(double accuracyMeters) {
+    if (!mounted) return;
+    final accuracy = accuracyMeters.isFinite && accuracyMeters > 0
+        ? accuracyMeters.round().toString()
+        : '—';
+    _showGpsFlash(AppLocalizations.of(context)!.gpsOnlineStatus(accuracy));
   }
 
   Future<void> _checkForUpdate() async {
@@ -117,6 +152,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               context,
             )!.locationServiceDisabledError,
           );
+          _showOfflineGpsHint();
         }
         return;
       }
@@ -133,6 +169,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               context,
             )!.locationPermissionDeniedError,
           );
+          _showOfflineGpsHint();
         }
         return;
       }
@@ -145,6 +182,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             context,
           )!.locationPermissionDeniedError,
         );
+        _showOfflineGpsHint();
       }
       return;
     }
@@ -158,10 +196,14 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         ).listen((pos) {
           if (!mounted) return;
           final location = LatLng(pos.latitude, pos.longitude);
+          final firstFix = !_hadGpsFix;
           setState(() {
             _currentLocation = location;
             _locationError = null;
+            _hadGpsFix = true;
           });
+          // As soon as a fix arrives, switch the under-button status to online.
+          if (firstFix) _showOnlineGpsFlash(pos.accuracy);
           if (!_centeredOnce) {
             _centeredOnce = true;
             // A wide, regional view by default - just placing the dot, not
@@ -174,6 +216,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   @override
   void dispose() {
+    _gpsFlashTimer?.cancel();
     _positionSub?.cancel();
     super.dispose();
   }
@@ -348,15 +391,50 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               right: 0,
               bottom: 24,
               child: Center(
-                child: FloatingActionButton.large(
-                  heroTag: 'homeRecord',
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  tooltip: l10n.recordRideTooltip,
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const RecordScreen()),
-                  ),
-                  child: const Icon(Icons.fiber_manual_record, size: 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FloatingActionButton(
+                      heroTag: 'homeRecord',
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      tooltip: l10n.recordRideTooltip,
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const RecordScreen()),
+                      ),
+                      child: const Icon(Icons.fiber_manual_record, size: 28),
+                    ),
+                    if (_gpsFlashMessage != null)
+                      IgnorePointer(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 260),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                child: Text(
+                                  _gpsFlashMessage!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),

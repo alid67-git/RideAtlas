@@ -155,5 +155,8 @@
   "vehicleIconCarCategory": "Auto",
   "vehicleIconOptionLabel": "Option {number}",
   "recordingTapToReturn": "Aufzeichnung läuft - zum Zurückkehren tippen",
-  "backToMapTooltip": "Zurück zur Karte"
+  "backToMapTooltip": "Zurück zur Karte",
+  "gpsOfflineRecordingHint": "Kein GPS — Aufzeichnung startet offline",
+  "gpsOnlineStatus": "GPS bereit (±{accuracy} m)",
+  "@gpsOnlineStatus": {"placeholders": {"accuracy": {"type": "String"}}}
 }

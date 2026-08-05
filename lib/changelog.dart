@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.38 beta',
+    date: '2026-08-05',
+    note:
+        'Ana ekrandaki kayıt düğmesi küçültüldü. Altında GPS durumu kısa '
+        'süre görünüyor: GPS yoksa offline kayıt uyarısı, GPS gelince '
+        'doğruluk bilgisiyle birlikte "hazır" mesajı (birkaç saniye sonra '
+        'kaybolur, tıklanamaz).',
+  ),
+  ChangelogEntry(
     version: 'v1.3.37 beta',
     date: '2026-08-04',
     note:

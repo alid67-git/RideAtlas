@@ -73,7 +73,7 @@ const _helpSectionsTr = <HelpSection>[
   HelpSection(
     title: 'GPS ile canlı rota kaydı',
     body:
-        'Ana ekrandaki büyük kırmızı düğmeyle canlı GPS kaydı başlatabilir, '
+        'Ana ekrandaki kırmızı kayıt düğmesiyle canlı GPS kaydı başlatabilir, '
         'konumunuzu gerçek zamanlı olarak haritada takip edebilirsiniz. '
         'Kayıt ekranında güncel hızınız büyük puntoyla, süre/mesafe/'
         'yükseklik ise yanında küçük olarak gösterilir. Kayıt başlar '
@@ -190,7 +190,7 @@ const _helpSectionsEn = <HelpSection>[
   HelpSection(
     title: 'Live GPS recording',
     body:
-        'The large red button on the home screen starts a live GPS '
+        'The red record button on the home screen starts a live GPS '
         'recording, tracking your position on the map in real time. The '
         'recording screen shows your current speed in large type, with '
         'duration/distance/altitude smaller alongside it. Recording always '
@@ -312,7 +312,7 @@ const _helpSectionsDe = <HelpSection>[
   HelpSection(
     title: 'Live-GPS-Aufzeichnung',
     body:
-        'Die große rote Schaltfläche auf dem Startbildschirm startet eine '
+        'Die rote Aufzeichnungstaste auf dem Startbildschirm startet eine '
         'Live-GPS-Aufzeichnung und verfolgt Ihre Position in Echtzeit auf '
         'der Karte. Auf dem Aufzeichnungsbildschirm wird Ihre aktuelle '
         'Geschwindigkeit groß angezeigt, Dauer/Distanz/Höhe daneben kleiner. '

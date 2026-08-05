@@ -178,5 +178,8 @@
   "vehicleIconOptionLabel": "Seçenek {number}",
   "@vehicleIconOptionLabel": {"placeholders": {"number": {"type": "int"}}},
   "recordingTapToReturn": "Kayıt sürüyor - dönmek için dokun",
-  "backToMapTooltip": "Haritaya dön"
+  "backToMapTooltip": "Haritaya dön",
+  "gpsOfflineRecordingHint": "GPS yok — kayıt offline başlayacak",
+  "gpsOnlineStatus": "GPS hazır (±{accuracy} m)",
+  "@gpsOnlineStatus": {"placeholders": {"accuracy": {"type": "String"}}}
 }

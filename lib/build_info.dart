@@ -1,10 +1,9 @@
 /// Bumped by hand on every push so the running build can be eyeballed on
 /// screen (Chrome tabs / dev servers can otherwise silently serve stale JS).
-const String kAppBuildLabel = 'v1.3.37 beta';
+const String kAppBuildLabel = 'v1.3.38 beta';
 
 /// Shown once, in a dialog, the first time this build label is seen.
 const String kAppBuildNote =
-    'Önemli düzeltme: Android\'de arka planda konum almayı bozan bir hata '
-    'giderildi (Android Auto eklenirken kazara bozulmuştu). Kayıt '
-    'ekranında araç ikonu artık her zaman yukarı bakıyor, kuzey-sabit '
-    'modda da dönmüyor.';
+    'Ana ekrandaki kayıt düğmesi küçültüldü. Altında GPS durumu kısa süre '
+    'görünüyor: GPS yoksa offline kayıt uyarısı, GPS gelince doğruluk '
+    'bilgisiyle birlikte "hazır" mesajı (birkaç saniye sonra kaybolur).';
