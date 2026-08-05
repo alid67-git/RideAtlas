@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.42 beta',
+    date: '2026-08-05',
+    note:
+        'Önemli düzeltme: bazı telefonlarda araç ikonunun rengi tüm '
+        'ekranı kaplıyordu (harita ve Araç ikonu seçim ekranı dahil) - '
+        'çalışma zamanında renklendirme yerine, her renk seçeneği artık '
+        'önceden hazırlanmış ayrı bir görsel olarak geliyor, sorun '
+        'kökten çözüldü. Uydu sayısı göstergesi artık bağlantı yeterliyken '
+        '(4+ uydu) yeşil, azken kırmızı renkte gösteriliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.41 beta',
     date: '2026-08-05',
     note:

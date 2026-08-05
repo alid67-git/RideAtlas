@@ -48,8 +48,10 @@ class _SatelliteCountBadgeState extends State<SatelliteCountBadge> {
     if (!visible || count == null) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
+    // 4 satellites is the minimum GPS needs for a 3D fix - below that, a
+    // position isn't reliable yet.
     final good = count >= 4;
-    final color = good ? Colors.greenAccent.shade400 : Colors.orangeAccent;
+    final color = good ? Colors.green.shade600 : Colors.red.shade600;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -67,7 +69,7 @@ class _SatelliteCountBadgeState extends State<SatelliteCountBadge> {
             '$count',
             style: theme.textTheme.labelMedium?.copyWith(
               fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface,
+              color: color,
             ),
           ),
         ],
