@@ -15,6 +15,7 @@ import '../models/base_map_style.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/battery_info.dart';
+import '../services/battery_optimization.dart';
 import '../services/gps_recorder.dart';
 import '../services/track_io.dart';
 import '../widgets/heading_cone.dart';
@@ -223,6 +224,14 @@ class _RecordScreenState extends State<RecordScreen> {
     setState(() => _followMe = true);
     if (location != null) _mapController.move(location, 16);
     _applyRotation();
+
+    // Many OEM Android skins throttle/kill GPS once the screen turns off
+    // unless the app is exempted from battery optimization - a proper
+    // foreground service alone isn't always enough on those skins. Ask
+    // right when a ride starts, since that's when it matters most.
+    if (!await isIgnoringBatteryOptimizations()) {
+      await requestIgnoreBatteryOptimizations();
+    }
   }
 
   Future<bool> _confirmDiscard() async {

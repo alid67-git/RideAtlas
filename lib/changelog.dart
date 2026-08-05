@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.40 beta',
+    date: '2026-08-05',
+    note:
+        'Önemli düzeltme: bazı telefon üreticilerinin (Xiaomi/MIUI, '
+        'Oppo/ColorOS, Samsung/OneUI gibi) ek pil kısıtlamaları yüzünden, '
+        'ekran kapanınca kayıt sırasında GPS güncellemeleri duruyordu - bu '
+        'foreground servis dışında, üretici bazlı ek bir kısıtlama. Artık '
+        'kayıt başlarken uygulamayı pil optimizasyonundan muaf tutmanız '
+        'için sistem izni isteniyor; Ayarlar > "Arka planda GPS izni" ile '
+        'istediğiniz zaman tekrar açabilirsiniz.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.39 beta',
     date: '2026-08-05',
     note:

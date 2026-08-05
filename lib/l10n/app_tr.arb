@@ -171,6 +171,8 @@
   "batteryLabel": "Pil",
   "batteryRangeLabel": "%{start} → %{end}",
   "@batteryRangeLabel": {"placeholders": {"start": {"type": "int"}, "end": {"type": "int"}}},
+  "batteryOptimizationTitle": "Arka planda GPS izni",
+  "batteryOptimizationSubtitle": "Ekran kapalıyken kayıt durmasın diye pil optimizasyonundan muaf tutun",
   "vehicleIconTitle": "Araç ikonu",
   "vehicleIconClassic": "Klasik nokta",
   "vehicleIconMotorcycleCategory": "Motosiklet",

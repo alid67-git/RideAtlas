@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../repositories/locale_controller.dart';
 import '../repositories/vehicle_icon_controller.dart';
+import '../services/battery_optimization.dart';
 import '../widgets/vehicle_marker.dart';
 import 'about_screen.dart';
 import 'help_screen.dart';
@@ -53,6 +55,15 @@ class SettingsScreen extends StatelessWidget {
             subtitle: Text(currentLanguageLabel),
             onTap: () => showLanguagePicker(context),
           ),
+          if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) ...[
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.battery_saver_outlined),
+              title: Text(l10n.batteryOptimizationTitle),
+              subtitle: Text(l10n.batteryOptimizationSubtitle),
+              onTap: requestIgnoreBatteryOptimizations,
+            ),
+          ],
           const Divider(height: 1),
           ListTile(
             leading: SizedBox(
