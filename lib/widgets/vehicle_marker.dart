@@ -3,20 +3,24 @@ import 'package:flutter/material.dart';
 import '../models/vehicle_icon.dart';
 
 const _classicDotSize = 20.0;
-const _iconMarkerBaseSize = 34.0;
+const _imageMarkerBaseSize = 46.0;
 
 /// The on-screen diameter [buildVehicleMarker] will render at for [option] -
 /// callers need this up front to size the [Marker] widget that hosts it.
 double vehicleMarkerSize(VehicleIconOption option) {
-  if (option.emoji == null) return _classicDotSize;
-  return _iconMarkerBaseSize * option.scale;
+  if (option.imageAsset == null) return _classicDotSize;
+  return _imageMarkerBaseSize * option.scale;
 }
 
 /// The "you are here" marker: either the classic blue dot, or the user's
-/// chosen vehicle icon (see Settings > Araç ikonu) - a full-color vehicle
-/// emoji over a colored circular badge.
+/// chosen vehicle icon (see Settings > Araç ikonu) - a top-down photo of
+/// the vehicle, recolored to the option's [VehicleIconOption.tintColor] via
+/// a hue/saturation-preserving-luminance blend (the same effect as
+/// Photoshop's "Color" blend mode), so one photo can offer several paint
+/// colors without needing separate art per variant.
 Widget buildVehicleMarker(VehicleIconOption option) {
-  if (option.emoji == null) {
+  final asset = option.imageAsset;
+  if (asset == null) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.blueAccent,
@@ -27,17 +31,16 @@ Widget buildVehicleMarker(VehicleIconOption option) {
   }
 
   final size = vehicleMarkerSize(option);
-  return Container(
-    decoration: BoxDecoration(
-      color: option.badgeColor,
-      shape: BoxShape.circle,
-      border: Border.all(color: Colors.white, width: 2.5),
-      boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 5)],
+  final image = Image.asset(asset, width: size, height: size);
+  return DecoratedBox(
+    decoration: const BoxDecoration(
+      boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 6)],
     ),
-    alignment: Alignment.center,
-    child: Text(
-      option.emoji!,
-      style: TextStyle(fontSize: size * 0.58),
-    ),
+    child: option.tintColor == null
+        ? image
+        : ColorFiltered(
+            colorFilter: ColorFilter.mode(option.tintColor!, BlendMode.color),
+            child: image,
+          ),
   );
 }

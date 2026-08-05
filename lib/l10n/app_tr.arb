@@ -173,6 +173,8 @@
   "@batteryRangeLabel": {"placeholders": {"start": {"type": "int"}, "end": {"type": "int"}}},
   "batteryOptimizationTitle": "Arka planda GPS izni",
   "batteryOptimizationSubtitle": "Ekran kapalıyken kayıt durmasın diye pil optimizasyonundan muaf tutun",
+  "satelliteCountTitle": "Uydu sayısını göster",
+  "satelliteCountSubtitle": "Kayıt tuşunun ve kayıt ekranının yanında bağlı uydu sayısını göster",
   "vehicleIconTitle": "Araç ikonu",
   "vehicleIconClassic": "Klasik nokta",
   "vehicleIconMotorcycleCategory": "Motosiklet",

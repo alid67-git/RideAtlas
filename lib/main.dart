@@ -7,6 +7,7 @@ import 'l10n/gen/app_localizations.dart';
 import 'repositories/locale_controller.dart';
 import 'repositories/photo_repository.dart';
 import 'repositories/route_repository.dart';
+import 'repositories/satellite_visibility_controller.dart';
 import 'repositories/vehicle_icon_controller.dart';
 import 'screens/home_map_screen.dart';
 import 'services/car_bridge.dart';
@@ -33,6 +34,9 @@ class RideAtlasApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PhotoRepository()..load()),
         ChangeNotifierProvider(create: (_) => LocaleController()..load()),
         ChangeNotifierProvider(create: (_) => VehicleIconController()..load()),
+        ChangeNotifierProvider(
+          create: (_) => SatelliteVisibilityController()..load(),
+        ),
         // Lives above the Navigator so an active recording survives
         // navigating away from RecordScreen - only an explicit "discard"
         // or "finish" call ever stops it.

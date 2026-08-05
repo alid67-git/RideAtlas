@@ -16,8 +16,14 @@ import io.flutter.plugin.common.MethodChannel
 const val CAR_FLUTTER_ENGINE_ID = "rideatlas_car_engine"
 private const val CAR_METHOD_CHANNEL = "com.rideatlas.app/car"
 private const val BATTERY_METHOD_CHANNEL = "com.rideatlas.app/battery"
+private const val SATELLITE_METHOD_CHANNEL = "com.rideatlas.app/satellites"
 
 class MainActivity : FlutterActivity() {
+
+    // Created in configureFlutterEngine(), not as a field initializer:
+    // applicationContext isn't available yet at construction time (Android
+    // calls attachBaseContext() only after the Activity object exists).
+    private var satelliteTracker: GnssSatelliteTracker? = null
 
     // Deliberately NOT overriding provideFlutterEngine() here: doing so
     // previously made FlutterActivity treat the engine as host-provided,
@@ -60,6 +66,28 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 else -> result.notImplemented()
+            }
+        }
+
+        // A plain request/response method rather than an EventChannel
+        // stream: SatelliteCountBadge polls this every couple of seconds,
+        // which is plenty for a slowly-changing display value, and avoids
+        // EventChannel.receiveBroadcastStream()'s behavior of reporting a
+        // missing platform handler through FlutterError instead of the
+        // stream itself (which made it fail Flutter's own widget tests,
+        // since their harness has no native platform to answer channel
+        // calls at all).
+        val tracker = satelliteTracker ?: GnssSatelliteTracker(applicationContext)
+        satelliteTracker = tracker
+        val satelliteChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SATELLITE_METHOD_CHANNEL,
+        )
+        satelliteChannel.setMethodCallHandler { call, result ->
+            if (call.method == "getSatelliteCount") {
+                result.success(tracker.lastUsedInFixCount)
+            } else {
+                result.notImplemented()
             }
         }
     }

@@ -16,6 +16,7 @@ import '../repositories/vehicle_icon_controller.dart';
 import '../services/gps_recorder.dart';
 import '../services/update_checker.dart';
 import '../widgets/recording_indicator.dart';
+import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 import 'record_screen.dart';
@@ -403,6 +404,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                         MaterialPageRoute(builder: (_) => const RecordScreen()),
                       ),
                       child: const Icon(Icons.fiber_manual_record, size: 28),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: SatelliteCountBadge(),
                     ),
                     if (_gpsFlashMessage != null)
                       IgnorePointer(
