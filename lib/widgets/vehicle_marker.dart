@@ -14,10 +14,8 @@ double vehicleMarkerSize(VehicleIconOption option) {
 
 /// The "you are here" marker: either the classic blue dot, or the user's
 /// chosen vehicle icon (see Settings > Araç ikonu) - a top-down photo of
-/// the vehicle, recolored to the option's [VehicleIconOption.tintColor] via
-/// a hue/saturation-preserving-luminance blend (the same effect as
-/// Photoshop's "Color" blend mode), so one photo can offer several paint
-/// colors without needing separate art per variant.
+/// the vehicle. Each color variant is its own pre-baked asset (see
+/// vehicle_icon.dart) rather than a shared photo tinted at runtime.
 Widget buildVehicleMarker(VehicleIconOption option) {
   final asset = option.imageAsset;
   if (asset == null) {
@@ -31,16 +29,10 @@ Widget buildVehicleMarker(VehicleIconOption option) {
   }
 
   final size = vehicleMarkerSize(option);
-  final image = Image.asset(asset, width: size, height: size);
   return DecoratedBox(
     decoration: const BoxDecoration(
       boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 6)],
     ),
-    child: option.tintColor == null
-        ? image
-        : ColorFiltered(
-            colorFilter: ColorFilter.mode(option.tintColor!, BlendMode.color),
-            child: image,
-          ),
+    child: Image.asset(asset, width: size, height: size),
   );
 }
