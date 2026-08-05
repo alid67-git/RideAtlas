@@ -20,6 +20,21 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.44 beta',
+    date: '2026-08-05',
+    note:
+        'Ekran kilitliyken GPS kaydının kesilmesi sorununun gerçek kök '
+        'nedeni bulundu: uygulama Android\'den hiçbir zaman "her zaman" '
+        '(arka planda) konum izni istemiyordu - bu yüzden telefonun Ayarlar '
+        'ekranında bu seçenek hiç görünmüyordu, sadece "uygulama '
+        'kullanılırken" seçilebiliyordu, pil izni/otomatik başlatma ne '
+        'kadar açık olursa olsun bu durumda ekran kilitlenince konum '
+        'kesiliyordu. Artık bu izin de isteniyor; kayıt başladığında hâlâ '
+        'sadece "kullanılırken" izni varsa, Ayarlar\'ı açmanız için bir '
+        'uyarı çıkıyor. Ayarlar ekranına da "Konum: Her zaman izin ver" '
+        'kısayolu eklendi.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.43 beta',
     date: '2026-08-05',
     note:
