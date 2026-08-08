@@ -84,8 +84,11 @@ const _helpSectionsTr = <HelpSection>[
         'durdurmaz; kayıt arka planda sürerken ekranın kenarında küçük bir '
         'kırmızı "REC" düğmesi belirir, dokunduğunuzda kayıt ekranına geri '
         'dönersiniz. Android\'de kayıt, uygulama küçültülse bile bir '
-        'bildirimle arka planda devam eder; web tarayıcısında ise kayıt '
-        'sadece sekme ön plandayken ve ekran açıkken sürer. Kaydettiğiniz '
+        'bildirimle arka planda devam eder - bunun için konum izninin '
+        '"Her zaman izin ver" olması ve (istediğinde) pil optimizasyonundan '
+        'muaf tutulması gerekir (Ayarlar\'dan da açılabilir). Web '
+        'tarayıcısında kayıt sadece sekme ön plandayken ve ekran açıkken '
+        'sürer. Kaydettiğiniz '
         'rotanın Özet sekmesinde hem net sürüş süresi (bekleme hariç) hem '
         'toplam süre (tüm molalar dahil), hem de kayıt başlangıç/bitiş pil '
         'yüzdeleri görüntülenir.',

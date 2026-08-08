@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.46 beta',
+    date: '2026-08-09',
+    note:
+        'Arka planda / ekran kilitliyken GPS kaydının kesilmesi için önemli '
+        'düzeltme: eski LocationManager yolu modern Android\'de ekran '
+        'kapanınca ~60 sn içinde GPS\'i durdurabiliyordu; kayıt artık Fused '
+        'Location + kalıcı bildirim + 5 sn aralıklı güncelleme kullanıyor. '
+        '"Her zaman izin ver" yoksa kayıt başlamıyor (Ayarlar\'a yönlendirir); '
+        'pil muafiyeti de kayıttan önce isteniyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.45 beta',
     date: '2026-08-08',
     note:

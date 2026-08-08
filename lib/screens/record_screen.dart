@@ -170,12 +170,8 @@ class _RecordScreenState extends State<RecordScreen> {
           locationSettings: _supportsBackgroundRecording
               ? AndroidSettings(
                   accuracy: LocationAccuracy.high,
-                  distanceFilter: 5,
-                  // See GpsRecorder._buildLocationSettings for why: the
-                  // Play-Services-backed provider gets throttled by some
-                  // OEM battery managers while the screen is locked, even
-                  // with every recommended exemption already granted.
-                  forceLocationManager: true,
+                  distanceFilter: 0,
+                  intervalDuration: const Duration(seconds: 5),
                 )
               : const LocationSettings(
                   accuracy: LocationAccuracy.high,
@@ -216,6 +212,16 @@ class _RecordScreenState extends State<RecordScreen> {
   }
 
   Future<void> _start() async {
+    // Ask for the two things screen-off recording needs *before* the
+    // stream starts, so we don't begin a ride that will silently gap.
+    if (_supportsBackgroundRecording) {
+      if (!await isIgnoringBatteryOptimizations()) {
+        await requestIgnoreBatteryOptimizations();
+      }
+      if (!mounted) return;
+      if (!await _ensureBackgroundLocationPermission()) return;
+    }
+
     setState(() => _starting = true);
     final l10nForStart = AppLocalizations.of(context)!;
     final error = await _recorder.start(
@@ -226,6 +232,10 @@ class _RecordScreenState extends State<RecordScreen> {
     setState(() => _starting = false);
     if (error != null) {
       final l10n = AppLocalizations.of(context)!;
+      if (error == RecordingStartError.backgroundPermissionDenied) {
+        await _promptBackgroundLocationSettings();
+        return;
+      }
       final message = error == RecordingStartError.serviceDisabled
           ? l10n.locationServiceDisabledError
           : l10n.locationPermissionDeniedError;
@@ -240,24 +250,28 @@ class _RecordScreenState extends State<RecordScreen> {
     setState(() => _followMe = true);
     if (location != null) _mapController.move(location, 16);
     _applyRotation();
+  }
 
-    // Many OEM Android skins throttle/kill GPS once the screen turns off
-    // unless the app is exempted from battery optimization - a proper
-    // foreground service alone isn't always enough on those skins. Ask
-    // right when a ride starts, since that's when it matters most.
-    if (!await isIgnoringBatteryOptimizations()) {
-      await requestIgnoreBatteryOptimizations();
+  /// Returns true when Android has granted "Allow all the time", or when
+  /// this platform doesn't need it. Shows the settings dialog and returns
+  /// false if the user still only has while-in-use access.
+  Future<bool> _ensureBackgroundLocationPermission() async {
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
     }
+    if (permission == LocationPermission.whileInUse) {
+      // Second, distinct request is how Android exposes "Allow all the time".
+      permission = await Geolocator.requestPermission();
+    }
+    if (!mounted) return false;
+    if (permission == LocationPermission.always) return true;
+    await _promptBackgroundLocationSettings();
+    if (!mounted) return false;
+    return await Geolocator.checkPermission() == LocationPermission.always;
+  }
 
-    // Only "while in use" access can't survive the screen locking, no
-    // matter what else is granted (foreground service, battery exemption,
-    // ...) - GpsRecorder.start() already tries to escalate to "always" via
-    // a second permission request, but the user may have declined it, or
-    // the OS may have routed straight to Settings without a direct prompt.
-    // Flag it explicitly rather than let recording silently drop points.
-    if (!mounted || !_supportsBackgroundRecording) return;
-    final permission = await Geolocator.checkPermission();
-    if (!mounted || permission == LocationPermission.always) return;
+  Future<void> _promptBackgroundLocationSettings() async {
     final l10n = AppLocalizations.of(context)!;
     await showDialog<void>(
       context: context,

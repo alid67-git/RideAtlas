@@ -12,7 +12,14 @@ const _distance = Distance();
 enum RecordingState { idle, recording, paused }
 
 /// Why [GpsRecorder.start] failed, so the UI can show a specific message.
-enum RecordingStartError { serviceDisabled, permissionDenied }
+enum RecordingStartError {
+  serviceDisabled,
+  permissionDenied,
+
+  /// Android only: the OS still has the app on "while in use" location
+  /// access. Screen-lock / background recording needs "Allow all the time".
+  backgroundPermissionDenied,
+}
 
 /// Records the device's live position into a growing list of [TrackPoint]s
 /// while the app is in the foreground. This only works while the browser tab
@@ -110,12 +117,21 @@ class GpsRecorder extends ChangeNotifier {
     // second call is exactly why recording used to silently stop the
     // moment the screen locked: the app never actually had background
     // location access, foreground service or not.
-    if (permission == LocationPermission.whileInUse) {
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        permission == LocationPermission.whileInUse) {
       permission = await Geolocator.requestPermission();
     }
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       return RecordingStartError.permissionDenied;
+    }
+    // Still only "while in use" after the second prompt: refuse to start
+    // rather than produce a silent gap the moment the screen locks.
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        permission != LocationPermission.always) {
+      return RecordingStartError.backgroundPermissionDenied;
     }
 
     _points.clear();
@@ -149,30 +165,32 @@ class GpsRecorder extends ChangeNotifier {
     required String notificationText,
   }) {
     const accuracy = LocationAccuracy.high;
-    const distanceFilter = 5;
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      // Use the default Fused Location Provider (forceLocationManager:
+      // false). Forcing the legacy LocationManager/GPS_PROVIDER looked
+      // better on some MIUI builds, but on modern Android (Doze / screen
+      // off) LocationManager often stops delivering fixes after ~60s even
+      // with a foreground service + wake lock - GPS_EVENT_STOPPED. Fused
+      // keeps updating through screen-off when paired with a real location
+      // FGS, "Allow all the time", and battery-optimization exemption.
+      // intervalDuration keeps a heartbeat even when the phone isn't
+      // moving enough to trip a distance filter.
       return AndroidSettings(
         accuracy: accuracy,
-        distanceFilter: distanceFilter,
-        // Google Play Services' FusedLocationProviderClient (the default)
-        // gets throttled/paused by some OEM battery managers (confirmed:
-        // MIUI) while the screen is locked, even with battery-optimization
-        // exemption, autostart, and a foreground service all already
-        // granted - the recorded track shows a straight-line gap for the
-        // locked period. The plain Android LocationManager/GPS_PROVIDER
-        // isn't tied to Play Services staying unthrottled, so it holds up
-        // much better under the same OEM restrictions.
-        forceLocationManager: true,
+        distanceFilter: 0,
+        intervalDuration: const Duration(seconds: 5),
         foregroundNotificationConfig: ForegroundNotificationConfig(
           notificationTitle: notificationTitle,
           notificationText: notificationText,
           enableWakeLock: true,
+          enableWifiLock: true,
+          setOngoing: true,
         ),
       );
     }
     return const LocationSettings(
       accuracy: accuracy,
-      distanceFilter: distanceFilter,
+      distanceFilter: 5,
     );
   }
 

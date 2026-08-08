@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Live ride recording: fine-grained location plus a foreground service
          with a persistent notification, so tracking keeps running while the
@@ -36,6 +37,13 @@
         android:label="RideAtlas"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- geolocator starts this as a location foreground service while
+             recording. Merge the type here so Android 14+ always sees
+             foregroundServiceType=location on the final merged manifest. -->
+        <service
+            android:name="com.baseflow.geolocator.GeolocatorLocationService"
+            android:foregroundServiceType="location"
+            tools:node="merge" />
         <!-- Android Auto: lets a recording already running on the phone be
              viewed and controlled (start/pause/resume/finish) from the
              car's own screen. See android/app/src/main/kotlin/.../car/. -->
