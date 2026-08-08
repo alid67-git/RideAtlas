@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
+import '../repositories/map_heading_mode_controller.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/battery_info.dart';
@@ -87,12 +88,14 @@ class _RecordScreenState extends State<RecordScreen> {
   /// instead (see [_recenter]).
   bool _followMe = true;
 
-  /// False (default): north is always up, map never rotates on its own -
-  /// the translucent heading cone (see [HeadingCone]) rotates instead to
-  /// show which way the rider is facing. True: the map rotates to keep the
-  /// direction of travel pointing up (course-up), so the cone stays fixed
-  /// pointing "forward" instead.
-  bool _headingUp = false;
+  /// False: north is always up, map never rotates on its own - the
+  /// translucent heading cone (see [HeadingCone]) rotates instead to show
+  /// which way the rider is facing. True (default, like a normal navigation
+  /// app): the map rotates to keep the direction of travel pointing up
+  /// (course-up), so the cone stays fixed pointing "forward" instead.
+  /// Seeded from, and kept in sync with, [MapHeadingModeController] so the
+  /// choice persists across recordings instead of resetting every time.
+  bool _headingUp = true;
 
   late final StreamSubscription<MapEvent> _mapEventSub;
 
@@ -100,6 +103,7 @@ class _RecordScreenState extends State<RecordScreen> {
   void initState() {
     super.initState();
     recordScreenVisible.value = true;
+    _headingUp = context.read<MapHeadingModeController>().headingUp;
     _startLiveLocation();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       if (event.source != MapEventSource.mapController && _followMe) {
@@ -118,6 +122,7 @@ class _RecordScreenState extends State<RecordScreen> {
   void _recenter() {
     if (_followMe) {
       setState(() => _headingUp = !_headingUp);
+      context.read<MapHeadingModeController>().setHeadingUp(_headingUp);
       _applyRotation();
       return;
     }

@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.45 beta',
+    date: '2026-08-08',
+    note:
+        'Kayıt ekranındaki harita artık normal navigasyon uygulamaları gibi '
+        'varsayılan olarak yön-takip (course-up) modunda açılıyor - harita, '
+        'gidilen yöne göre dönüyor. Konum tuşuna basarak kuzey-sabit moda '
+        'geçilebiliyor; hangi mod seçiliyse bir sonraki kayıtta da o '
+        'hatırlanıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.44 beta',
     date: '2026-08-05',
     note:
