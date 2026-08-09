@@ -8,14 +8,6 @@ import '../models/waypoint.dart';
 
 const _distance = Distance();
 
-/// A gap between two consecutive points longer than this is treated as a
-/// stop/wait rather than riding, and excluded from [GpxRoute.movingDuration].
-/// Chosen to comfortably clear normal GPS fix spacing and short traffic-light
-/// stops while still catching real breaks; matches the order of magnitude of
-/// [GpsRecorder]'s own auto-pause delay, so a recording made in-app and a
-/// plain GPX both land on roughly the same "were they moving" answer.
-const _movingGapThreshold = Duration(seconds: 60);
-
 /// Parses raw GPX XML into track points and waypoints.
 ///
 /// Track points come from `<trk>/<trkseg>` segments (all segments of all
@@ -141,18 +133,6 @@ GpxRoute buildRouteMetadata({
     }
   }
 
-  Duration movingDuration = Duration.zero;
-  var hasTimedGap = false;
-  for (var i = 1; i < points.length; i++) {
-    final t0 = points[i - 1].time;
-    final t1 = points[i].time;
-    if (t0 == null || t1 == null || !t1.isAfter(t0)) continue;
-    final gap = t1.difference(t0);
-    hasTimedGap = true;
-    if (gap <= _movingGapThreshold) movingDuration += gap;
-  }
-  final movingDurationSeconds = hasTimedGap ? movingDuration.inSeconds : null;
-
   if (points.isEmpty) {
     north = 0;
     south = 0;
@@ -170,7 +150,6 @@ GpxRoute buildRouteMetadata({
     minElevation: minEle,
     maxElevation: maxEle,
     durationSeconds: durationSeconds,
-    movingDurationSeconds: movingDurationSeconds,
     pointCount: points.length,
     north: north,
     south: south,
@@ -204,6 +183,13 @@ List<ElevationSample> buildElevationProfile(List<TrackPoint> points) {
 /// faster than 250 km/h (implausible GPS spikes) are ignored. [minKmh] /
 /// [maxKmh] / [averageMovingKmh] are therefore "while moving" figures;
 /// overall average (distance ÷ total duration) lives on [GpxRoute].
+///
+/// [movingSeconds] sums the duration of every segment that passes the same
+/// "actually moving" speed filter - a per-segment speed check rather than
+/// just looking for a long gap between points, since plenty of GPX sources
+/// (bike computers, other tracking apps) keep logging points at a fixed
+/// interval even while stopped, which would make a gap-based "were they
+/// moving" check see no gap at all and call the whole ride "moving".
 SpeedStats buildSpeedStats(List<TrackPoint> points) {
   const minDtSeconds = 1.0;
   const minMovingKmh = 1.0;
@@ -213,6 +199,8 @@ SpeedStats buildSpeedStats(List<TrackPoint> points) {
   double? maxKmh;
   var sumKmh = 0.0;
   var count = 0;
+  var movingSeconds = 0.0;
+  var hasTimedSegment = false;
 
   for (var i = 1; i < points.length; i++) {
     final prev = points[i - 1];
@@ -223,6 +211,7 @@ SpeedStats buildSpeedStats(List<TrackPoint> points) {
 
     final dtSeconds = t1.difference(t0).inMilliseconds / 1000.0;
     if (dtSeconds < minDtSeconds) continue;
+    hasTimedSegment = true;
 
     final meters = _distance(prev.latLng, curr.latLng);
     final kmh = (meters / 1000.0) / (dtSeconds / 3600.0);
@@ -232,12 +221,14 @@ SpeedStats buildSpeedStats(List<TrackPoint> points) {
     maxKmh = maxKmh == null ? kmh : (kmh > maxKmh ? kmh : maxKmh);
     sumKmh += kmh;
     count++;
+    movingSeconds += dtSeconds;
   }
 
   return SpeedStats(
     minKmh: minKmh,
     maxKmh: maxKmh,
     averageMovingKmh: count == 0 ? null : sumKmh / count,
+    movingSeconds: hasTimedSegment ? movingSeconds.round() : null,
   );
 }
 
@@ -278,6 +269,7 @@ class SpeedStats {
     required this.minKmh,
     required this.maxKmh,
     required this.averageMovingKmh,
+    required this.movingSeconds,
   });
 
   final double? minKmh;
@@ -285,4 +277,12 @@ class SpeedStats {
 
   /// Mean of per-segment speeds while moving (see [buildSpeedStats]).
   final double? averageMovingKmh;
+
+  /// Total time spent in segments fast enough to count as riding, not the
+  /// track's overall wall-clock span. Null only if the track has no usable
+  /// timestamps at all.
+  final int? movingSeconds;
+
+  Duration? get movingDuration =>
+      movingSeconds == null ? null : Duration(seconds: movingSeconds!);
 }

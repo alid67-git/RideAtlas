@@ -281,11 +281,15 @@ class _OverviewTab extends StatelessWidget {
       Localizations.localeOf(context).languageCode,
     );
     final total = route.duration;
-    final moving = route.movingDuration;
+    final moving = speed.movingDuration;
     // Time not spent moving - traffic lights and short waits included, not
-    // just the 20+ minute stops the Stops tab lists separately.
+    // just the 20+ minute stops the Stops tab lists separately. Clamped at
+    // zero: a route with out-of-order timestamps (e.g. a bad merge) could
+    // otherwise show a nonsensical negative rest duration.
     final restDuration = (total != null && moving != null)
-        ? total - moving
+        ? (total - moving).isNegative
+              ? Duration.zero
+              : total - moving
         : null;
 
     return ListView(

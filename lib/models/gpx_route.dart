@@ -13,7 +13,6 @@ class GpxRoute {
     required this.minElevation,
     required this.maxElevation,
     required this.durationSeconds,
-    this.movingDurationSeconds,
     required this.pointCount,
     required this.north,
     required this.south,
@@ -33,16 +32,11 @@ class GpxRoute {
   final double? maxElevation;
 
   /// Wall-clock span from the first to the last GPS point - includes every
-  /// stop and wait along the way.
+  /// stop and wait along the way. For actual moving/riding time, see
+  /// [buildSpeedStats]'s `movingSeconds` - computed from point-to-point
+  /// speed rather than cached here, since a gap-based estimate can't tell a
+  /// genuine stop from a device that keeps logging points at rest.
   final int? durationSeconds;
-
-  /// Sum of only the consecutive-point gaps short enough to count as still
-  /// riding (see buildRouteMetadata in gpx_parser.dart) - the same idea as
-  /// [durationSeconds] but with pauses subtracted out. Works for any GPX,
-  /// not just ones recorded in-app: a long gap between two points means the
-  /// rider wasn't moving (or wasn't being tracked) for that stretch,
-  /// recorded or not.
-  final int? movingDurationSeconds;
   final int pointCount;
   final double north;
   final double south;
@@ -59,10 +53,6 @@ class GpxRoute {
 
   Duration? get duration =>
       durationSeconds == null ? null : Duration(seconds: durationSeconds!);
-
-  Duration? get movingDuration => movingDurationSeconds == null
-      ? null
-      : Duration(seconds: movingDurationSeconds!);
 
   double? get averageSpeedKmh {
     final d = duration;
@@ -81,7 +71,6 @@ class GpxRoute {
       minElevation: minElevation,
       maxElevation: maxElevation,
       durationSeconds: durationSeconds,
-      movingDurationSeconds: movingDurationSeconds,
       pointCount: pointCount,
       north: north,
       south: south,
@@ -102,7 +91,6 @@ class GpxRoute {
     'minElevation': minElevation,
     'maxElevation': maxElevation,
     'durationSeconds': durationSeconds,
-    'movingDurationSeconds': movingDurationSeconds,
     'pointCount': pointCount,
     'north': north,
     'south': south,
@@ -123,7 +111,6 @@ class GpxRoute {
       minElevation: (json['minElevation'] as num?)?.toDouble(),
       maxElevation: (json['maxElevation'] as num?)?.toDouble(),
       durationSeconds: json['durationSeconds'] as int?,
-      movingDurationSeconds: json['movingDurationSeconds'] as int?,
       pointCount: json['pointCount'] as int,
       north: (json['north'] as num).toDouble(),
       south: (json['south'] as num).toDouble(),
