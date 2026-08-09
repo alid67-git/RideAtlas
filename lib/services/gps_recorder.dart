@@ -6,43 +6,42 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/track_point.dart';
 import 'battery_info.dart';
+import 'native_recording.dart';
 
 const _distance = Distance();
 
 enum RecordingState { idle, recording, paused }
 
 /// Why [GpsRecorder.start] failed, so the UI can show a specific message.
-enum RecordingStartError { serviceDisabled, permissionDenied }
+enum RecordingStartError {
+  serviceDisabled,
+  permissionDenied,
 
-/// Records the device's live position into a growing list of [TrackPoint]s
-/// while the app is in the foreground. This only works while the browser tab
-/// is active and the screen is on - there is no background/low-power mode,
-/// since that would require a native (App Store) build rather than a web app.
+  /// Android only: the OS still has the app on "while in use" location
+  /// access. Screen-lock / background recording needs "Allow all the time".
+  backgroundPermissionDenied,
+}
+
+/// Records the device's live position into a growing list of [TrackPoint]s.
+///
+/// On Android, GPS is collected by a native foreground service
+/// ([NativeRecording]) so points keep arriving while the screen is off -
+/// Dart-side geolocator streams freeze with the Flutter engine under Doze.
+/// Elsewhere (web / desktop) this uses [Geolocator.getPositionStream] and
+/// only works while the tab/window is active.
 class GpsRecorder extends ChangeNotifier {
-  /// Below this speed, the rider is considered stationary (traffic light,
-  /// fuel stop, etc.) for auto-pause purposes. Compared against a smoothed
-  /// speed (see [_smoothedSpeedKmh]), not the raw GPS reading - a stationary
-  /// phone's instantaneous GPS speed routinely jitters anywhere from 0 up to
-  /// 2-3 km/h on positional noise alone, so comparing the raw value against
-  /// a low threshold made real stops inconsistent to detect (a single noisy
-  /// spike above the threshold reset the stationary timer).
   static const _autoPauseSpeedThresholdKmh = 3.0;
-
-  /// Above this speed (with hysteresis above the pause threshold, so GPS
-  /// jitter around walking pace doesn't flicker the state), auto-pause lifts.
   static const _autoPauseResumeThresholdKmh = 6.0;
-
-  /// How long the rider must stay under the threshold before auto-pause
-  /// kicks in - long enough that a normal stop-sign or gear shift doesn't
-  /// trigger it.
   static const _autoPauseDelay = Duration(seconds: 15);
-
-  /// How many recent speed readings [_smoothedSpeedKmh] averages over.
   static const _speedSmoothingWindow = 4;
 
   RecordingState _state = RecordingState.idle;
   final List<TrackPoint> _points = [];
   StreamSubscription<Position>? _sub;
+  StreamSubscription<Map<Object?, Object?>>? _nativeSub;
+  Timer? _nativePollTimer;
+  int _nativeIngestedCount = 0;
+  final Set<int> _seenNativeTimeMs = {};
   DateTime? _startedAt;
   Duration _pausedDuration = Duration.zero;
   DateTime? _pauseStartedAt;
@@ -54,9 +53,6 @@ class GpsRecorder extends ChangeNotifier {
   final List<double> _recentSpeedsKmh = [];
 
   RecordingState get state => _state;
-  /// Battery level (0-100) when [start] was called, or null if it couldn't
-  /// be read on this platform. Captured once and kept through pause/resume;
-  /// the matching end-of-ride reading is taken by the caller when finishing.
   int? get batteryStartPercent => _batteryStartPercent;
   List<TrackPoint> get points => List.unmodifiable(_points);
   bool get isRecording => _state == RecordingState.recording;
@@ -64,11 +60,6 @@ class GpsRecorder extends ChangeNotifier {
   bool get isIdle => _state == RecordingState.idle;
   double get currentSpeedKmh => _currentSpeedKmh;
   double? get currentAltitude => _currentAltitude;
-
-  /// True while [isRecording] but the rider has been stationary long enough
-  /// that new points/time aren't being accumulated. Distinct from [isPaused]
-  /// (a manual pause) so the UI can show a lighter "auto-paused" hint
-  /// instead of the full paused state.
   bool get isAutoPaused => _isAutoPaused;
 
   double get distanceKm {
@@ -88,11 +79,6 @@ class GpsRecorder extends ChangeNotifier {
     return DateTime.now().difference(started) - pausedSoFar;
   }
 
-  /// Returns null on success, or the reason it couldn't start.
-  ///
-  /// [androidNotificationTitle]/[androidNotificationText] are only used on
-  /// Android, where a foreground service with a persistent notification is
-  /// required to keep tracking while the app is minimized.
   Future<RecordingStartError?> start({
     String androidNotificationTitle = 'RideAtlas',
     String androidNotificationText = 'Recording your ride',
@@ -104,21 +90,24 @@ class GpsRecorder extends ChangeNotifier {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    // Android refuses to grant "always" (background) access in the same
-    // request as foreground access - it has to be asked for as a distinct
-    // second step, once foreground is already confirmed. Skipping this
-    // second call is exactly why recording used to silently stop the
-    // moment the screen locked: the app never actually had background
-    // location access, foreground service or not.
-    if (permission == LocationPermission.whileInUse) {
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        permission == LocationPermission.whileInUse) {
       permission = await Geolocator.requestPermission();
     }
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       return RecordingStartError.permissionDenied;
     }
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        permission != LocationPermission.always) {
+      return RecordingStartError.backgroundPermissionDenied;
+    }
 
     _points.clear();
+    _nativeIngestedCount = 0;
+    _seenNativeTimeMs.clear();
     _startedAt = DateTime.now();
     _pausedDuration = Duration.zero;
     _pauseStartedAt = null;
@@ -131,54 +120,66 @@ class GpsRecorder extends ChangeNotifier {
     _state = RecordingState.recording;
     notifyListeners();
 
-    _sub = Geolocator.getPositionStream(
-      locationSettings: _buildLocationSettings(
-        notificationTitle: androidNotificationTitle,
-        notificationText: androidNotificationText,
-      ),
-    ).listen(_onPosition);
+    if (NativeRecording.isSupported) {
+      await NativeRecording.start(
+        title: androidNotificationTitle,
+        text: androidNotificationText,
+      );
+      _nativeSub = NativeRecording.pointStream().listen(_applyNativePoint);
+      // EventChannel drops while the UI isolate is frozen; the native
+      // buffer still has every fix — poll as a safety net.
+      _nativePollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        unawaited(_drainNativePoints());
+      });
+    } else {
+      _sub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 5,
+        ),
+      ).listen(_onPosition);
+    }
     return null;
   }
 
-  /// On Android, wraps the location settings with a foreground-service
-  /// notification so tracking survives the app being minimized. Other
-  /// platforms (including web) get the plain settings, since only Android's
-  /// federated geolocator plugin supports this.
-  LocationSettings _buildLocationSettings({
-    required String notificationTitle,
-    required String notificationText,
-  }) {
-    const accuracy = LocationAccuracy.high;
-    const distanceFilter = 5;
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return AndroidSettings(
-        accuracy: accuracy,
-        distanceFilter: distanceFilter,
-        // Google Play Services' FusedLocationProviderClient (the default)
-        // gets throttled/paused by some OEM battery managers (confirmed:
-        // MIUI) while the screen is locked, even with battery-optimization
-        // exemption, autostart, and a foreground service all already
-        // granted - the recorded track shows a straight-line gap for the
-        // locked period. The plain Android LocationManager/GPS_PROVIDER
-        // isn't tied to Play Services staying unthrottled, so it holds up
-        // much better under the same OEM restrictions.
-        forceLocationManager: true,
-        foregroundNotificationConfig: ForegroundNotificationConfig(
-          notificationTitle: notificationTitle,
-          notificationText: notificationText,
-          enableWakeLock: true,
-        ),
-      );
-    }
-    return const LocationSettings(
-      accuracy: accuracy,
-      distanceFilter: distanceFilter,
+  Future<void> _drainNativePoints() async {
+    if (!NativeRecording.isSupported || _state == RecordingState.idle) return;
+    try {
+      final batch = await NativeRecording.getPointsSince(_nativeIngestedCount);
+      for (final raw in batch) {
+        _applyNativePoint(raw);
+        _nativeIngestedCount++;
+      }
+    } catch (_) {}
+  }
+
+  void _applyNativePoint(Map<Object?, Object?> raw) {
+    final lat = (raw['latitude'] as num?)?.toDouble();
+    final lng = (raw['longitude'] as num?)?.toDouble();
+    if (lat == null || lng == null) return;
+    final timeMs = (raw['timeMs'] as num?)?.toInt();
+    if (timeMs != null && !_seenNativeTimeMs.add(timeMs)) return;
+
+    final altitude = (raw['altitude'] as num?)?.toDouble() ?? 0;
+    final speedMs = (raw['speed'] as num?)?.toDouble() ?? 0;
+    _onPosition(
+      Position(
+        longitude: lng,
+        latitude: lat,
+        timestamp: timeMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(timeMs, isUtc: true)
+            : DateTime.now(),
+        accuracy: (raw['accuracy'] as num?)?.toDouble() ?? 0,
+        altitude: altitude,
+        altitudeAccuracy: 0,
+        heading: 0,
+        headingAccuracy: 0,
+        speed: speedMs,
+        speedAccuracy: 0,
+      ),
     );
   }
 
-  /// Appends [reading] to the rolling window and returns its average, so
-  /// auto-pause decisions react to sustained speed rather than a single
-  /// noisy GPS sample.
   double _smoothedSpeedKmh(double reading) {
     _recentSpeedsKmh.add(reading);
     if (_recentSpeedsKmh.length > _speedSmoothingWindow) {
@@ -235,9 +236,10 @@ class GpsRecorder extends ChangeNotifier {
   void pause() {
     if (_state != RecordingState.recording) return;
     _state = RecordingState.paused;
-    // If already auto-paused, keep the original pause start so that
-    // stationary time isn't undercounted.
     _pauseStartedAt ??= DateTime.now();
+    if (NativeRecording.isSupported) {
+      unawaited(NativeRecording.setPaused(true));
+    }
     notifyListeners();
   }
 
@@ -251,22 +253,81 @@ class GpsRecorder extends ChangeNotifier {
     _isAutoPaused = false;
     _stationarySince = null;
     _state = RecordingState.recording;
+    if (NativeRecording.isSupported) {
+      unawaited(NativeRecording.setPaused(false));
+    }
     notifyListeners();
   }
 
   /// Ends the session and returns the recorded points, resetting to idle.
-  List<TrackPoint> stop() {
+  Future<List<TrackPoint>> stop() async {
+    if (NativeRecording.isSupported) {
+      try {
+        final batch = await NativeRecording.stop();
+        // Authoritative rebuild: includes every fix collected while Flutter
+        // was frozen with the screen off.
+        _rebuildPointsFromNative(batch);
+      } catch (_) {
+        await _drainNativePoints();
+        try {
+          await NativeRecording.discard();
+        } catch (_) {}
+      }
+    }
     final result = List<TrackPoint>.from(_points);
     _reset();
     return result;
   }
 
-  /// Ends the session without keeping the recorded points.
-  void discard() => _reset();
+  void _rebuildPointsFromNative(List<Map<Object?, Object?>> batch) {
+    // Take every native fix as-is. Re-running live auto-pause against a
+    // burst of historical points would use wall-clock delays incorrectly
+    // and drop real movement that happened while the screen was off.
+    _points.clear();
+    _seenNativeTimeMs.clear();
+    _isAutoPaused = false;
+    _stationarySince = null;
+    _recentSpeedsKmh.clear();
+    for (final raw in batch) {
+      final lat = (raw['latitude'] as num?)?.toDouble();
+      final lng = (raw['longitude'] as num?)?.toDouble();
+      if (lat == null || lng == null) continue;
+      final timeMs = (raw['timeMs'] as num?)?.toInt();
+      if (timeMs != null && !_seenNativeTimeMs.add(timeMs)) continue;
+      final altitude = (raw['altitude'] as num?)?.toDouble();
+      final speedMs = (raw['speed'] as num?)?.toDouble() ?? 0;
+      _points.add(
+        TrackPoint(
+          latLng: LatLng(lat, lng),
+          elevation: altitude,
+          time: timeMs != null
+              ? DateTime.fromMillisecondsSinceEpoch(timeMs, isUtc: true)
+              : null,
+        ),
+      );
+      _currentSpeedKmh = speedMs > 0 ? speedMs * 3.6 : 0;
+      _currentAltitude = altitude;
+    }
+  }
+
+  Future<void> discard() async {
+    if (NativeRecording.isSupported) {
+      try {
+        await NativeRecording.discard();
+      } catch (_) {}
+    }
+    _reset();
+  }
 
   void _reset() {
     _sub?.cancel();
     _sub = null;
+    _nativeSub?.cancel();
+    _nativeSub = null;
+    _nativePollTimer?.cancel();
+    _nativePollTimer = null;
+    _nativeIngestedCount = 0;
+    _seenNativeTimeMs.clear();
     _points.clear();
     _startedAt = null;
     _pauseStartedAt = null;
@@ -284,6 +345,8 @@ class GpsRecorder extends ChangeNotifier {
   @override
   void dispose() {
     _sub?.cancel();
+    _nativeSub?.cancel();
+    _nativePollTimer?.cancel();
     super.dispose();
   }
 }

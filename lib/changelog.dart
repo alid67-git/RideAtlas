@@ -20,7 +20,7 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
-    version: 'v1.3.46 beta',
+    version: 'v1.3.48 beta',
     date: '2026-08-09',
     note:
         'Kayıt ekranındaki harita artık her zaman yön-takip (course-up) '
@@ -29,6 +29,27 @@ const kChangelog = <ChangelogEntry>[
         'yeniden düzenlendi: değerler dar ekranlarda birbirine karışıp '
         'taşmak yerine, aralarında ince bir ayraçla, kendi sütunlarında '
         'okunaklı şekilde gösteriliyor.',
+  ),
+  ChangelogEntry(
+    version: 'v1.3.47 beta',
+    date: '2026-08-09',
+    note:
+        'Ekran kapalı / uyku modunda GPS kaydının kesilmesine kök çözüm: '
+        'konum artık Flutter/geolocator akışı yerine Android native '
+        'foreground serviste toplanıyor (Fused Location + wake lock + kalıcı '
+        'bildirim). Flutter motoru Doze ile donsa bile noktalar native '
+        'tampona yazılıyor; kayıt bitince rota bundan üretiliyor.',
+  ),
+  ChangelogEntry(
+    version: 'v1.3.46 beta',
+    date: '2026-08-09',
+    note:
+        'Arka planda / ekran kilitliyken GPS kaydının kesilmesi için önemli '
+        'düzeltme: eski LocationManager yolu modern Android\'de ekran '
+        'kapanınca ~60 sn içinde GPS\'i durdurabiliyordu; kayıt artık Fused '
+        'Location + kalıcı bildirim + 5 sn aralıklı güncelleme kullanıyor. '
+        '"Her zaman izin ver" yoksa kayıt başlamıyor (Ayarlar\'a yönlendirir); '
+        'pil muafiyeti de kayıttan önce isteniyor.',
   ),
   ChangelogEntry(
     version: 'v1.3.45 beta',

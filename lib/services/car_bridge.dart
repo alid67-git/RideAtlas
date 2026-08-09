@@ -74,7 +74,7 @@ class CarBridge {
   Future<void> _finishFromCar() async {
     final batteryStart = _recorder.batteryStartPercent;
     final batteryEnd = await currentBatteryPercent();
-    final points = _recorder.stop();
+    final points = await _recorder.stop();
     if (points.isEmpty) return;
 
     final now = DateTime.now();
