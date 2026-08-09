@@ -1,12 +1,18 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
+import '../models/track_point.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../services/gps_recorder.dart';
+import '../services/gpx_parser.dart';
+import '../services/track_io.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/route_card.dart';
 import 'map_screen.dart';
@@ -41,6 +47,93 @@ class _RouteListScreenState extends State<RouteListScreen> {
       MaterialPageRoute(
         builder: (_) => MultiRouteMapScreen(routeIds: _selectedIds.toList()),
       ),
+    );
+  }
+
+  /// Merges the selected routes into one new route, e.g. several separate
+  /// day recordings from the same trip. Routes are ordered by their own
+  /// first GPS timestamp (falling back to import time for tracks without
+  /// timestamps) rather than selection order, so it doesn't matter what
+  /// order the rider picked them in. The originals are kept, not deleted -
+  /// just renamed with a "(birleştirildi)" suffix - and any photos/videos
+  /// attached to them are copied onto the new merged route too.
+  Future<void> _mergeSelected() async {
+    final l10n = AppLocalizations.of(context)!;
+    final repo = context.read<RouteRepository>();
+    final photoRepo = context.read<PhotoRepository>();
+    final selected = repo.routes
+        .where((r) => _selectedIds.contains(r.id))
+        .toList();
+    if (selected.length < 2) return;
+
+    final loaded = <(GpxRoute route, List<TrackPoint> points, DateTime start)>[];
+    for (final route in selected) {
+      final xml = await repo.readTrackContent(route);
+      final parsed = parseTrackXml(xml);
+      final start = trackTimeRange(parsed.points).start ?? route.importedAt;
+      loaded.add((route, parsed.points, start));
+    }
+    loaded.sort((a, b) => a.$3.compareTo(b.$3));
+    if (!mounted) return;
+
+    final defaultName = loaded.map((e) => e.$1.name).join(' + ');
+    final controller = TextEditingController(text: defaultName);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.mergeRouteDialogTitle),
+        content: TextField(controller: controller, autofocus: true),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: Text(l10n.save),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty || !mounted) return;
+
+    final combinedPoints = [for (final e in loaded) ...e.$2];
+    final gpx = exportTrack(
+      name: name,
+      points: combinedPoints,
+      waypoints: const [],
+      format: TrackFormat.gpx,
+    );
+    final merged = await repo.importFromBytes(
+      bytes: Uint8List.fromList(utf8.encode(gpx)),
+      suggestedFileName: '$name.gpx',
+    );
+    if (!mounted) return;
+
+    for (final e in loaded) {
+      final original = e.$1;
+      await repo.rename(original.id, '${original.name} ${l10n.mergedRouteSuffix}');
+      if (!mounted) return;
+      for (final photo in photoRepo.photosFor(original.id)) {
+        final bytes = await photoRepo.loadBytes(photo.id);
+        if (bytes == null) continue;
+        await photoRepo.add(
+          routeId: merged.id,
+          bytes: bytes,
+          lat: photo.lat,
+          lng: photo.lng,
+          type: photo.type,
+        );
+      }
+    }
+    if (!mounted) return;
+
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: merged.id)),
     );
   }
 
@@ -215,10 +308,27 @@ class _RouteListScreenState extends State<RouteListScreen> {
       floatingActionButton: _selectionMode
           ? (_selectedIds.isEmpty
                 ? null
-                : FloatingActionButton.extended(
-                    onPressed: _showSelectedOnMap,
-                    icon: const Icon(Icons.map),
-                    label: Text(l10n.showOnMapButton(_selectedIds.length)),
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_selectedIds.length > 1) ...[
+                        FloatingActionButton.extended(
+                          heroTag: 'mergeRoutes',
+                          onPressed: _mergeSelected,
+                          icon: const Icon(Icons.call_merge),
+                          label: Text(
+                            l10n.mergeRoutesButton(_selectedIds.length),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      FloatingActionButton.extended(
+                        heroTag: 'showOnMap',
+                        onPressed: _showSelectedOnMap,
+                        icon: const Icon(Icons.map),
+                        label: Text(l10n.showOnMapButton(_selectedIds.length)),
+                      ),
+                    ],
                   ))
           : FloatingActionButton.extended(
               onPressed: _importing ? null : _importTrack,
