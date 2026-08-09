@@ -261,6 +261,16 @@ class _OverviewTab extends StatelessWidget {
   final GpxRoute route;
   final List<TrackPoint> points;
 
+  /// The last GPS point that has elevation data - "where the ride's
+  /// altitude reading ended up", as opposed to [GpxRoute.maxElevation]/
+  /// [minElevation] which are the extremes across the whole track.
+  double? get _lastAltitude {
+    for (final p in points.reversed) {
+      if (p.elevation != null) return p.elevation;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -270,6 +280,13 @@ class _OverviewTab extends StatelessWidget {
       'd MMM yyyy, HH:mm',
       Localizations.localeOf(context).languageCode,
     );
+    final total = route.duration;
+    final moving = route.movingDuration;
+    // Time not spent moving - traffic lights and short waits included, not
+    // just the 20+ minute stops the Stops tab lists separately.
+    final restDuration = (total != null && moving != null)
+        ? total - moving
+        : null;
 
     return ListView(
       padding: const EdgeInsets.only(right: 8, top: 8),
@@ -285,10 +302,10 @@ class _OverviewTab extends StatelessWidget {
             ),
             Expanded(
               child: AnalysisHeroStat(
-                label: l10n.totalDurationLabel,
-                value: route.duration == null
+                label: l10n.netDurationLabel,
+                value: moving == null
                     ? '—'
-                    : formatAnalysisDuration(l10n, route.duration!),
+                    : formatAnalysisDuration(l10n, moving),
                 unit: '',
               ),
             ),
@@ -317,21 +334,44 @@ class _OverviewTab extends StatelessWidget {
               value: times.end == null ? '—' : timeFmt.format(times.end!),
             ),
             AnalysisStatCard(
-              icon: Icons.timelapse,
-              label: l10n.netDurationLabel,
-              value: route.movingDuration == null
+              icon: Icons.schedule,
+              label: l10n.totalDurationLabel,
+              value: total == null ? '—' : formatAnalysisDuration(l10n, total),
+            ),
+            AnalysisStatCard(
+              icon: Icons.pause_circle_outline,
+              label: l10n.restDurationLabel,
+              value: restDuration == null
                   ? '—'
-                  : formatAnalysisDuration(l10n, route.movingDuration!),
+                  : formatAnalysisDuration(l10n, restDuration),
             ),
             AnalysisStatCard(
-              icon: Icons.gps_fixed,
-              label: l10n.gpsPoints,
-              value: '${route.pointCount}',
+              icon: Icons.speed,
+              label: l10n.averageSpeedLabel,
+              value: speed.averageMovingKmh == null
+                  ? '—'
+                  : '${speed.averageMovingKmh!.toStringAsFixed(1)} km/s',
             ),
             AnalysisStatCard(
-              icon: Icons.trending_up,
-              label: l10n.climb,
-              value: '${route.elevationGainMeters.round()} m',
+              icon: Icons.arrow_upward,
+              label: l10n.maxAltitude,
+              value: route.maxElevation == null
+                  ? '—'
+                  : '${route.maxElevation!.round()} m',
+            ),
+            AnalysisStatCard(
+              icon: Icons.arrow_downward,
+              label: l10n.minAltitude,
+              value: route.minElevation == null
+                  ? '—'
+                  : '${route.minElevation!.round()} m',
+            ),
+            AnalysisStatCard(
+              icon: Icons.landscape,
+              label: l10n.lastAltitudeLabel,
+              value: _lastAltitude == null
+                  ? '—'
+                  : '${_lastAltitude!.round()} m',
             ),
             if (route.batteryStartPercent != null &&
                 route.batteryEndPercent != null)
@@ -998,26 +1038,40 @@ class AnalysisHeroStat extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: theme.textTheme.bodySmall),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         const SizedBox(height: 2),
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.end,
-          children: [
-            Text(
-              value,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: theme.colorScheme.primary,
-              ),
+        // FittedBox scales the value+unit down to fit this column's width
+        // instead of letting a long value (e.g. "11 sa 47 dk") wrap onto a
+        // second line mid-word, which is what a plain Wrap did here before.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  value,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                if (unit.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(unit, style: theme.textTheme.bodySmall),
+                  ),
+                ],
+              ],
             ),
-            if (unit.isNotEmpty) ...[
-              const SizedBox(width: 4),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(unit, style: theme.textTheme.bodySmall),
-              ),
-            ],
-          ],
+          ),
         ),
       ],
     );
