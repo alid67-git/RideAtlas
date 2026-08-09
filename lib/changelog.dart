@@ -20,6 +20,20 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.3 beta',
+    date: '2026-08-09',
+    note:
+        'Önemli düzeltme: Analiz > Özet sekmesinde "Aktif sürüş süresi" '
+        'bazı rotalarda "Toplam süre" ile birebir aynı çıkıyor, bu yüzden '
+        '"Mola süresi" de her zaman 0 görünüyordu. Kök neden: eski hesap, '
+        'sadece noktalar arasında 60 saniyeden uzun bir boşluk varsa "mola '
+        'verildi" sayıyordu - ama birçok GPS cihazı/uygulaması dururken de '
+        'sabit aralıklarla nokta kaydetmeye devam ediyor, bu da hiç boşluk '
+        'oluşmamasına yol açıyordu. Artık her nokta çifti arasındaki gerçek '
+        'hıza bakılıyor (duraklarda hız ~0 km/s), bu yüzden hangi cihazla '
+        'kaydedilmiş olursa olsun doğru sonuç veriyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.2 beta',
     date: '2026-08-09',
     note:
