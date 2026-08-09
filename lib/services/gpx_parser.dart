@@ -182,14 +182,11 @@ List<ElevationSample> buildElevationProfile(List<TrackPoint> points) {
 /// Segments shorter than 1s, slower than 1 km/h (stopped / GPS jitter) or
 /// faster than 250 km/h (implausible GPS spikes) are ignored. [minKmh] /
 /// [maxKmh] / [averageMovingKmh] are therefore "while moving" figures;
-/// overall average (distance ÷ total duration) lives on [GpxRoute].
-///
-/// [movingSeconds] sums the duration of every segment that passes the same
-/// "actually moving" speed filter - a per-segment speed check rather than
-/// just looking for a long gap between points, since plenty of GPX sources
-/// (bike computers, other tracking apps) keep logging points at a fixed
-/// interval even while stopped, which would make a gap-based "were they
-/// moving" check see no gap at all and call the whole ride "moving".
+/// overall average (distance ÷ total duration) lives on [GpxRoute]. For how
+/// long the rider was actually moving, see [RouteGeographyAnalyzer.
+/// detectStops] instead - a per-segment speed check is too noisy (GPS
+/// jitter keeps flickering a stationary rider just above/below the
+/// threshold) to use as a duration figure on its own.
 SpeedStats buildSpeedStats(List<TrackPoint> points) {
   const minDtSeconds = 1.0;
   const minMovingKmh = 1.0;
@@ -199,8 +196,6 @@ SpeedStats buildSpeedStats(List<TrackPoint> points) {
   double? maxKmh;
   var sumKmh = 0.0;
   var count = 0;
-  var movingSeconds = 0.0;
-  var hasTimedSegment = false;
 
   for (var i = 1; i < points.length; i++) {
     final prev = points[i - 1];
@@ -211,7 +206,6 @@ SpeedStats buildSpeedStats(List<TrackPoint> points) {
 
     final dtSeconds = t1.difference(t0).inMilliseconds / 1000.0;
     if (dtSeconds < minDtSeconds) continue;
-    hasTimedSegment = true;
 
     final meters = _distance(prev.latLng, curr.latLng);
     final kmh = (meters / 1000.0) / (dtSeconds / 3600.0);
@@ -221,14 +215,12 @@ SpeedStats buildSpeedStats(List<TrackPoint> points) {
     maxKmh = maxKmh == null ? kmh : (kmh > maxKmh ? kmh : maxKmh);
     sumKmh += kmh;
     count++;
-    movingSeconds += dtSeconds;
   }
 
   return SpeedStats(
     minKmh: minKmh,
     maxKmh: maxKmh,
     averageMovingKmh: count == 0 ? null : sumKmh / count,
-    movingSeconds: hasTimedSegment ? movingSeconds.round() : null,
   );
 }
 
@@ -269,7 +261,6 @@ class SpeedStats {
     required this.minKmh,
     required this.maxKmh,
     required this.averageMovingKmh,
-    required this.movingSeconds,
   });
 
   final double? minKmh;
@@ -277,12 +268,4 @@ class SpeedStats {
 
   /// Mean of per-segment speeds while moving (see [buildSpeedStats]).
   final double? averageMovingKmh;
-
-  /// Total time spent in segments fast enough to count as riding, not the
-  /// track's overall wall-clock span. Null only if the track has no usable
-  /// timestamps at all.
-  final int? movingSeconds;
-
-  Duration? get movingDuration =>
-      movingSeconds == null ? null : Duration(seconds: movingSeconds!);
 }
