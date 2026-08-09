@@ -34,6 +34,20 @@
          not the Play Store, so requesting it is fine - Play Store policy is
          the reason most apps avoid it. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- After finishing a recording, offers to attach any photos/videos the
+         gallery gained during the ride (see lib/services/gallery_scan.dart)
+         - needs read access to the device's media library. READ_MEDIA_IMAGES
+         and READ_MEDIA_VIDEO cover Android 13+; READ_MEDIA_VISUAL_USER_SELECTED
+         covers Android 14+'s "select photos" partial-access grant; the
+         maxSdkVersion=32 permission (added by the photo_manager plugin
+         itself) covers everything older. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
+    <!-- Without this, Android 10+ strips GPS coordinates from a photo's
+         metadata before handing it to us, so a gallery-scanned photo would
+         always look location-less even when it has a geotag. -->
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION"/>
     <application
         android:label="RideAtlas"
         android:name="${applicationName}"

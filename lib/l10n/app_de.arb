@@ -167,5 +167,13 @@
   "backToMapTooltip": "Zurück zur Karte",
   "gpsOfflineRecordingHint": "Kein GPS — Aufzeichnung startet offline",
   "gpsOnlineStatus": "GPS bereit (±{accuracy} m)",
-  "@gpsOnlineStatus": {"placeholders": {"accuracy": {"type": "String"}}}
+  "@gpsOnlineStatus": {"placeholders": {"accuracy": {"type": "String"}}},
+  "showPhotoPinsTooltip": "Foto-/Videostandorte anzeigen",
+  "hidePhotoPinsTooltip": "Foto-/Videostandorte ausblenden",
+  "ridePhotoPickerTitle": "Fotos von dieser Fahrt",
+  "ridePhotoPickerMessage": "{count} Foto(s)/Video(s) gefunden, die während der Aufzeichnung zur Galerie hinzugefügt wurden. Wählen Sie aus, welche zur Route hinzugefügt werden sollen.",
+  "@ridePhotoPickerMessage": {"placeholders": {"count": {"type": "int"}}},
+  "ridePhotoPickerAddButton": "Auswahl hinzufügen ({count})",
+  "@ridePhotoPickerAddButton": {"placeholders": {"count": {"type": "int"}}},
+  "ridePhotoPickerSkipButton": "Überspringen"
 }
