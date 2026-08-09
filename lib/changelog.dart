@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.2 beta',
+    date: '2026-08-09',
+    note:
+        'Rota listesinde birden fazla rota seçtiğinizde artık "Birleştir" '
+        'seçeneği de var - örneğin birkaç günlük bir gezinin her günü ayrı '
+        'kaydedildiyse, seçilenler kendi ilk GPS zaman damgasına göre '
+        'otomatik sıralanıp (seçim sırası önemli değil) tek bir yeni rotada '
+        'birleştiriliyor; yeni rota için bir isim soruluyor. Orijinal '
+        'rotalar silinmiyor, sadece isimlerine "(birleştirildi)" ekleniyor; '
+        'üzerlerindeki fotoğraf/videolar da yeni rotaya kopyalanıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.1 beta',
     date: '2026-08-09',
     note:

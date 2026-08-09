@@ -35,7 +35,13 @@ const _helpSectionsTr = <HelpSection>[
         'Rota listesinde her rotayı tek dokunuşla açabilir, ismini '
         'değiştirebilir veya silebilirsiniz. Sağ üstteki seçim ikonuyla '
         'birden fazla rota seçip aynı anda haritada gösterebilir, '
-        'karşılaştırabilirsiniz.',
+        'karşılaştırabilirsiniz. İki veya daha fazla rota seçtiğinizde '
+        '"Birleştir" seçeneği de çıkar: örneğin birkaç günlük bir gezinin '
+        'her günü ayrı kaydedildiyse, seçilenler ilk GPS zamanına göre '
+        'otomatik sıralanıp tek bir rotada birleştirilir - bir isim '
+        'sorulur, orijinal rotalar silinmez, sadece isimlerine '
+        '"(birleştirildi)" eklenir; üzerlerindeki fotoğraf/videolar da '
+        'yeni rotaya kopyalanır.',
   ),
   HelpSection(
     title: 'Harita görünümü',
@@ -158,7 +164,13 @@ const _helpSectionsEn = <HelpSection>[
         'In the route list you can open any route with a tap, rename it, '
         'or delete it. The select icon in the top right lets you pick '
         'several routes at once and show them together on the map to '
-        'compare them.',
+        'compare them. Selecting two or more also reveals a "Merge" '
+        'option: useful when a multi-day trip was recorded as separate '
+        'rides per day - the selection is automatically ordered by each '
+        'route\'s own first GPS timestamp and combined into one new route '
+        '(you\'re asked for a name). The originals aren\'t deleted, just '
+        'renamed with a "(merged)" suffix; any photos/videos on them are '
+        'copied onto the new route too.',
   ),
   HelpSection(
     title: 'Map view',
@@ -280,7 +292,14 @@ const _helpSectionsDe = <HelpSection>[
         'In der Routenliste können Sie jede Route mit einem Tippen öffnen, '
         'umbenennen oder löschen. Mit dem Auswahlsymbol oben rechts können '
         'Sie mehrere Routen gleichzeitig auswählen und zum Vergleich '
-        'zusammen auf der Karte anzeigen.',
+        'zusammen auf der Karte anzeigen. Bei zwei oder mehr ausgewählten '
+        'Routen erscheint zusätzlich "Zusammenführen": praktisch, wenn eine '
+        'mehrtägige Reise als separate Fahrten pro Tag aufgezeichnet wurde '
+        '- die Auswahl wird automatisch nach dem ersten GPS-Zeitstempel '
+        'jeder Route sortiert und zu einer neuen Route zusammengeführt '
+        '(ein Name wird abgefragt). Die Originale werden nicht gelöscht, '
+        'nur mit dem Zusatz "(zusammengeführt)" umbenannt; Fotos/Videos '
+        'daran werden ebenfalls auf die neue Route kopiert.',
   ),
   HelpSection(
     title: 'Kartenansicht',
