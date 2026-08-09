@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.1 beta',
+    date: '2026-08-09',
+    note:
+        'Analiz > Özet sekmesi sadeleştirildi: Tırmanış çıkarıldı (zaten '
+        'Yükseklik sekmesinde var); yerine Ortalama hız, Minimum/Maksimum/'
+        'Son irtifa ve Mola süresi (toplam süre − aktif sürüş süresi) '
+        'eklendi. "Net süre" etiketi "Aktif sürüş süresi" oldu. Üstteki üç '
+        'büyük değerin (mesafe, süre, hız) uzun metinlerde ortadan '
+        'bölünmesine yol açan görünüm hatası düzeltildi.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.0 beta',
     date: '2026-08-09',
     note:
