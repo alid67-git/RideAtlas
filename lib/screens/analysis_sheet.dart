@@ -281,16 +281,20 @@ class _OverviewTab extends StatelessWidget {
       Localizations.localeOf(context).languageCode,
     );
     final total = route.duration;
-    final moving = speed.movingDuration;
-    // Time not spent moving - traffic lights and short waits included, not
-    // just the 20+ minute stops the Stops tab lists separately. Clamped at
-    // zero: a route with out-of-order timestamps (e.g. a bad merge) could
-    // otherwise show a nonsensical negative rest duration.
-    final restDuration = (total != null && moving != null)
-        ? (total - moving).isNegative
+    // Same dwell-cluster detection the Stops tab and the Daily tab's own
+    // riding/rest split already use (RouteGeographyAnalyzer.detectStops),
+    // so "Aktif sürüş süresi" here agrees with "Sürüş süresi" on the Daily
+    // tab instead of using a different, looser definition of "moving".
+    final restDuration = total == null
+        ? null
+        : RouteGeographyAnalyzer()
+              .detectStops(points)
+              .fold<Duration>(Duration.zero, (sum, stop) => sum + stop.duration);
+    final moving = (total == null || restDuration == null)
+        ? null
+        : (total - restDuration).isNegative
               ? Duration.zero
-              : total - moving
-        : null;
+              : total - restDuration;
 
     return ListView(
       padding: const EdgeInsets.only(right: 8, top: 8),

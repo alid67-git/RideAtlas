@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.4 beta',
+    date: '2026-08-09',
+    note:
+        'Düzeltme: bir önceki sürümde "Aktif sürüş süresi" nokta-nokta '
+        'hıza bakarak hesaplanmaya başlamıştı, ama bu Günlük sekmesindeki '
+        '"Sürüş süresi"nin kullandığı (20+ dk duraklama kümeleri tespit '
+        'eden) yöntemden farklıydı - aynı rota için iki sekmede farklı '
+        'sayılar görünebiliyordu. Artık Özet sekmesi de Günlük sekmesiyle '
+        'aynı mola tespitini kullanıyor; "Aktif sürüş süresi" ve "Mola '
+        'süresi" artık her iki sekmede de tutarlı.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.3 beta',
     date: '2026-08-09',
     note:
