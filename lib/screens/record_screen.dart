@@ -319,8 +319,8 @@ class _RecordScreenState extends State<RecordScreen> {
 
   Future<void> _discard() async {
     if (await _confirmDiscard() && mounted) {
-      _recorder.discard();
-      Navigator.pop(context);
+      await _recorder.discard();
+      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -356,7 +356,7 @@ class _RecordScreenState extends State<RecordScreen> {
     final repo = context.read<RouteRepository>();
     final batteryStart = _recorder.batteryStartPercent;
     final batteryEnd = await currentBatteryPercent();
-    final points = _recorder.stop();
+    final points = await _recorder.stop();
     final gpx = exportTrack(
       name: name,
       points: points,

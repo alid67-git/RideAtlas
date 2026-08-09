@@ -19,6 +19,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <!-- Many OEM Android skins (MIUI, ColorOS, OneUI, ...) throttle or kill
          GPS updates once the screen turns off, even for a proper foreground
          service, unless the app is exempted from battery optimization. This
@@ -44,6 +45,14 @@
             android:name="com.baseflow.geolocator.GeolocatorLocationService"
             android:foregroundServiceType="location"
             tools:node="merge" />
+        <!-- Our own recording FGS: collects GPS natively so screen-off /
+             Doze can't freeze the track when the Flutter engine sleeps. -->
+        <service
+            android:name=".RecordingLocationService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location"
+            android:stopWithTask="false" />
         <!-- Android Auto: lets a recording already running on the phone be
              viewed and controlled (start/pause/resume/finish) from the
              car's own screen. See android/app/src/main/kotlin/.../car/. -->

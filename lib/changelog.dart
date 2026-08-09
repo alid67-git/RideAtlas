@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.47 beta',
+    date: '2026-08-09',
+    note:
+        'Ekran kapalı / uyku modunda GPS kaydının kesilmesine kök çözüm: '
+        'konum artık Flutter/geolocator akışı yerine Android native '
+        'foreground serviste toplanıyor (Fused Location + wake lock + kalıcı '
+        'bildirim). Flutter motoru Doze ile donsa bile noktalar native '
+        'tampona yazılıyor; kayıt bitince rota bundan üretiliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.46 beta',
     date: '2026-08-09',
     note:

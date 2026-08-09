@@ -90,6 +90,14 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             }
         }
+
+        // Native GPS recording FGS - survives screen-off where Dart-side
+        // geolocator streams freeze with the Flutter engine.
+        RecordingNativeBridge.attach(
+            applicationContext,
+            this,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
     }
 
     private fun isIgnoringBatteryOptimizations(): Boolean {
@@ -108,6 +116,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        RecordingNativeBridge.detach()
         FlutterEngineCache.getInstance().remove(CAR_FLUTTER_ENGINE_ID)
         super.cleanUpFlutterEngine(flutterEngine)
     }
