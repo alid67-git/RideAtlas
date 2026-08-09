@@ -190,5 +190,13 @@
   "backToMapTooltip": "Haritaya dön",
   "gpsOfflineRecordingHint": "GPS yok — kayıt offline başlayacak",
   "gpsOnlineStatus": "GPS hazır (±{accuracy} m)",
-  "@gpsOnlineStatus": {"placeholders": {"accuracy": {"type": "String"}}}
+  "@gpsOnlineStatus": {"placeholders": {"accuracy": {"type": "String"}}},
+  "showPhotoPinsTooltip": "Fotoğraf/video konumlarını göster",
+  "hidePhotoPinsTooltip": "Fotoğraf/video konumlarını gizle",
+  "ridePhotoPickerTitle": "Sürüşte çekilen fotoğraflar",
+  "ridePhotoPickerMessage": "Kayıt sırasında galeriye eklenmiş {count} fotoğraf/video bulundu. Rotaya eklemek istediklerinizi seçin.",
+  "@ridePhotoPickerMessage": {"placeholders": {"count": {"type": "int"}}},
+  "ridePhotoPickerAddButton": "Seçilenleri ekle ({count})",
+  "@ridePhotoPickerAddButton": {"placeholders": {"count": {"type": "int"}}},
+  "ridePhotoPickerSkipButton": "Atla"
 }

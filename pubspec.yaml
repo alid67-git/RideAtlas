@@ -58,6 +58,7 @@ dependencies:
   open_filex: ^4.7.0
   video_player: ^2.9.2
   battery_plus: ^7.1.1
+  photo_manager: ^3.7.1
 
 dev_dependencies:
   flutter_test:

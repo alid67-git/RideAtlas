@@ -20,6 +20,21 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.0 beta',
+    date: '2026-08-09',
+    note:
+        'Sürüş sırasında çekilen fotoğraflar rotaya bağlanabiliyor: kayıt '
+        'bitirilip kaydedildiğinde, o sürüş süresince telefonun galerisine '
+        'eklenmiş fotoğraf/videolar varsa bunlar listelenir, hangilerinin '
+        'rotaya ekleneceğini seçebilirsiniz. Konumu bilinmeyen bir foto/'
+        'video seçilirse, haritadan elle nereye ait olduğunu işaretlemeniz '
+        'istenir. Rota haritasına, fotoğraf/video konumlarını gösterme veya '
+        'gizleme için yeni bir düğme eklendi (varsayılan: gösteriliyor); '
+        'gösterildiğinde her biri haritada küçük bir önizlemeyle işaretlenir '
+        've dokununca tam ekran açılır. Fotoğraf/video daha sonra da elle '
+        'eklenebilir - bu zaten var olan özellik değişmedi.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.48 beta',
     date: '2026-08-09',
     note:

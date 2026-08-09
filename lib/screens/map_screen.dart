@@ -113,6 +113,12 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   /// button lets riders reveal them when they want the detail.
   bool _showStops = false;
 
+  /// Whether geotagged photo/video pins are drawn on the map. On by default
+  /// (unlike [_showStops]) since these are media the rider deliberately
+  /// attached - worth surfacing without an extra tap; the button still lets
+  /// them hide the clutter on a busy route.
+  bool _showPhotoPins = true;
+
   /// Current map bearing in degrees, tracked so the compass button can show
   /// which way is north and only appear once the map's been rotated off it.
   double _rotationDeg = 0;
@@ -511,6 +517,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                   .where((s) => s.duration < const Duration(hours: 4))
                   .toList();
         final overnights = overnightStays(days);
+        final geotaggedPhotoCount = context
+            .watch<PhotoRepository>()
+            .photosFor(route.id)
+            .where((p) => p.hasLocation)
+            .length;
 
         return Scaffold(
           body: Stack(
@@ -563,6 +574,22 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                           _showStops
                               ? Icons.pause_circle_filled
                               : Icons.pause_circle_outline,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    if (geotaggedPhotoCount > 0) ...[
+                      FloatingActionButton.small(
+                        heroTag: 'togglePhotoPins',
+                        tooltip: _showPhotoPins
+                            ? AppLocalizations.of(context)!.hidePhotoPinsTooltip
+                            : AppLocalizations.of(context)!.showPhotoPinsTooltip,
+                        onPressed: () =>
+                            setState(() => _showPhotoPins = !_showPhotoPins),
+                        child: Icon(
+                          _showPhotoPins
+                              ? Icons.photo_camera
+                              : Icons.photo_camera_outlined,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -743,36 +770,37 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 size: 36,
               ),
             ),
-            for (final photo
-                in context
-                    .watch<PhotoRepository>()
-                    .photosFor(route.id)
-                    .where((p) => p.hasLocation))
-              Marker(
-                point: photo.latLng!,
-                width: 44,
-                height: 44,
-                child: GestureDetector(
-                  onTap: () => _openPhotoViewer(route, photo.id),
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.fromBorderSide(
-                        BorderSide(color: Colors.white, width: 2),
+            if (_showPhotoPins)
+              for (final photo
+                  in context
+                      .watch<PhotoRepository>()
+                      .photosFor(route.id)
+                      .where((p) => p.hasLocation))
+                Marker(
+                  point: photo.latLng!,
+                  width: 44,
+                  height: 44,
+                  child: GestureDetector(
+                    onTap: () => _openPhotoViewer(route, photo.id),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.fromBorderSide(
+                          BorderSide(color: Colors.white, width: 2),
+                        ),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black38, blurRadius: 4),
+                        ],
                       ),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black38, blurRadius: 4),
-                      ],
-                    ),
-                    child: PhotoThumb(
-                      photoId: photo.id,
-                      size: 40,
-                      circle: true,
-                      isVideo: photo.isVideo,
+                      child: PhotoThumb(
+                        photoId: photo.id,
+                        size: 40,
+                        circle: true,
+                        isVideo: photo.isVideo,
+                      ),
                     ),
                   ),
                 ),
-              ),
           ],
         ),
         RichAttributionWidget(

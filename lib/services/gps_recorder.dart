@@ -54,6 +54,14 @@ class GpsRecorder extends ChangeNotifier {
 
   RecordingState get state => _state;
   int? get batteryStartPercent => _batteryStartPercent;
+
+  /// Wall-clock time [start] was called, or null if idle. Unlike the track
+  /// points themselves (GPS timestamps, which can be null/sparse), this is
+  /// always the actual device clock reading - used to match this recording
+  /// against the device's photo gallery by capture time. Stays set until
+  /// [stop] or [discard] resets it, so callers must read it before calling
+  /// either.
+  DateTime? get startedAt => _startedAt;
   List<TrackPoint> get points => List.unmodifiable(_points);
   bool get isRecording => _state == RecordingState.recording;
   bool get isPaused => _state == RecordingState.paused;

@@ -68,7 +68,11 @@ const _helpSectionsTr = <HelpSection>[
         'video dosyaları bu bilgiyi içermez) haritadan elle nokta '
         'seçebilir ya da bu adımı atlayabilirsiniz. Eklenen tüm '
         'fotoğraf/videolar ekranın altındaki şeritte görünür ve dokununca '
-        'büyütülerek izlenebilir.',
+        'büyütülerek izlenebilir. Bir kayıt bitirilip kaydedildiğinde, o '
+        'sürüş süresince galeriye eklenmiş fotoğraf/videolar varsa '
+        'otomatik olarak listelenir ve hangilerini rotaya eklemek '
+        'istediğiniz sorulur. Haritada, fotoğraf/video konumlarını '
+        'gösteren veya gizleyen ayrı bir düğme bulunur.',
   ),
   HelpSection(
     title: 'GPS ile canlı rota kaydı',
@@ -188,7 +192,10 @@ const _helpSectionsEn = <HelpSection>[
         'don\'t carry it), you can pick a point on the map by hand or skip '
         'that step entirely. Everything you\'ve added shows up in a strip '
         'at the bottom of the screen, and tapping an item opens it full '
-        'screen.',
+        'screen. When you finish and save a recording, any photos/videos '
+        'your gallery gained during that ride are found automatically and '
+        'you\'re asked which ones to attach to the route. The map has a '
+        'separate button to show or hide photo/video locations.',
   ),
   HelpSection(
     title: 'Live GPS recording',
@@ -310,7 +317,12 @@ const _helpSectionsDe = <HelpSection>[
         'enthalten sie meist ohnehin nicht), können Sie den Ort manuell auf '
         'der Karte auswählen oder diesen Schritt überspringen. Alle '
         'hinzugefügten Fotos/Videos erscheinen in einer Leiste am unteren '
-        'Bildschirmrand; ein Tipp darauf öffnet sie in Vollbild.',
+        'Bildschirmrand; ein Tipp darauf öffnet sie in Vollbild. Wird eine '
+        'Aufzeichnung beendet und gespeichert, werden Fotos/Videos, die '
+        'während der Fahrt zur Galerie hinzugefügt wurden, automatisch '
+        'gefunden - Sie wählen dann aus, welche der Route hinzugefügt '
+        'werden sollen. Auf der Karte gibt es eine eigene Schaltfläche, um '
+        'Foto-/Videostandorte ein- oder auszublenden.',
   ),
   HelpSection(
     title: 'Live-GPS-Aufzeichnung',

@@ -11,17 +11,22 @@ import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
+import '../models/gpx_route.dart';
+import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/battery_info.dart';
 import '../services/battery_optimization.dart';
+import '../services/gallery_scan.dart';
 import '../services/gps_recorder.dart';
 import '../services/track_io.dart';
 import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
+import 'location_picker_screen.dart';
 import 'map_screen.dart' show RouteMapScreen;
+import 'ride_photo_picker_screen.dart';
 
 /// True on a native Android build, where [GpsRecorder] runs a foreground
 /// service and recording survives the app being minimized. Everywhere else
@@ -334,6 +339,9 @@ class _RecordScreenState extends State<RecordScreen> {
     final repo = context.read<RouteRepository>();
     final batteryStart = _recorder.batteryStartPercent;
     final batteryEnd = await currentBatteryPercent();
+    // Read before stop() - it resets GpsRecorder back to idle, taking
+    // startedAt with it.
+    final recordingStart = _recorder.startedAt;
     final points = await _recorder.stop();
     final gpx = exportTrack(
       name: name,
@@ -349,8 +357,100 @@ class _RecordScreenState extends State<RecordScreen> {
       batteryEndPercent: batteryEnd,
     );
     if (!mounted) return;
+    if (recordingStart != null) {
+      await _offerGalleryMedia(route, recordingStart);
+      if (!mounted) return;
+    }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)),
+    );
+  }
+
+  /// Looks for photos/videos the gallery gained during this ride and, if
+  /// any turn up, lets the rider pick which to attach - added with their
+  /// own EXIF/gallery GPS tag if they have one, or by asking where to place
+  /// them on the map otherwise (same fallback as adding media by hand from
+  /// the route screen). Never blocks saving the ride: any failure here
+  /// (permission refused, nothing found, plugin error) is swallowed and the
+  /// recording is still saved either way.
+  Future<void> _offerGalleryMedia(GpxRoute route, DateTime recordingStart) async {
+    List<GalleryCandidate> candidates;
+    try {
+      candidates = await findGalleryMediaBetween(recordingStart, DateTime.now());
+    } catch (_) {
+      return;
+    }
+    if (candidates.isEmpty || !mounted) return;
+
+    final selected = await Navigator.of(context).push<List<GalleryCandidate>>(
+      MaterialPageRoute(
+        builder: (_) => RidePhotoPickerScreen(candidates: candidates),
+      ),
+    );
+    if (selected == null || selected.isEmpty || !mounted) return;
+
+    final photoRepo = context.read<PhotoRepository>();
+    for (final candidate in selected) {
+      if (!mounted) return;
+      final asset = candidate.asset;
+      // AssetEntity's own LatLng type isn't the one the rest of the app
+      // uses (latlong2) - pull the raw doubles out immediately rather than
+      // holding onto it, so there's no ambiguity between the two.
+      final assetLocation = await asset.latlngAsync();
+      var lat = assetLocation?.latitude;
+      var lng = assetLocation?.longitude;
+      if (lat == null || lng == null || (lat == 0 && lng == 0)) {
+        final picked = await _pickLocationManually(route);
+        if (!mounted) return;
+        lat = picked?.latitude;
+        lng = picked?.longitude;
+      }
+      final file = await asset.originFile ?? await asset.file;
+      if (file == null) continue;
+      final fileBytes = await file.readAsBytes();
+      await photoRepo.add(
+        routeId: route.id,
+        bytes: fileBytes,
+        lat: lat,
+        lng: lng,
+        type: candidate.mediaType,
+      );
+    }
+  }
+
+  /// Asks whether the user wants to place a pin for a photo/video with no
+  /// known location, and if so opens [LocationPickerScreen] centered on the
+  /// route. Returns null if they skip, or don't confirm a point. Mirrors
+  /// RouteMapScreen's own manual-placement flow for a single added photo.
+  Future<LatLng?> _pickLocationManually(GpxRoute route) async {
+    final l10n = AppLocalizations.of(context)!;
+    final wantsToPlace = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.noLocationFoundTitle),
+        content: Text(l10n.noLocationFoundMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.skipLocationButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.pickOnMapButton),
+          ),
+        ],
+      ),
+    );
+    if (wantsToPlace != true || !mounted) return null;
+
+    final center = LatLng(
+      (route.north + route.south) / 2,
+      (route.east + route.west) / 2,
+    );
+    return Navigator.of(context).push<LatLng>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(initialCenter: center),
+      ),
     );
   }
 
