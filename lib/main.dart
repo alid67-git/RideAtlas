@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 
 import 'l10n/gen/app_localizations.dart';
 import 'repositories/locale_controller.dart';
-import 'repositories/map_heading_mode_controller.dart';
 import 'repositories/photo_repository.dart';
 import 'repositories/route_repository.dart';
 import 'repositories/satellite_visibility_controller.dart';
@@ -37,9 +36,6 @@ class RideAtlasApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => VehicleIconController()..load()),
         ChangeNotifierProvider(
           create: (_) => SatelliteVisibilityController()..load(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => MapHeadingModeController()..load(),
         ),
         // Lives above the Navigator so an active recording survives
         // navigating away from RecordScreen - only an explicit "discard"

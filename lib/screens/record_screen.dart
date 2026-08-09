@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -12,7 +11,6 @@ import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
-import '../repositories/map_heading_mode_controller.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/battery_info.dart';
@@ -80,22 +78,13 @@ class _RecordScreenState extends State<RecordScreen> {
   /// needs to actually be moving to be meaningful).
   double? _currentHeading;
 
-  /// True while the map should keep auto-centering on the live position.
-  /// Any user-driven map interaction (drag, pinch, fling, ...) turns this
-  /// off, so panning around to look at the surroundings isn't constantly
-  /// fought by the auto-follow; the recenter button turns it back on - and,
-  /// if it's tapped again while already following, toggles [_headingUp]
-  /// instead (see [_recenter]).
+  /// True while the map should keep auto-centering on the live position,
+  /// rotated to keep the direction of travel pointing up (course-up), like
+  /// a normal navigation app. Any user-driven map interaction (drag, pinch,
+  /// fling, ...) turns this off, so panning around to look at the
+  /// surroundings isn't constantly fought by the auto-follow; the recenter
+  /// button turns it back on (see [_recenter]).
   bool _followMe = true;
-
-  /// False: north is always up, map never rotates on its own - the
-  /// translucent heading cone (see [HeadingCone]) rotates instead to show
-  /// which way the rider is facing. True (default, like a normal navigation
-  /// app): the map rotates to keep the direction of travel pointing up
-  /// (course-up), so the cone stays fixed pointing "forward" instead.
-  /// Seeded from, and kept in sync with, [MapHeadingModeController] so the
-  /// choice persists across recordings instead of resetting every time.
-  bool _headingUp = true;
 
   late final StreamSubscription<MapEvent> _mapEventSub;
 
@@ -103,7 +92,6 @@ class _RecordScreenState extends State<RecordScreen> {
   void initState() {
     super.initState();
     recordScreenVisible.value = true;
-    _headingUp = context.read<MapHeadingModeController>().headingUp;
     _startLiveLocation();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       if (event.source != MapEventSource.mapController && _followMe) {
@@ -116,16 +104,11 @@ class _RecordScreenState extends State<RecordScreen> {
     });
   }
 
-  /// Recenters and resumes following the live position - unless the map is
-  /// already following it, in which case a repeat tap instead switches
-  /// between north-up and course-up (see [_headingUp]).
+  /// Recenters and resumes following the live position, course-up. A repeat
+  /// tap while already following is a no-op - there's nothing further to
+  /// switch to.
   void _recenter() {
-    if (_followMe) {
-      setState(() => _headingUp = !_headingUp);
-      context.read<MapHeadingModeController>().setHeadingUp(_headingUp);
-      _applyRotation();
-      return;
-    }
+    if (_followMe) return;
     final location = _currentLocation;
     setState(() => _followMe = true);
     if (location != null) {
@@ -135,13 +118,8 @@ class _RecordScreenState extends State<RecordScreen> {
     _applyRotation();
   }
 
-  /// Rotates the map to match [_headingUp]'s current mode - north-up
-  /// (rotation 0) or course-up (rotation = live heading, if known yet).
+  /// Rotates the map to the live heading (course-up), if known yet.
   void _applyRotation() {
-    if (!_headingUp) {
-      _mapController.rotate(0);
-      return;
-    }
     final heading = _currentHeading;
     if (heading != null) _mapController.rotate(heading);
   }
@@ -200,7 +178,7 @@ class _RecordScreenState extends State<RecordScreen> {
           } else if (_followMe) {
             _mapController.move(location, _mapController.camera.zoom);
           }
-          if (_followMe && _headingUp && heading != null) {
+          if (_followMe && heading != null) {
             _mapController.rotate(heading);
           }
         });
@@ -415,13 +393,11 @@ class _RecordScreenState extends State<RecordScreen> {
                     ? Theme.of(context).colorScheme.onPrimary
                     : null,
                 onPressed: _currentLocation == null ? null : _recenter,
-                // A compass-needle icon while following the direction of
-                // travel (course-up), the plain dot while north stays up -
-                // the same visual language most map/nav apps use for this.
+                // A compass-needle icon while auto-following (course-up),
+                // the plain dot otherwise - the same visual language most
+                // map/nav apps use for this.
                 child: Icon(
-                  _followMe && _headingUp
-                      ? Icons.navigation
-                      : Icons.my_location,
+                  _followMe ? Icons.navigation : Icons.my_location,
                 ),
               ),
             ),
@@ -533,16 +509,29 @@ class _RecordScreenState extends State<RecordScreen> {
                     ],
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _StatColumn(label: l10n.duration, value: durationStr),
-                      _StatColumn(
-                        label: l10n.distance,
-                        value: '${recorder.distanceKm.toStringAsFixed(2)} km',
+                      Expanded(
+                        child: _StatColumn(
+                          label: l10n.duration,
+                          value: durationStr,
+                        ),
                       ),
-                      _StatColumn(
-                        label: l10n.currentAltitudeLabel,
-                        value: altitude == null ? '—' : '${altitude.round()} m',
+                      _statDivider(theme),
+                      Expanded(
+                        child: _StatColumn(
+                          label: l10n.distance,
+                          value:
+                              '${recorder.distanceKm.toStringAsFixed(2)} km',
+                        ),
+                      ),
+                      _statDivider(theme),
+                      Expanded(
+                        child: _StatColumn(
+                          label: l10n.currentAltitudeLabel,
+                          value: altitude == null
+                              ? '—'
+                              : '${altitude.round()} m',
+                        ),
                       ),
                     ],
                   ),
@@ -573,6 +562,17 @@ class _RecordScreenState extends State<RecordScreen> {
           ),
         ],
       ],
+    );
+  }
+
+  /// Thin vertical separator between the duration/distance/altitude
+  /// columns, so their values read as distinct fields instead of running
+  /// into each other on narrow screens.
+  Widget _statDivider(ThemeData theme) {
+    return Container(
+      width: 1,
+      height: 28,
+      color: theme.colorScheme.outlineVariant,
     );
   }
 
@@ -667,26 +667,16 @@ class _RecordScreenState extends State<RecordScreen> {
                   alignment: Alignment.center,
                   children: [
                     // MotionX-GPS-style translucent "cone of light" showing
-                    // the GPS heading. Rotated to point up in course-up
-                    // mode (where the map itself already turned to put the
-                    // heading up), or to the actual compass heading in
-                    // north-up mode (where the map stays fixed, so the cone
-                    // is the only thing that shows direction of travel).
+                    // the GPS heading. The map itself already turns to keep
+                    // the direction of travel pointing up (course-up), so
+                    // the cone always points straight up too.
                     if (_currentHeading != null)
-                      Transform.rotate(
-                        angle: _headingUp
-                            ? 0
-                            : _currentHeading! * math.pi / 180,
-                        child: HeadingCone(
-                          size: markerSize * _coneMarkerScale,
-                          color: const Color(0xFFFFA726),
-                        ),
+                      HeadingCone(
+                        size: markerSize * _coneMarkerScale,
+                        color: const Color(0xFFFFA726),
                       ),
-                    // Always points straight up, regardless of north-up vs.
-                    // course-up mode: in course-up mode that's because the
-                    // map itself rotates to keep the direction of travel
-                    // pointing up, and in north-up mode it's simply the
-                    // app's chosen vehicle icon, not a compass needle.
+                    // Always points straight up: the map itself rotates to
+                    // keep the direction of travel pointing up.
                     SizedBox(
                       width: markerSize,
                       height: markerSize,
@@ -717,8 +707,25 @@ class _StatColumn extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(value, style: theme.textTheme.titleSmall),
-        Text(label, style: theme.textTheme.labelSmall),
+        // FittedBox shrinks the value instead of letting it run into the
+        // next column (or wrap and get clipped) when this stat's column
+        // ends up narrower than the text - e.g. a multi-day duration or a
+        // long distance reading on a small phone screen.
+        FittedBox(
+          child: Text(
+            value,
+            maxLines: 1,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelSmall,
+        ),
       ],
     );
   }

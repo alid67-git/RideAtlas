@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.3.46 beta',
+    date: '2026-08-09',
+    note:
+        'Kayıt ekranındaki harita artık her zaman yön-takip (course-up) '
+        'modunda - kuzey-sabit moda geçiş kaldırıldı, konum tuşu artık her '
+        'basışta sadece ortalıyor. Üstteki süre/mesafe/yükseklik kutusu '
+        'yeniden düzenlendi: değerler dar ekranlarda birbirine karışıp '
+        'taşmak yerine, aralarında ince bir ayraçla, kendi sütunlarında '
+        'okunaklı şekilde gösteriliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.3.45 beta',
     date: '2026-08-08',
     note:
