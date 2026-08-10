@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.5 beta',
+    date: '2026-08-10',
+    note:
+        'Düzeltme: Android Auto uygulama listesinde RideAtlas hiç '
+        'görünmüyordu. Sebebi, androidx.car.app kütüphanesinin zorunlu '
+        'tuttuğu bir manifest ayarının (minCarApiLevel) eksik olmasıydı - '
+        'bu olmadan Android Auto uygulamayı hatasız şekilde sessizce '
+        'listeden düşürüyor. Eklendi.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.4 beta',
     date: '2026-08-09',
     note:
