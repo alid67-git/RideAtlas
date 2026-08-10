@@ -73,6 +73,12 @@
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
+        <!-- Required by the androidx.car.app library - without it the
+             Android Auto host can't tell this is a valid car app and just
+             silently omits it from the app grid (no error anywhere). -->
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="1" />
         <service
             android:name=".car.RideAtlasCarAppService"
             android:exported="true">
