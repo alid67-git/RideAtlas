@@ -30,6 +30,18 @@ object CarRecordingBridge {
         private set
     var isAutoPaused: Boolean = false
         private set
+    var latitude: Double? = null
+        private set
+    var longitude: Double? = null
+        private set
+    var headingDegrees: Double? = null
+        private set
+
+    private const val MAX_TRAIL_POINTS = 2000
+
+    /** Lat/lng pairs recorded so far this ride, for [CarMapRenderer] to draw
+     * as a trail. Cleared whenever recording goes back to idle. */
+    private val trail = mutableListOf<DoubleArray>()
 
     private var channel: MethodChannel? = null
     private val listeners = mutableListOf<() -> Unit>()
@@ -46,18 +58,40 @@ object CarRecordingBridge {
         listeners.remove(listener)
     }
 
+    fun trailSnapshot(): List<DoubleArray> = synchronized(trail) { trail.toList() }
+
     /** Applies a state snapshot pushed from Dart's "updateState" call. */
     fun handleUpdate(call: MethodCall) {
-        state = when (call.argument<String>("state")) {
+        val newState = when (call.argument<String>("state")) {
             "recording" -> State.RECORDING
             "paused" -> State.PAUSED
             else -> State.IDLE
         }
+        if (newState == State.IDLE && state != State.IDLE) {
+            synchronized(trail) { trail.clear() }
+        }
+        state = newState
         speedKmh = (call.argument<Number>("speedKmh"))?.toDouble() ?: 0.0
         distanceKm = (call.argument<Number>("distanceKm"))?.toDouble() ?: 0.0
         durationSeconds = (call.argument<Number>("durationSeconds"))?.toInt() ?: 0
         altitudeMeters = (call.argument<Number>("altitudeMeters"))?.toDouble()
         isAutoPaused = call.argument<Boolean>("isAutoPaused") ?: false
+        latitude = (call.argument<Number>("lat"))?.toDouble()
+        longitude = (call.argument<Number>("lng"))?.toDouble()
+        headingDegrees = (call.argument<Number>("headingDegrees"))?.toDouble()
+
+        val lat = latitude
+        val lng = longitude
+        if (state != State.IDLE && lat != null && lng != null) {
+            synchronized(trail) {
+                val last = trail.lastOrNull()
+                if (last == null || last[0] != lat || last[1] != lng) {
+                    trail.add(doubleArrayOf(lat, lng))
+                    if (trail.size > MAX_TRAIL_POINTS) trail.removeAt(0)
+                }
+            }
+        }
+
         listeners.toList().forEach { it() }
     }
 

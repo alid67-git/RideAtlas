@@ -48,6 +48,11 @@
          metadata before handing it to us, so a gallery-scanned photo would
          always look location-less even when it has a geotag. -->
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION"/>
+    <!-- Required by the androidx.car.app library for RecordingScreen's live
+         map (CarMapRenderer): NAVIGATION_TEMPLATES to use NavigationTemplate
+         at all, ACCESS_SURFACE to actually get a drawable Surface for it. -->
+    <uses-permission android:name="androidx.car.app.NAVIGATION_TEMPLATES"/>
+    <uses-permission android:name="androidx.car.app.ACCESS_SURFACE"/>
     <application
         android:label="RideAtlas"
         android:name="${applicationName}"

@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.6 beta',
+    date: '2026-08-10',
+    note:
+        'Yeni: Android Auto\'da kayıt ekranı artık gerçek bir harita '
+        'gösteriyor - telefondaki gibi yön-yukarı (course-up) dönen, '
+        'kat edilen rota çizgisiyle. Karolar telefonun zaten kullandığı '
+        'ücretsiz Carto kaynağından (API anahtarı gerekmiyor). Deneysel: '
+        'gerçek bir araçta test edilemedi, sorun görürseniz bildirin.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.5 beta',
     date: '2026-08-10',
     note:

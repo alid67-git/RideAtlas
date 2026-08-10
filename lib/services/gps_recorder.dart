@@ -47,6 +47,7 @@ class GpsRecorder extends ChangeNotifier {
   DateTime? _pauseStartedAt;
   double _currentSpeedKmh = 0;
   double? _currentAltitude;
+  double? _currentHeading;
   bool _isAutoPaused = false;
   DateTime? _stationarySince;
   int? _batteryStartPercent;
@@ -69,6 +70,15 @@ class GpsRecorder extends ChangeNotifier {
   double get currentSpeedKmh => _currentSpeedKmh;
   double? get currentAltitude => _currentAltitude;
   bool get isAutoPaused => _isAutoPaused;
+
+  /// Live GPS heading in degrees (0-360, clockwise from north), or null
+  /// until the device reports one while moving. Only updated above a small
+  /// speed threshold, same as [record_screen.dart]'s own course-up map, so
+  /// it doesn't jitter while stationary.
+  double? get currentHeading => _currentHeading;
+
+  /// Most recent recorded point's position, or null before the first fix.
+  LatLng? get currentLatLng => _points.isEmpty ? null : _points.last.latLng;
 
   double get distanceKm {
     var total = 0.0;
@@ -121,6 +131,7 @@ class GpsRecorder extends ChangeNotifier {
     _pauseStartedAt = null;
     _currentSpeedKmh = 0;
     _currentAltitude = null;
+    _currentHeading = null;
     _isAutoPaused = false;
     _stationarySince = null;
     _recentSpeedsKmh.clear();
@@ -170,6 +181,7 @@ class GpsRecorder extends ChangeNotifier {
 
     final altitude = (raw['altitude'] as num?)?.toDouble() ?? 0;
     final speedMs = (raw['speed'] as num?)?.toDouble() ?? 0;
+    final bearing = (raw['bearing'] as num?)?.toDouble() ?? 0;
     _onPosition(
       Position(
         longitude: lng,
@@ -180,7 +192,7 @@ class GpsRecorder extends ChangeNotifier {
         accuracy: (raw['accuracy'] as num?)?.toDouble() ?? 0,
         altitude: altitude,
         altitudeAccuracy: 0,
-        heading: 0,
+        heading: bearing,
         headingAccuracy: 0,
         speed: speedMs,
         speedAccuracy: 0,
@@ -205,6 +217,9 @@ class GpsRecorder extends ChangeNotifier {
     _currentSpeedKmh = speedKmh;
     _currentAltitude = pos.altitude;
     final smoothedSpeedKmh = _smoothedSpeedKmh(speedKmh);
+    if (pos.heading.isFinite && pos.heading >= 0 && smoothedSpeedKmh > 3) {
+      _currentHeading = pos.heading;
+    }
 
     if (_isAutoPaused) {
       if (smoothedSpeedKmh >= _autoPauseResumeThresholdKmh) {
@@ -342,6 +357,7 @@ class GpsRecorder extends ChangeNotifier {
     _pausedDuration = Duration.zero;
     _currentSpeedKmh = 0;
     _currentAltitude = null;
+    _currentHeading = null;
     _isAutoPaused = false;
     _stationarySince = null;
     _recentSpeedsKmh.clear();

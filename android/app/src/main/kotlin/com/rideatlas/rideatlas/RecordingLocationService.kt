@@ -77,6 +77,7 @@ class RecordingLocationService : Service() {
                             "longitude" to location.longitude,
                             "altitude" to location.altitude,
                             "speed" to location.speed.toDouble(),
+                            "bearing" to location.bearing.toDouble(),
                             "timeMs" to location.time,
                             "accuracy" to location.accuracy.toDouble(),
                         )

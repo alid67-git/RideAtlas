@@ -43,6 +43,9 @@ class CarBridge {
             'durationSeconds': _recorder.elapsed.inSeconds,
             'altitudeMeters': _recorder.currentAltitude,
             'isAutoPaused': _recorder.isAutoPaused,
+            'lat': _recorder.currentLatLng?.latitude,
+            'lng': _recorder.currentLatLng?.longitude,
+            'headingDegrees': _recorder.currentHeading,
           })
           .catchError((_) {}),
     );
