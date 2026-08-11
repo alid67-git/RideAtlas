@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart';
@@ -65,15 +64,10 @@ class _RecordScreenState extends State<RecordScreen>
   /// bounding box is, so the cone has room to fan out beyond the icon.
   static const _coneMarkerScale = 2.3;
 
-  /// How many recent heading readings [_smoothHeading] averages over -
-  /// raw GPS course jitters several degrees fix-to-fix even on a straight
-  /// road, which without smoothing made the course-up map visibly wobble
-  /// side to side instead of holding steady like a real nav app.
-  static const _headingSmoothingWindow = 5;
-
   final _mapController = MapController();
   late final AnimationController _rotationController;
-  final List<double> _recentHeadings = [];
+  double? _lastAcceptedHeading;
+  DateTime? _lastAcceptedHeadingTime;
   Timer? _tickTimer;
   bool _starting = false;
   bool _saving = false;
@@ -136,6 +130,24 @@ class _RecordScreenState extends State<RecordScreen>
     });
   }
 
+  /// Switches from the info page to the map, and immediately re-syncs the
+  /// map to the current position/heading rather than waiting for the next
+  /// GPS fix (which can be several seconds away) - the map widget is torn
+  /// down while the info page is showing, so it would otherwise briefly
+  /// reappear wherever it last was instead of already being correct.
+  void _switchToMap() {
+    setState(() => _showMap = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final location = _currentLocation;
+      if (location != null && _followMe) {
+        _mapController.move(location, _mapController.camera.zoom);
+      }
+      final heading = _currentHeading;
+      if (heading != null && _followMe) _mapController.rotate(heading);
+    });
+  }
+
   /// Recenters and resumes following the live position, course-up. A repeat
   /// tap while already following is a no-op - there's nothing further to
   /// switch to.
@@ -156,25 +168,33 @@ class _RecordScreenState extends State<RecordScreen>
     if (heading != null) _rotateMapTo(heading);
   }
 
-  /// Circular moving average of the last [_headingSmoothingWindow] raw GPS
-  /// headings - a plain average breaks near the 0/360 wraparound (e.g.
-  /// averaging 350 and 10 naively gives 180, the opposite direction), so
-  /// this averages the unit vectors instead and converts back to an angle.
-  double _smoothHeading(double reading) {
-    _recentHeadings.add(reading);
-    if (_recentHeadings.length > _headingSmoothingWindow) {
-      _recentHeadings.removeAt(0);
+  /// Rejects a heading reading that implies a physically implausible turn
+  /// rate since the last accepted one (a single bad GPS course fix, not a
+  /// real maneuver), keeping the last good heading instead of snapping to
+  /// noise. Generous enough that even a tight hairpin passes straight
+  /// through - unlike averaging several readings together (this file's
+  /// previous approach), this never lags behind a genuine curve, since a
+  /// real turn is accepted the instant it's seen rather than waiting for
+  /// several more fixes to pull a moving average round to it.
+  static const _maxHeadingChangeDegPerSec = 60.0;
+
+  double _plausibleHeading(double rawHeading, DateTime time) {
+    final lastHeading = _lastAcceptedHeading;
+    final lastTime = _lastAcceptedHeadingTime;
+    if (lastHeading != null && lastTime != null) {
+      final dtSeconds = time.difference(lastTime).inMilliseconds / 1000.0;
+      if (dtSeconds > 0) {
+        var diff = (rawHeading - lastHeading) % 360;
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+        if (diff.abs() > _maxHeadingChangeDegPerSec * dtSeconds) {
+          return lastHeading;
+        }
+      }
     }
-    var sumSin = 0.0;
-    var sumCos = 0.0;
-    for (final h in _recentHeadings) {
-      final rad = h * math.pi / 180;
-      sumSin += math.sin(rad);
-      sumCos += math.cos(rad);
-    }
-    var degrees = math.atan2(sumSin, sumCos) * 180 / math.pi;
-    if (degrees < 0) degrees += 360;
-    return degrees;
+    _lastAcceptedHeading = rawHeading;
+    _lastAcceptedHeadingTime = time;
+    return rawHeading;
   }
 
   /// Animates the map's rotation to [targetHeading] instead of snapping
@@ -238,10 +258,12 @@ class _RecordScreenState extends State<RecordScreen>
           final location = LatLng(pos.latitude, pos.longitude);
           // A heading reading near 0 accuracy/while stationary is noisy
           // GPS jitter, not a real course - ignore it rather than let the
-          // map twitch around when stopped. What's left still jitters
-          // fix-to-fix, so smooth it before it ever reaches the map.
+          // map twitch around when stopped. What's left is filtered for
+          // physically-implausible single-fix jumps before it ever reaches
+          // the map, rather than averaged (averaging lagged behind genuine
+          // curves - see _plausibleHeading).
           final heading = (pos.heading >= 0 && pos.speed > 0.5)
-              ? _smoothHeading(pos.heading)
+              ? _plausibleHeading(pos.heading, pos.timestamp)
               : _currentHeading;
           setState(() {
             _currentLocation = location;
@@ -1004,7 +1026,7 @@ class _RecordScreenState extends State<RecordScreen>
                     child: _RoundIconButton(
                       icon: Icons.map_outlined,
                       tooltip: l10n.recordMapTabTooltip,
-                      onPressed: () => setState(() => _showMap = true),
+                      onPressed: _switchToMap,
                     ),
                   ),
                 ],
