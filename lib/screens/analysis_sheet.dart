@@ -1092,24 +1092,34 @@ class AnalysisStatCard extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.accentColor,
   });
 
   final IconData icon;
   final String label;
   final String value;
 
+  /// Optional per-card accent - tints the background and icon instead of
+  /// the plain neutral default, so a grid of many cards (e.g.
+  /// RecordScreen's info page) can read as distinct stats at a glance
+  /// rather than a wall of identical gray tiles.
+  final Color? accentColor;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final accent = accentColor;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
+        color: accent == null
+            ? theme.colorScheme.surfaceContainerHighest
+            : accent.withValues(alpha: theme.brightness == Brightness.dark ? 0.24 : 0.14),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          Icon(icon, color: theme.colorScheme.primary, size: 20),
+          Icon(icon, color: accent ?? theme.colorScheme.primary, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -1140,9 +1150,14 @@ class AnalysisStatCard extends StatelessWidget {
 }
 
 class AnalysisStatGrid extends StatelessWidget {
-  const AnalysisStatGrid({super.key, required this.children});
+  const AnalysisStatGrid({
+    super.key,
+    required this.children,
+    this.childAspectRatio = 2.5,
+  });
 
   final List<Widget> children;
+  final double childAspectRatio;
 
   @override
   Widget build(BuildContext context) {
@@ -1152,7 +1167,7 @@ class AnalysisStatGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 10,
       crossAxisSpacing: 10,
-      childAspectRatio: 2.5,
+      childAspectRatio: childAspectRatio,
       children: children,
     );
   }
