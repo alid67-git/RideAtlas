@@ -20,6 +20,22 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.12 beta',
+    date: '2026-08-11',
+    note:
+        'Düzeltme: v1.4.9\'da titremeyi gidermek için eklenen "son birkaç '
+        'okumanın ortalaması" yöntemi, GPS güncellemeleri seyrek geldiğinde '
+        '(~5 saniyede bir) dönemeçlerde haritanın gerçek yöne yetişmesini '
+        'yavaşlatıyordu - yol dönüyor ama harita hâlâ eski yöne bakıyor gibi '
+        'görünüyordu. Ortalama alma yerine artık hız filtresiyle aynı '
+        'mantık kullanılıyor: gerçek bir dönüş (ne kadar keskin olursa '
+        'olsun) anında uygulanıyor, sadece fiziksel olarak imkansız ani '
+        'sıçramalar (tek bir kötü GPS ölçümü) göz ardı ediliyor. Ayrıca '
+        'bilgi panelinden haritaya geçerken harita artık bir sonraki GPS '
+        'güncellemesini beklemeden anında doğru konum/yöne senkronize '
+        'ediliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.11 beta',
     date: '2026-08-11',
     note:
