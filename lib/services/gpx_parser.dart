@@ -160,6 +160,27 @@ GpxRoute buildRouteMetadata({
   );
 }
 
+/// Cumulative elevation gain/loss across [points], same simple point-to-point
+/// sum [buildRouteMetadata] uses for a saved route's own totals - so a live
+/// in-progress figure (see RecordScreen's info page) already matches what
+/// the route will show once saved, no separate reconciliation needed.
+({double gain, double loss}) computeElevationChange(List<TrackPoint> points) {
+  double gain = 0;
+  double loss = 0;
+  for (var i = 1; i < points.length; i++) {
+    final prev = points[i - 1].elevation;
+    final curr = points[i].elevation;
+    if (prev == null || curr == null) continue;
+    final diff = curr - prev;
+    if (diff > 0) {
+      gain += diff;
+    } else {
+      loss += -diff;
+    }
+  }
+  return (gain: gain, loss: loss);
+}
+
 /// Cumulative distance (km) vs elevation (m) samples, for the elevation
 /// profile chart. Points without elevation data are skipped.
 List<ElevationSample> buildElevationProfile(List<TrackPoint> points) {

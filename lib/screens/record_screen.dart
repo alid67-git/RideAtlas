@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -12,6 +14,7 @@ import 'package:provider/provider.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
+import '../models/track_point.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
@@ -19,14 +22,23 @@ import '../services/battery_info.dart';
 import '../services/battery_optimization.dart';
 import '../services/gallery_scan.dart';
 import '../services/gps_recorder.dart';
+import '../services/gpx_parser.dart';
 import '../services/track_io.dart';
 import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
+import 'analysis_sheet.dart'
+    show
+        AnalysisElevationChart,
+        AnalysisSectionTitle,
+        AnalysisStatCard,
+        AnalysisStatGrid;
 import 'location_picker_screen.dart';
 import 'map_screen.dart' show RouteMapScreen;
 import 'ride_photo_picker_screen.dart';
+
+const _speedDistance = Distance();
 
 /// True on a native Android build, where [GpsRecorder] runs a foreground
 /// service and recording survives the app being minimized. Everywhere else
@@ -51,15 +63,30 @@ class RecordScreen extends StatefulWidget {
   State<RecordScreen> createState() => _RecordScreenState();
 }
 
-class _RecordScreenState extends State<RecordScreen> {
+class _RecordScreenState extends State<RecordScreen>
+    with SingleTickerProviderStateMixin {
   /// How much bigger than the vehicle marker itself the heading cone's
   /// bounding box is, so the cone has room to fan out beyond the icon.
   static const _coneMarkerScale = 2.3;
 
+  /// How many recent heading readings [_smoothHeading] averages over -
+  /// raw GPS course jitters several degrees fix-to-fix even on a straight
+  /// road, which without smoothing made the course-up map visibly wobble
+  /// side to side instead of holding steady like a real nav app.
+  static const _headingSmoothingWindow = 5;
+
   final _mapController = MapController();
+  late final AnimationController _rotationController;
+  final List<double> _recentHeadings = [];
   Timer? _tickTimer;
   bool _starting = false;
   bool _saving = false;
+
+  /// True once recording has started and the rider has switched to the map
+  /// page (see [_buildInfoPage]/[_buildMapPage]). Recording always opens on
+  /// the info page - the map is one tap away via the toggle button in either
+  /// page's header.
+  bool _showMap = false;
 
   GpsRecorder get _recorder => context.read<GpsRecorder>();
 
@@ -97,6 +124,10 @@ class _RecordScreenState extends State<RecordScreen> {
   void initState() {
     super.initState();
     recordScreenVisible.value = true;
+    _rotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
     _startLiveLocation();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       if (event.source != MapEventSource.mapController && _followMe) {
@@ -126,7 +157,53 @@ class _RecordScreenState extends State<RecordScreen> {
   /// Rotates the map to the live heading (course-up), if known yet.
   void _applyRotation() {
     final heading = _currentHeading;
-    if (heading != null) _mapController.rotate(heading);
+    if (heading != null) _rotateMapTo(heading);
+  }
+
+  /// Circular moving average of the last [_headingSmoothingWindow] raw GPS
+  /// headings - a plain average breaks near the 0/360 wraparound (e.g.
+  /// averaging 350 and 10 naively gives 180, the opposite direction), so
+  /// this averages the unit vectors instead and converts back to an angle.
+  double _smoothHeading(double reading) {
+    _recentHeadings.add(reading);
+    if (_recentHeadings.length > _headingSmoothingWindow) {
+      _recentHeadings.removeAt(0);
+    }
+    var sumSin = 0.0;
+    var sumCos = 0.0;
+    for (final h in _recentHeadings) {
+      final rad = h * math.pi / 180;
+      sumSin += math.sin(rad);
+      sumCos += math.cos(rad);
+    }
+    var degrees = math.atan2(sumSin, sumCos) * 180 / math.pi;
+    if (degrees < 0) degrees += 360;
+    return degrees;
+  }
+
+  /// Animates the map's rotation to [targetHeading] instead of snapping
+  /// instantly, taking the shorter way round (e.g. 350deg -> 10deg animates
+  /// as +20, not -340) - reads the map's actual current rotation each call
+  /// rather than tracking a separate copy of it, so this can't drift out of
+  /// sync with the map itself.
+  void _rotateMapTo(double targetHeading) {
+    final current = _mapController.camera.rotation;
+    var delta = (targetHeading - current) % 360;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    if (delta.abs() < 0.5) return;
+    final target = current + delta;
+    final animation = Tween<double>(begin: current, end: target).animate(
+      CurvedAnimation(parent: _rotationController, curve: Curves.easeOut),
+    );
+    void listener() => _mapController.rotate(animation.value);
+    animation.addListener(listener);
+    _rotationController
+      ..stop()
+      ..reset();
+    _rotationController.forward().whenComplete(() {
+      animation.removeListener(listener);
+    });
   }
 
   Future<void> _startLiveLocation() async {
@@ -165,9 +242,10 @@ class _RecordScreenState extends State<RecordScreen> {
           final location = LatLng(pos.latitude, pos.longitude);
           // A heading reading near 0 accuracy/while stationary is noisy
           // GPS jitter, not a real course - ignore it rather than let the
-          // map twitch around when stopped.
+          // map twitch around when stopped. What's left still jitters
+          // fix-to-fix, so smooth it before it ever reaches the map.
           final heading = (pos.heading >= 0 && pos.speed > 0.5)
-              ? pos.heading
+              ? _smoothHeading(pos.heading)
               : _currentHeading;
           setState(() {
             _currentLocation = location;
@@ -180,7 +258,7 @@ class _RecordScreenState extends State<RecordScreen> {
             _mapController.move(location, _mapController.camera.zoom);
           }
           if (_followMe && heading != null) {
-            _mapController.rotate(heading);
+            _rotateMapTo(heading);
           }
         });
   }
@@ -191,6 +269,7 @@ class _RecordScreenState extends State<RecordScreen> {
     _tickTimer?.cancel();
     _liveLocationSub?.cancel();
     _mapEventSub.cancel();
+    _rotationController.dispose();
     super.dispose();
   }
 
@@ -230,7 +309,13 @@ class _RecordScreenState extends State<RecordScreen> {
     // Recording always starts with the vehicle centered on screen, even if
     // the map had been panned away from it beforehand.
     final location = _currentLocation;
-    setState(() => _followMe = true);
+    setState(() {
+      _followMe = true;
+      // Opens on the info page - the map is one tap away via its toggle
+      // button - rather than whatever page the rider happened to be
+      // looking at before tapping start.
+      _showMap = false;
+    });
     if (location != null) _mapController.move(location, 16);
     _applyRotation();
   }
@@ -456,8 +541,18 @@ class _RecordScreenState extends State<RecordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final recorder = context.watch<GpsRecorder>();
+    // Idle (not recording yet) always shows the map with the start button -
+    // the info/map split only matters once there's a ride actually in
+    // progress to show stats for.
+    if (!recorder.isIdle && !_showMap) {
+      return _buildInfoPage(context, recorder);
+    }
+    return _buildMapPage(context, recorder);
+  }
+
+  Widget _buildMapPage(BuildContext context, GpsRecorder recorder) {
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       body: Stack(
@@ -487,6 +582,14 @@ class _RecordScreenState extends State<RecordScreen> {
                       padding: EdgeInsets.only(top: 4),
                       child: SatelliteCountBadge(),
                     ),
+                    if (!recorder.isIdle) ...[
+                      const SizedBox(width: 8),
+                      _RoundIconButton(
+                        icon: Icons.dashboard_outlined,
+                        tooltip: l10n.recordInfoTabTooltip,
+                        onPressed: () => setState(() => _showMap = false),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -553,13 +656,7 @@ class _RecordScreenState extends State<RecordScreen> {
       );
     }
 
-    final d = recorder.elapsed;
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    final s = d.inSeconds % 60;
-    final durationStr = h > 0
-        ? '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
-        : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    final durationStr = _formatDuration(recorder.elapsed);
     final altitude = recorder.currentAltitude;
 
     return Column(
@@ -677,6 +774,228 @@ class _RecordScreenState extends State<RecordScreen> {
         ],
       ],
     );
+  }
+
+  static String _formatDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    final s = d.inSeconds % 60;
+    return h > 0
+        ? '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
+        : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  /// The default page while recording/paused: a scrollable dashboard of
+  /// every stat a rider might want mid-ride (duration breakdown, speed,
+  /// climb/descent, ...) plus short speed/elevation-over-time charts - the
+  /// map itself is one tap away via the header's toggle button. See
+  /// [_buildMapPage] for the map.
+  Widget _buildInfoPage(BuildContext context, GpsRecorder recorder) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final points = recorder.points;
+    final speedStats = buildSpeedStats(points);
+    final elevationChange = computeElevationChange(points);
+    final elevationSamples = buildElevationProfile(points);
+    final speedSpots = _speedTimeSpots(points);
+    final altitude = recorder.currentAltitude;
+
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              child: Row(
+                children: [
+                  _RoundIconButton(
+                    icon: Icons.arrow_back,
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const Spacer(),
+                  const SatelliteCountBadge(),
+                  const SizedBox(width: 8),
+                  _RoundIconButton(
+                    icon: Icons.map_outlined,
+                    tooltip: l10n.recordMapTabTooltip,
+                    onPressed: () => setState(() => _showMap = true),
+                  ),
+                ],
+              ),
+            ),
+            if (recorder.isAutoPaused)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    l10n.autoPausedLabel,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: theme.colorScheme.onTertiaryContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                children: [
+                  Center(
+                    child: Column(
+                      children: [
+                        Text(
+                          _formatDuration(
+                            recorder.totalDuration ?? Duration.zero,
+                          ),
+                          style: theme.textTheme.displayMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          l10n.totalDurationLabel,
+                          style: theme.textTheme.labelLarge,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  AnalysisStatGrid(
+                    children: [
+                      AnalysisStatCard(
+                        icon: Icons.speed,
+                        label: l10n.speedLabel,
+                        value:
+                            '${recorder.currentSpeedKmh.toStringAsFixed(0)} km/h',
+                      ),
+                      AnalysisStatCard(
+                        icon: Icons.route,
+                        label: l10n.distance,
+                        value: '${recorder.distanceKm.toStringAsFixed(2)} km',
+                      ),
+                      AnalysisStatCard(
+                        icon: Icons.timelapse,
+                        label: l10n.netDurationLabel,
+                        value: _formatDuration(recorder.elapsed),
+                      ),
+                      AnalysisStatCard(
+                        icon: Icons.pause_circle_outline,
+                        label: l10n.restDurationLabel,
+                        value: _formatDuration(recorder.restDuration),
+                      ),
+                      AnalysisStatCard(
+                        icon: Icons.equalizer,
+                        label: l10n.averageSpeedLabel,
+                        value: speedStats.averageMovingKmh == null
+                            ? '—'
+                            : '${speedStats.averageMovingKmh!.toStringAsFixed(1)} km/h',
+                      ),
+                      AnalysisStatCard(
+                        icon: Icons.bolt,
+                        label: l10n.maxSpeed,
+                        value: speedStats.maxKmh == null
+                            ? '—'
+                            : '${speedStats.maxKmh!.toStringAsFixed(1)} km/h',
+                      ),
+                      AnalysisStatCard(
+                        icon: Icons.terrain,
+                        label: l10n.currentAltitudeLabel,
+                        value: altitude == null ? '—' : '${altitude.round()} m',
+                      ),
+                      AnalysisStatCard(
+                        icon: Icons.trending_up,
+                        label: l10n.climb,
+                        value: '${elevationChange.gain.round()} m',
+                      ),
+                      AnalysisStatCard(
+                        icon: Icons.trending_down,
+                        label: l10n.descent,
+                        value: '${elevationChange.loss.round()} m',
+                      ),
+                    ],
+                  ),
+                  if (speedSpots.length >= 2) ...[
+                    const SizedBox(height: 20),
+                    AnalysisSectionTitle(
+                      icon: Icons.speed,
+                      title: l10n.speedChartTitle,
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 140,
+                      child: _SpeedTimeChart(spots: speedSpots),
+                    ),
+                  ],
+                  if (elevationSamples.length >= 2) ...[
+                    const SizedBox(height: 20),
+                    AnalysisSectionTitle(
+                      icon: Icons.terrain,
+                      title: l10n.elevationChartTitle,
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 140,
+                      child: AnalysisElevationChart(samples: elevationSamples),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: _buildControls(l10n, recorder),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Per-segment speed samples (minutes since ride start, km/h) for the
+  /// speed-over-time chart, using the same plausibility filter
+  /// [buildSpeedStats] does (ignores stopped/GPS-jitter and implausible
+  /// spikes) so the chart and the max/average speed stats above it always
+  /// agree. Downsampled to a bounded point count so the chart stays cheap
+  /// to rebuild every second even on a multi-hour ride.
+  List<FlSpot> _speedTimeSpots(List<TrackPoint> points) {
+    const minMovingKmh = 1.0;
+    const maxPlausibleKmh = 250.0;
+    if (points.length < 2) return const [];
+    final start = points.first.time;
+    if (start == null) return const [];
+
+    final spots = <FlSpot>[];
+    for (var i = 1; i < points.length; i++) {
+      final prev = points[i - 1];
+      final curr = points[i];
+      final t0 = prev.time;
+      final t1 = curr.time;
+      if (t0 == null || t1 == null) continue;
+      final dtSeconds = t1.difference(t0).inMilliseconds / 1000.0;
+      if (dtSeconds < 1) continue;
+      final meters = _speedDistance(prev.latLng, curr.latLng);
+      final kmh = (meters / 1000.0) / (dtSeconds / 3600.0);
+      if (kmh < minMovingKmh || kmh > maxPlausibleKmh) continue;
+      spots.add(FlSpot(t1.difference(start).inSeconds / 60.0, kmh));
+    }
+
+    const maxChartPoints = 200;
+    if (spots.length <= maxChartPoints) return spots;
+    final step = (spots.length / maxChartPoints).ceil();
+    return [for (var i = 0; i < spots.length; i += step) spots[i]];
   }
 
   /// Thin vertical separator between the duration/distance/altitude
@@ -846,10 +1165,15 @@ class _StatColumn extends StatelessWidget {
 }
 
 class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, required this.onPressed});
+  const _RoundIconButton({
+    required this.icon,
+    required this.onPressed,
+    this.tooltip,
+  });
 
   final IconData icon;
   final VoidCallback? onPressed;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -857,7 +1181,84 @@ class _RoundIconButton extends StatelessWidget {
       color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
       shape: const CircleBorder(),
       elevation: 2,
-      child: IconButton(icon: Icon(icon), onPressed: onPressed),
+      child: IconButton(
+        icon: Icon(icon),
+        tooltip: tooltip,
+        onPressed: onPressed,
+      ),
+    );
+  }
+}
+
+/// Speed-over-time line chart for [RecordScreen]'s info page - same visual
+/// language as [AnalysisElevationChart], just plotting km/h against minutes
+/// since the ride started instead of elevation against distance.
+class _SpeedTimeChart extends StatelessWidget {
+  const _SpeedTimeChart({required this.spots});
+
+  final List<FlSpot> spots;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    final maxX = spots.last.x;
+    final theme = Theme.of(context);
+
+    return LineChart(
+      LineChartData(
+        minX: 0,
+        maxX: maxX == 0 ? 1 : maxX,
+        minY: 0,
+        maxY: maxY + 10,
+        gridData: const FlGridData(drawVerticalLine: false),
+        borderData: FlBorderData(show: false),
+        titlesData: FlTitlesData(
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 40,
+              getTitlesWidget: (v, meta) {
+                return Text(
+                  '${v.round()}',
+                  style: theme.textTheme.bodySmall,
+                );
+              },
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 24,
+              getTitlesWidget: (v, meta) {
+                return Text(
+                  '${v.round()}dk',
+                  style: theme.textTheme.bodySmall,
+                );
+              },
+            ),
+          ),
+        ),
+        lineTouchData: const LineTouchData(enabled: true),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            barWidth: 2,
+            color: theme.colorScheme.primary,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              color: theme.colorScheme.primary.withValues(alpha: 0.15),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
