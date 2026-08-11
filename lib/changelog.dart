@@ -20,6 +20,24 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.15 beta',
+    date: '2026-08-11',
+    note:
+        'KRİTİK düzeltme: haritadaki araç işaretçisi hâlâ yukarı bakmıyordu '
+        '- gerçek sebep, flutter_map\'in Marker bileşeninin varsayılan '
+        'olarak haritayla BİRLİKTE dönmesiydi (rotate:true set edilmemişti), '
+        'yani harita yön-takip için döndükçe işaretçi de onunla birlikte '
+        'dönüp ekranda yanlış açıda kalıyordu. Artık işaretçi haritanın '
+        'dönüşüne karşı sabitlenip her zaman yukarı bakıyor. Ayrıca: harita '
+        'sayfasındaki hız/süre/mesafe/yükseklik kutularının yazıları en az '
+        '2 kat büyütüldü; bilgi sayfasındaki alt kartların değerleri artık '
+        'aktif sürüş süresi kutusuyla aynı büyüklükte (gerekirse sayfa '
+        'kayabilir); bilgi sayfasının rengi kırmızı ağırlıklı temadan mavi-'
+        'beyaz ağırlıklı bir palete çevrildi; hız grafiğindeki sürüşün '
+        'başındaki anlamsız boş bölge kaldırıldı, grafik artık gerçek '
+        'hareketin başladığı noktadan başlıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.14 beta',
     date: '2026-08-11',
     note:

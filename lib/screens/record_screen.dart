@@ -710,8 +710,8 @@ class _RecordScreenState extends State<RecordScreen>
               // everything else is secondary and stays small.
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 6,
+                  horizontal: 16,
+                  vertical: 8,
                 ),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surface.withValues(alpha: 0.92),
@@ -724,14 +724,21 @@ class _RecordScreenState extends State<RecordScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // At least double the old headlineMedium size - this is
+                    // the number a rider needs to read at a glance while
+                    // moving, the old size was too small for that.
                     Text(
                       recorder.currentSpeedKmh.toStringAsFixed(0),
-                      style: theme.textTheme.headlineMedium?.copyWith(
+                      style: const TextStyle(
+                        fontSize: 62,
                         fontWeight: FontWeight.w800,
                         height: 1,
                       ),
                     ),
-                    Text(l10n.speedLabel, style: theme.textTheme.labelSmall),
+                    Text(
+                      l10n.speedLabel,
+                      style: theme.textTheme.titleSmall,
+                    ),
                   ],
                 ),
               ),
@@ -820,11 +827,16 @@ class _RecordScreenState extends State<RecordScreen>
   /// The single accent every card/tile on the info page shares - a
   /// deliberate departure from the earlier per-stat rainbow of colors
   /// (blue/orange/teal/pink/brown/green/red/...), which read as busy and
-  /// carnival-like rather than a coherent dashboard. One consistent hue
-  /// (the app's own primary color, so it also matches the speed number and
-  /// chart lines) plus a subtle glass/border treatment on every card is
-  /// what actually reads as "modern" rather than "colorful".
-  Color _cardAccent(ThemeData theme) => theme.colorScheme.primary;
+  /// carnival-like rather than a coherent dashboard. Deliberately a fixed
+  /// blue rather than [ThemeData.colorScheme.primary] - the app's own seed
+  /// color is red, so the theme's primary/secondary render as a pink/maroon
+  /// wash in dark mode, which is exactly the "everything is reddish" look
+  /// requested to move away from in favor of a cooler, blue-white weighted
+  /// dashboard (the app's other red accents - the record button, discard
+  /// button - are untouched, so red hasn't disappeared entirely).
+  static const _infoAccent = Color(0xFF4FA3FF);
+
+  Color _cardAccent(ThemeData theme) => _infoAccent;
 
   /// The default page while recording/paused: speed front and center (the
   /// one number a rider actually cares about mid-ride), duration/rest right
@@ -898,7 +910,7 @@ class _RecordScreenState extends State<RecordScreen>
                     ),
                   ),
                 Expanded(
-                  child: Padding(
+                  child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       children: [
@@ -974,7 +986,7 @@ class _RecordScreenState extends State<RecordScreen>
                         ),
                         const SizedBox(height: 8),
                         AnalysisStatGrid(
-                          childAspectRatio: 3.4,
+                          childAspectRatio: 2.3,
                           children: [
                             AnalysisStatCard(
                               icon: Icons.route,
@@ -982,12 +994,14 @@ class _RecordScreenState extends State<RecordScreen>
                               value:
                                   '${recorder.distanceKm.toStringAsFixed(2)} km',
                               accentColor: accent,
+                              large: true,
                             ),
                             AnalysisStatCard(
                               icon: Icons.pause_circle_outline,
                               label: l10n.restDurationLabel,
                               value: _formatDuration(recorder.restDuration),
                               accentColor: accent,
+                              large: true,
                             ),
                             AnalysisStatCard(
                               icon: Icons.equalizer,
@@ -996,6 +1010,7 @@ class _RecordScreenState extends State<RecordScreen>
                                   ? '—'
                                   : '${speedStats.averageMovingKmh!.toStringAsFixed(1)} km/h',
                               accentColor: accent,
+                              large: true,
                             ),
                             AnalysisStatCard(
                               icon: Icons.bolt,
@@ -1004,6 +1019,7 @@ class _RecordScreenState extends State<RecordScreen>
                                   ? '—'
                                   : '${speedStats.maxKmh!.toStringAsFixed(1)} km/h',
                               accentColor: accent,
+                              large: true,
                             ),
                             AnalysisStatCard(
                               icon: Icons.terrain,
@@ -1012,24 +1028,33 @@ class _RecordScreenState extends State<RecordScreen>
                                   ? '—'
                                   : '${altitude.round()} m',
                               accentColor: accent,
+                              large: true,
                             ),
                             AnalysisStatCard(
                               icon: Icons.trending_up,
                               label: l10n.climb,
                               value: '${elevationChange.gain.round()} m',
                               accentColor: accent,
+                              large: true,
                             ),
                             AnalysisStatCard(
                               icon: Icons.trending_down,
                               label: l10n.descent,
                               value: '${elevationChange.loss.round()} m',
                               accentColor: accent,
+                              large: true,
                             ),
                           ],
                         ),
                         if (hasSpeedChart || hasElevationChart) ...[
                           const SizedBox(height: 8),
-                          Expanded(
+                          // Fixed height rather than Expanded - this whole
+                          // section now lives inside a SingleChildScrollView
+                          // (needed once the stat cards above grew this
+                          // much), and a scroll view can't hand out
+                          // unbounded height the way the old Expanded did.
+                          SizedBox(
+                            height: 160,
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
@@ -1040,6 +1065,7 @@ class _RecordScreenState extends State<RecordScreen>
                                       title: l10n.speedChartTitle,
                                       child: _SpeedTimeChart(
                                         spots: speedSpots,
+                                        accent: accent,
                                       ),
                                     ),
                                   ),
@@ -1053,12 +1079,14 @@ class _RecordScreenState extends State<RecordScreen>
                                       child: AnalysisElevationChart(
                                         samples: elevationSamples,
                                         showPeakMarkers: true,
+                                        lineColor: accent,
                                       ),
                                     ),
                                   ),
                               ],
                             ),
                           ),
+                          const SizedBox(height: 8),
                         ],
                       ],
                     ),
@@ -1076,19 +1104,17 @@ class _RecordScreenState extends State<RecordScreen>
     );
   }
 
-  /// Per-segment speed samples (minutes since ride start, km/h) for the
-  /// speed-over-time chart, using the same plausibility filter
-  /// [buildSpeedStats] does (ignores stopped/GPS-jitter and implausible
-  /// spikes) so the chart and the max/average speed stats above it always
-  /// agree. Downsampled to a bounded point count so the chart stays cheap
-  /// to rebuild every second even on a multi-hour ride.
+  /// Per-segment speed samples (minutes since the first *moving* sample,
+  /// km/h) for the speed-over-time chart, using the same plausibility
+  /// filter [buildSpeedStats] does (ignores stopped/GPS-jitter and
+  /// implausible spikes) so the chart and the max/average speed stats above
+  /// it always agree. Downsampled to a bounded point count so the chart
+  /// stays cheap to rebuild every second even on a multi-hour ride.
   List<FlSpot> _speedTimeSpots(List<TrackPoint> points) {
     const minMovingKmh = 1.0;
     const maxPlausibleKmh = 250.0;
     const maxAccelerationKmhPerSec = 30.0;
     if (points.length < 2) return const [];
-    final start = points.first.time;
-    if (start == null) return const [];
 
     final spots = <FlSpot>[];
     double? lastAcceptedKmh;
@@ -1118,7 +1144,18 @@ class _RecordScreenState extends State<RecordScreen>
       }
       lastAcceptedKmh = kmh;
       lastAcceptedTime = t1;
-      spots.add(FlSpot(t1.difference(start).inSeconds / 60.0, kmh));
+      // Minutes since t1 for now - shifted below once the first accepted
+      // sample's own time is known, so the chart starts right where actual
+      // riding does instead of at whenever recording began. A ride that
+      // sits still (or in a pre-departure rest) for a few minutes before
+      // moving used to leave a blank, meaningless stretch at the start of
+      // this exact chart.
+      spots.add(FlSpot(t1.millisecondsSinceEpoch / 60000.0, kmh));
+    }
+    if (spots.isEmpty) return spots;
+    final offset = spots.first.x;
+    for (var i = 0; i < spots.length; i++) {
+      spots[i] = FlSpot(spots[i].x - offset, spots[i].y);
     }
 
     const maxChartPoints = 200;
@@ -1223,6 +1260,17 @@ class _RecordScreenState extends State<RecordScreen>
                 width: markerSize * _coneMarkerScale,
                 height: markerSize * _coneMarkerScale,
                 alignment: Alignment.center,
+                // The actual root cause of the vehicle icon appearing to
+                // point sideways instead of up: flutter_map's Marker
+                // defaults to rotate:false, which means it rotates *with*
+                // the map's own content (tiles, roads) instead of staying
+                // screen-fixed. Since the map is deliberately rotated to
+                // keep the direction of travel pointing up (course-up), an
+                // embedded marker was being dragged along by that same
+                // rotation instead of staying upright - counter-rotating it
+                // is what actually keeps it pointing up regardless of the
+                // map's current rotation.
+                rotate: true,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
@@ -1272,9 +1320,11 @@ class _StatRow extends StatelessWidget {
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelSmall,
+          style: theme.textTheme.bodyMedium,
         ),
         const Spacer(),
+        // At least double the old titleSmall size - readable at a glance
+        // while riding was the whole point of this box.
         Flexible(
           child: FittedBox(
             fit: BoxFit.scaleDown,
@@ -1282,9 +1332,7 @@ class _StatRow extends StatelessWidget {
             child: Text(
               value,
               maxLines: 1,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
             ),
           ),
         ),
@@ -1370,7 +1418,7 @@ class _MiniChart extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, size: 16, color: theme.colorScheme.primary),
+            Icon(icon, size: 16, color: _RecordScreenState._infoAccent),
             const SizedBox(width: 4),
             Text(title, style: theme.textTheme.labelMedium),
           ],
@@ -1393,12 +1441,17 @@ class _InfoPageBackground extends StatelessWidget {
 
   final Animation<double> animation;
 
+  // Fixed blue/white glow colors rather than the theme's own primary/
+  // secondary - see [_RecordScreenState._infoAccent] for why: the app's
+  // red seed color renders as pink/maroon in dark mode, which is the
+  // "lunapark" look this whole page moved away from.
+  static const _glowBlue = Color(0xFF4FA3FF);
+  static const _glowWhite = Color(0xFFCFE8FF);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
-    final primary = theme.colorScheme.primary;
-    final secondary = theme.colorScheme.secondary;
 
     return AnimatedBuilder(
       animation: animation,
@@ -1422,14 +1475,14 @@ class _InfoPageBackground extends StatelessWidget {
                   )!,
                   colors: dark
                       ? const [
-                          Color(0xFF0D0E1C),
-                          Color(0xFF16132E),
-                          Color(0xFF0A0C18),
+                          Color(0xFF0A0E1C),
+                          Color(0xFF0F2038),
+                          Color(0xFF090C14),
                         ]
                       : const [
-                          Color(0xFFF1EEFF),
-                          Color(0xFFE9F2FF),
-                          Color(0xFFFBFBFF),
+                          Color(0xFFE8F2FF),
+                          Color(0xFFEFF6FF),
+                          Color(0xFFFFFFFF),
                         ],
                 ),
               ),
@@ -1438,7 +1491,7 @@ class _InfoPageBackground extends StatelessWidget {
               top: -100 + 20 * t,
               left: -80,
               child: _GlowBlob(
-                color: primary,
+                color: _glowBlue,
                 size: 280,
                 opacity: (dark ? 0.28 : 0.18) + 0.08 * t,
               ),
@@ -1447,9 +1500,9 @@ class _InfoPageBackground extends StatelessWidget {
               bottom: -120,
               right: -90 + 20 * t,
               child: _GlowBlob(
-                color: secondary,
+                color: _glowWhite,
                 size: 320,
-                opacity: (dark ? 0.22 : 0.14) + 0.06 * (1 - t),
+                opacity: (dark ? 0.16 : 0.20) + 0.05 * (1 - t),
               ),
             ),
           ],
@@ -1530,9 +1583,10 @@ class _RoundIconButton extends StatelessWidget {
 /// be no way to tell "how fast did I actually go" from the chart at a
 /// glance.
 class _SpeedTimeChart extends StatelessWidget {
-  const _SpeedTimeChart({required this.spots});
+  const _SpeedTimeChart({required this.spots, required this.accent});
 
   final List<FlSpot> spots;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -1550,20 +1604,20 @@ class _SpeedTimeChart extends StatelessWidget {
       spots: spots,
       isCurved: true,
       barWidth: 2,
-      color: theme.colorScheme.primary,
+      color: accent,
       dotData: FlDotData(
         show: true,
         checkToShowDot: (spot, bar) => spot == maxSpot,
         getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(
           radius: 4,
-          color: theme.colorScheme.primary,
+          color: accent,
           strokeWidth: 2,
           strokeColor: theme.colorScheme.surface,
         ),
       ),
       belowBarData: BarAreaData(
         show: true,
-        color: theme.colorScheme.primary.withValues(alpha: 0.15),
+        color: accent.withValues(alpha: 0.15),
       ),
     );
 
@@ -1615,14 +1669,13 @@ class _SpeedTimeChart extends StatelessWidget {
               vertical: 3,
             ),
             tooltipMargin: 8,
-            getTooltipColor: (_) =>
-                theme.colorScheme.primary.withValues(alpha: 0.92),
+            getTooltipColor: (_) => accent.withValues(alpha: 0.92),
             getTooltipItems: (touchedSpots) => touchedSpots
                 .map(
                   (s) => LineTooltipItem(
                     '${s.y.round()} km/h',
-                    TextStyle(
-                      color: theme.colorScheme.onPrimary,
+                    const TextStyle(
+                      color: Colors.white,
                       fontWeight: FontWeight.w700,
                       fontSize: 11,
                     ),
