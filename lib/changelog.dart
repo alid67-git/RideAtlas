@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.11 beta',
+    date: '2026-08-11',
+    note:
+        'Düzeltme: GPS ara sıra tek bir kötü ölçümle fiziksel olarak '
+        'imkansız bir hız sıçraması veriyordu (ör. 95 km/s seyirde aniden '
+        '200 km/s görünüp hemen eski hıza dönmesi) - hız grafiğinde ve '
+        'maks. hız istatistiğinde belirgin dikenler olarak görünüyordu. '
+        'Artık son kabul edilen okumaya göre saniyede ~30 km/s\'i aşan '
+        'imkansız hızlanma/yavaşlamalar (gerçek bir motorun '
+        'yapamayacağı kadar ani) hem canlı hız göstergesinde hem de hız '
+        'grafiği/istatistik hesaplamalarında göz ardı ediliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.10 beta',
     date: '2026-08-11',
     note:

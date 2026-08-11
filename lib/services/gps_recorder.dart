@@ -153,6 +153,8 @@ class GpsRecorder extends ChangeNotifier {
     _isAutoPaused = false;
     _stationarySince = null;
     _recentSpeedsKmh.clear();
+    _lastAcceptedSpeedKmh = null;
+    _lastAcceptedSpeedTime = null;
     _batteryStartPercent = await currentBatteryPercent();
     _state = RecordingState.recording;
     notifyListeners();
@@ -226,12 +228,37 @@ class GpsRecorder extends ChangeNotifier {
     return _recentSpeedsKmh.reduce((a, b) => a + b) / _recentSpeedsKmh.length;
   }
 
+  /// Rejects a speed reading that implies physically implausible
+  /// acceleration/deceleration since the last accepted one (a GPS glitch -
+  /// a single bad fix or a momentary Doppler misread - not real riding),
+  /// keeping the last good value instead of a spike. Generous enough
+  /// (~8 m/s^2) to allow genuine hard acceleration/braking through.
+  static const _maxAccelerationKmhPerSec = 30.0;
+  double? _lastAcceptedSpeedKmh;
+  DateTime? _lastAcceptedSpeedTime;
+
+  double _plausibleSpeedKmh(double rawKmh, DateTime time) {
+    final lastKmh = _lastAcceptedSpeedKmh;
+    final lastTime = _lastAcceptedSpeedTime;
+    if (lastKmh != null && lastTime != null) {
+      final dtSeconds = time.difference(lastTime).inMilliseconds / 1000.0;
+      if (dtSeconds > 0 &&
+          (rawKmh - lastKmh).abs() > _maxAccelerationKmhPerSec * dtSeconds) {
+        return lastKmh;
+      }
+    }
+    _lastAcceptedSpeedKmh = rawKmh;
+    _lastAcceptedSpeedTime = time;
+    return rawKmh;
+  }
+
   void _onPosition(Position pos) {
     if (_state != RecordingState.recording) return;
 
-    final speedKmh = (pos.speed.isFinite && pos.speed > 0)
+    final rawSpeedKmh = (pos.speed.isFinite && pos.speed > 0)
         ? pos.speed * 3.6
         : 0.0;
+    final speedKmh = _plausibleSpeedKmh(rawSpeedKmh, pos.timestamp);
     _currentSpeedKmh = speedKmh;
     _currentAltitude = pos.altitude;
     final smoothedSpeedKmh = _smoothedSpeedKmh(speedKmh);
@@ -379,6 +406,8 @@ class GpsRecorder extends ChangeNotifier {
     _isAutoPaused = false;
     _stationarySince = null;
     _recentSpeedsKmh.clear();
+    _lastAcceptedSpeedKmh = null;
+    _lastAcceptedSpeedTime = null;
     _batteryStartPercent = null;
     _state = RecordingState.idle;
     notifyListeners();
