@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.9 beta',
+    date: '2026-08-11',
+    note:
+        'Kayıt ekranı iki sayfaya ayrıldı: kayıt başlar başlamaz artık '
+        'önce toplam süre, aktif sürüş süresi, mola süresi, ortalama/maks. '
+        'hız, toplam çıkış/iniş ve hız/yükseklik grafiklerinin olduğu bir '
+        'bilgi paneli açılıyor; sağ üstteki düğmeyle haritaya geçilebiliyor. '
+        'Ayrıca haritanın yön-yukarı dönüşü artık sağa sola titremiyor - '
+        'son birkaç GPS yönünün ortalaması alınıp yumuşak şekilde '
+        'döndürülüyor (navigasyon uygulamaları gibi).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.8 beta',
     date: '2026-08-11',
     note:

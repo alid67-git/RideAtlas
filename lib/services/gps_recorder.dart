@@ -88,6 +88,9 @@ class GpsRecorder extends ChangeNotifier {
     return total / 1000;
   }
 
+  /// Active/moving duration - wall-clock time since [start] minus every
+  /// pause (manual or auto-pause). This is what most riders mean by "how
+  /// long have I actually been riding".
   Duration get elapsed {
     final started = _startedAt;
     if (started == null) return Duration.zero;
@@ -95,6 +98,21 @@ class GpsRecorder extends ChangeNotifier {
         ? _pausedDuration + DateTime.now().difference(_pauseStartedAt!)
         : _pausedDuration;
     return DateTime.now().difference(started) - pausedSoFar;
+  }
+
+  /// Raw wall-clock time since [start], including every stop/pause - unlike
+  /// [elapsed]. Null while idle.
+  Duration? get totalDuration {
+    final started = _startedAt;
+    return started == null ? null : DateTime.now().difference(started);
+  }
+
+  /// Time spent paused/stopped (manual pause + auto-pause) since [start].
+  Duration get restDuration {
+    final total = totalDuration;
+    if (total == null) return Duration.zero;
+    final diff = total - elapsed;
+    return diff.isNegative ? Duration.zero : diff;
   }
 
   Future<RecordingStartError?> start({
