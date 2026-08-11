@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.10 beta',
+    date: '2026-08-11',
+    note:
+        'Bilgi paneli geri bildirimlere göre yeniden düzenlendi: '
+        'en üstte artık büyük puntoyla anlık hız var, hemen altında aktif '
+        'sürüş süresi ve toplam süre yan yana; onların altında renkli, '
+        'daha kompakt bir istatistik ızgarası (mesafe, mola, ort./maks. '
+        'hız, yükseklik, çıkış/iniş); en altta da hız ve yükseklik '
+        'grafikleri yan yana - hepsi kaydırma olmadan tek ekrana sığıyor. '
+        'Harita düğmesi sağ üstten sol alta taşındı.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.9 beta',
     date: '2026-08-11',
     note:
