@@ -1129,31 +1129,60 @@ class AnalysisStatCard extends StatelessWidget {
             : Border.all(color: accent.withValues(alpha: 0.35)),
       ),
       child: Row(
+        // large cards (RecordScreen's info page) center their whole
+        // icon+text block as a unit instead of hugging the left edge -
+        // requested so a grid of short numeric values reads as tidy rather
+        // than ragged. The Analysis sheet's own denser cards (large:false)
+        // keep the original left-aligned, Expanded+ellipsis layout.
+        mainAxisAlignment: large ? MainAxisAlignment.center : MainAxisAlignment.start,
+        mainAxisSize: large ? MainAxisSize.min : MainAxisSize.max,
         children: [
           Icon(icon, color: accent ?? theme.colorScheme.primary, size: large ? 26 : 20),
           SizedBox(width: large ? 10 : 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  label,
-                  style: large ? theme.textTheme.bodyMedium : theme.textTheme.bodySmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  value,
-                  style: large
-                      ? theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)
-                      : theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+          if (large)
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    value,
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            )
+          else
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.bodySmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    value,
+                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
