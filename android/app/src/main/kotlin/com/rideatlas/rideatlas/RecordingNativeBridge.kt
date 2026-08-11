@@ -121,6 +121,24 @@ object RecordingNativeBridge {
                 result.success(if (index <= 0) all else all.drop(index))
             }
             "isRunning" -> result.success(RecordingLocationService.isRunning)
+            "getOrphanedPoints" -> {
+                // Points left on disk from a recording the app never got to
+                // stop/discard itself - both of those paths clean up their
+                // own file, so a leftover one (while nothing is currently
+                // running) means the process was killed mid-ride. See
+                // RecordingLocationService.onStartCommand's null-action
+                // comment for the restart-vs-fresh-start distinction this
+                // relies on.
+                if (RecordingLocationService.isRunning) {
+                    result.success(emptyList<Map<String, Any>>())
+                } else {
+                    result.success(RecordingLocationService.readPointsFromFile(ctx))
+                }
+            }
+            "clearOrphanedPoints" -> {
+                RecordingLocationService.clearPoints(ctx)
+                result.success(null)
+            }
             "discard" -> {
                 val intent =
                     Intent(ctx, RecordingLocationService::class.java).apply {

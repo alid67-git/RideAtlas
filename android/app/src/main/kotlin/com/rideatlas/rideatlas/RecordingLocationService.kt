@@ -62,6 +62,34 @@ class RecordingLocationService : Service() {
 
         fun pointsFile(context: Context): File =
             File(context.filesDir, POINTS_FILE)
+
+        /** Parses the append-only points file without touching [points] or
+         * [isRunning] - used both by the resume-after-restart path below and
+         * by [RecordingNativeBridge]'s orphan-recovery check, which must be
+         * able to inspect a leftover file while nothing is running. */
+        fun readPointsFromFile(context: Context): List<Map<String, Any>> {
+            val restored = mutableListOf<Map<String, Any>>()
+            try {
+                pointsFile(context).forEachLine { line ->
+                    if (line.isBlank()) return@forEachLine
+                    val obj = JSONObject(line)
+                    restored.add(
+                        mapOf(
+                            "latitude" to obj.optDouble("latitude"),
+                            "longitude" to obj.optDouble("longitude"),
+                            "altitude" to obj.optDouble("altitude"),
+                            "speed" to obj.optDouble("speed"),
+                            "bearing" to obj.optDouble("bearing", 0.0),
+                            "timeMs" to obj.optLong("timeMs"),
+                            "accuracy" to obj.optDouble("accuracy"),
+                        ),
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to read persisted points", e)
+            }
+            return restored
+        }
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
@@ -259,31 +287,11 @@ class RecordingLocationService : Service() {
      * [onStartCommand]) - the in-memory list is empty again on a fresh
      * process, but the file still has every fix collected before the kill. */
     private fun reloadPointsFromFile() {
-        try {
-            val restored = mutableListOf<Map<String, Any>>()
-            pointsFile(this).forEachLine { line ->
-                if (line.isBlank()) return@forEachLine
-                val obj = JSONObject(line)
-                restored.add(
-                    mapOf(
-                        "latitude" to obj.optDouble("latitude"),
-                        "longitude" to obj.optDouble("longitude"),
-                        "altitude" to obj.optDouble("altitude"),
-                        "speed" to obj.optDouble("speed"),
-                        "bearing" to obj.optDouble("bearing", 0.0),
-                        "timeMs" to obj.optLong("timeMs"),
-                        "accuracy" to obj.optDouble("accuracy"),
-                    ),
-                )
-            }
-            synchronized(points) {
-                points.clear()
-                points.addAll(restored)
-            }
-            Log.i(TAG, "Recovered ${restored.size} points from an interrupted recording")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to reload persisted points, starting fresh", e)
-            clearPoints(this)
+        val restored = readPointsFromFile(this)
+        synchronized(points) {
+            points.clear()
+            points.addAll(restored)
         }
+        Log.i(TAG, "Recovered ${restored.size} points from an interrupted recording")
     }
 }

@@ -198,6 +198,8 @@
   "gpsOfflineRecordingHint": "GPS yok — kayıt offline başlayacak",
   "gpsOnlineStatus": "GPS hazır (±{accuracy} m)",
   "@gpsOnlineStatus": {"placeholders": {"accuracy": {"type": "String"}}},
+  "orphanedRecordingRecovered": "Kesintiye uğrayan bir kayıt kurtarıldı: {routeName}",
+  "@orphanedRecordingRecovered": {"placeholders": {"routeName": {"type": "String"}}},
   "showPhotoPinsTooltip": "Fotoğraf/video konumlarını göster",
   "hidePhotoPinsTooltip": "Fotoğraf/video konumlarını gizle",
   "ridePhotoPickerTitle": "Sürüşte çekilen fotoğraflar",
