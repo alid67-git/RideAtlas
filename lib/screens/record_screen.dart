@@ -59,13 +59,20 @@ class RecordScreen extends StatefulWidget {
 }
 
 class _RecordScreenState extends State<RecordScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   /// How much bigger than the vehicle marker itself the heading cone's
   /// bounding box is, so the cone has room to fan out beyond the icon.
   static const _coneMarkerScale = 2.3;
 
   final _mapController = MapController();
   late final AnimationController _rotationController;
+
+  /// Drives the info page's slowly-breathing background gradient/glow - a
+  /// single continuous ticker (hence [TickerProviderStateMixin] instead of
+  /// [SingleTickerProviderStateMixin], since [_rotationController] already
+  /// needs one) reused for both the gradient shift and the glow blobs'
+  /// opacity pulse, so they stay in sync.
+  late final AnimationController _bgController;
   double? _lastAcceptedHeading;
   DateTime? _lastAcceptedHeadingTime;
   Timer? _tickTimer;
@@ -118,6 +125,10 @@ class _RecordScreenState extends State<RecordScreen>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
+    _bgController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 7),
+    )..repeat(reverse: true);
     _startLiveLocation();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       if (event.source != MapEventSource.mapController && _followMe) {
@@ -288,6 +299,7 @@ class _RecordScreenState extends State<RecordScreen>
     _liveLocationSub?.cancel();
     _mapEventSub.cancel();
     _rotationController.dispose();
+    _bgController.dispose();
     super.dispose();
   }
 
@@ -805,22 +817,21 @@ class _RecordScreenState extends State<RecordScreen>
         : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
-  static const _distanceColor = Colors.blue;
-  static const _restColor = Colors.deepOrange;
-  static const _avgSpeedColor = Colors.teal;
-  static const _maxSpeedColor = Colors.pink;
-  static const _altitudeColor = Colors.brown;
-  static const _climbColor = Colors.green;
-  static const _descentColor = Colors.red;
-  static const _totalDurationColor = Colors.purple;
-  static const _activeDurationColor = Colors.indigo;
+  /// The single accent every card/tile on the info page shares - a
+  /// deliberate departure from the earlier per-stat rainbow of colors
+  /// (blue/orange/teal/pink/brown/green/red/...), which read as busy and
+  /// carnival-like rather than a coherent dashboard. One consistent hue
+  /// (the app's own primary color, so it also matches the speed number and
+  /// chart lines) plus a subtle glass/border treatment on every card is
+  /// what actually reads as "modern" rather than "colorful".
+  Color _cardAccent(ThemeData theme) => theme.colorScheme.primary;
 
   /// The default page while recording/paused: speed front and center (the
   /// one number a rider actually cares about mid-ride), duration/rest right
   /// below it, then every other stat and a compact speed/elevation chart -
   /// all sized to fit one screen without scrolling. The map itself is one
-  /// tap away via the bottom-left toggle button. See [_buildMapPage] for
-  /// the map.
+  /// tap away via the top-right toggle button, mirroring [_buildMapPage]'s
+  /// own toggle so both pages switch from the same corner.
   Widget _buildInfoPage(BuildContext context, GpsRecorder recorder) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
@@ -832,210 +843,235 @@ class _RecordScreenState extends State<RecordScreen>
     final altitude = recorder.currentAltitude;
     final hasSpeedChart = speedSpots.length >= 2;
     final hasElevationChart = elevationSamples.length >= 2;
+    final accent = _cardAccent(theme);
 
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
-              child: Row(
-                children: [
-                  _RoundIconButton(
-                    icon: Icons.arrow_back,
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  const Spacer(),
-                  const SatelliteCountBadge(),
-                ],
-              ),
-            ),
-            if (recorder.isAutoPaused)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Container(
-                  width: double.infinity,
+      body: Stack(
+        children: [
+          Positioned.fill(child: _InfoPageBackground(animation: _bgController)),
+          SafeArea(
+            child: Column(
+              children: [
+                Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
+                    horizontal: 12,
                     vertical: 8,
                   ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.tertiaryContainer,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    l10n.autoPausedLabel,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: theme.colorScheme.onTertiaryContainer,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  child: Row(
+                    children: [
+                      _RoundIconButton(
+                        icon: Icons.arrow_back,
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const Spacer(),
+                      const SatelliteCountBadge(),
+                      const SizedBox(width: 8),
+                      _RoundIconButton(
+                        icon: Icons.map_outlined,
+                        tooltip: l10n.recordMapTabTooltip,
+                        onPressed: _switchToMap,
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    // The one number a rider actually needs at a glance -
-                    // everything else here is secondary to this.
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            recorder.currentSpeedKmh.toStringAsFixed(0),
-                            style: theme.textTheme.displayLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              color: theme.colorScheme.primary,
-                              height: 1,
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Text(
-                              ' km/h',
-                              style: theme.textTheme.titleMedium,
-                            ),
-                          ),
-                        ],
+                if (recorder.isAutoPaused)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.tertiaryContainer,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        l10n.autoPausedLabel,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: theme.colorScheme.onTertiaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
+                  ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
                       children: [
-                        Expanded(
-                          child: _DurationTile(
-                            label: l10n.netDurationLabel,
-                            value: _formatDuration(recorder.elapsed),
-                            color: _activeDurationColor,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _DurationTile(
-                            label: l10n.totalDurationLabel,
-                            value: _formatDuration(
-                              recorder.totalDuration ?? Duration.zero,
-                            ),
-                            color: _totalDurationColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    AnalysisStatGrid(
-                      childAspectRatio: 3.4,
-                      children: [
-                        AnalysisStatCard(
-                          icon: Icons.route,
-                          label: l10n.distance,
-                          value:
-                              '${recorder.distanceKm.toStringAsFixed(2)} km',
-                          accentColor: _distanceColor,
-                        ),
-                        AnalysisStatCard(
-                          icon: Icons.pause_circle_outline,
-                          label: l10n.restDurationLabel,
-                          value: _formatDuration(recorder.restDuration),
-                          accentColor: _restColor,
-                        ),
-                        AnalysisStatCard(
-                          icon: Icons.equalizer,
-                          label: l10n.averageSpeedLabel,
-                          value: speedStats.averageMovingKmh == null
-                              ? '—'
-                              : '${speedStats.averageMovingKmh!.toStringAsFixed(1)} km/h',
-                          accentColor: _avgSpeedColor,
-                        ),
-                        AnalysisStatCard(
-                          icon: Icons.bolt,
-                          label: l10n.maxSpeed,
-                          value: speedStats.maxKmh == null
-                              ? '—'
-                              : '${speedStats.maxKmh!.toStringAsFixed(1)} km/h',
-                          accentColor: _maxSpeedColor,
-                        ),
-                        AnalysisStatCard(
-                          icon: Icons.terrain,
-                          label: l10n.currentAltitudeLabel,
-                          value: altitude == null
-                              ? '—'
-                              : '${altitude.round()} m',
-                          accentColor: _altitudeColor,
-                        ),
-                        AnalysisStatCard(
-                          icon: Icons.trending_up,
-                          label: l10n.climb,
-                          value: '${elevationChange.gain.round()} m',
-                          accentColor: _climbColor,
-                        ),
-                        AnalysisStatCard(
-                          icon: Icons.trending_down,
-                          label: l10n.descent,
-                          value: '${elevationChange.loss.round()} m',
-                          accentColor: _descentColor,
-                        ),
-                      ],
-                    ),
-                    if (hasSpeedChart || hasElevationChart) ...[
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (hasSpeedChart)
-                              Expanded(
-                                child: _MiniChart(
-                                  icon: Icons.speed,
-                                  title: l10n.speedChartTitle,
-                                  child: _SpeedTimeChart(spots: speedSpots),
+                        // The one number a rider actually needs at a glance -
+                        // everything else here is secondary to this. Bigger,
+                        // slanted and glowing rather than the plain
+                        // displayLarge style used elsewhere, so it reads as
+                        // a dashboard's hero figure, not just another label.
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                recorder.currentSpeedKmh.toStringAsFixed(0),
+                                style: TextStyle(
+                                  fontSize: 150,
+                                  fontWeight: FontWeight.w900,
+                                  fontStyle: FontStyle.italic,
+                                  letterSpacing: -6,
+                                  height: 0.95,
+                                  color: theme.colorScheme.onSurface,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                  shadows: [
+                                    Shadow(
+                                      color: accent.withValues(alpha: 0.55),
+                                      blurRadius: 32,
+                                    ),
+                                  ],
                                 ),
                               ),
-                            if (hasSpeedChart && hasElevationChart)
-                              const SizedBox(width: 8),
-                            if (hasElevationChart)
-                              Expanded(
-                                child: _MiniChart(
-                                  icon: Icons.terrain,
-                                  title: l10n.elevationChartTitle,
-                                  child: AnalysisElevationChart(
-                                    samples: elevationSamples,
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: 20,
+                                  left: 6,
+                                ),
+                                child: Text(
+                                  'km/h',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: theme.colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DurationTile(
+                                icon: Icons.timer_outlined,
+                                label: l10n.netDurationLabel,
+                                value: _formatDuration(recorder.elapsed),
+                                color: accent,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _DurationTile(
+                                icon: Icons.schedule,
+                                label: l10n.totalDurationLabel,
+                                value: _formatDuration(
+                                  recorder.totalDuration ?? Duration.zero,
+                                ),
+                                color: accent,
+                              ),
+                            ),
                           ],
                         ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Center(child: _buildControls(l10n, recorder)),
-                  Positioned(
-                    left: 16,
-                    child: _RoundIconButton(
-                      icon: Icons.map_outlined,
-                      tooltip: l10n.recordMapTabTooltip,
-                      onPressed: _switchToMap,
+                        const SizedBox(height: 8),
+                        AnalysisStatGrid(
+                          childAspectRatio: 3.4,
+                          children: [
+                            AnalysisStatCard(
+                              icon: Icons.route,
+                              label: l10n.distance,
+                              value:
+                                  '${recorder.distanceKm.toStringAsFixed(2)} km',
+                              accentColor: accent,
+                            ),
+                            AnalysisStatCard(
+                              icon: Icons.pause_circle_outline,
+                              label: l10n.restDurationLabel,
+                              value: _formatDuration(recorder.restDuration),
+                              accentColor: accent,
+                            ),
+                            AnalysisStatCard(
+                              icon: Icons.equalizer,
+                              label: l10n.averageSpeedLabel,
+                              value: speedStats.averageMovingKmh == null
+                                  ? '—'
+                                  : '${speedStats.averageMovingKmh!.toStringAsFixed(1)} km/h',
+                              accentColor: accent,
+                            ),
+                            AnalysisStatCard(
+                              icon: Icons.bolt,
+                              label: l10n.maxSpeed,
+                              value: speedStats.maxKmh == null
+                                  ? '—'
+                                  : '${speedStats.maxKmh!.toStringAsFixed(1)} km/h',
+                              accentColor: accent,
+                            ),
+                            AnalysisStatCard(
+                              icon: Icons.terrain,
+                              label: l10n.currentAltitudeLabel,
+                              value: altitude == null
+                                  ? '—'
+                                  : '${altitude.round()} m',
+                              accentColor: accent,
+                            ),
+                            AnalysisStatCard(
+                              icon: Icons.trending_up,
+                              label: l10n.climb,
+                              value: '${elevationChange.gain.round()} m',
+                              accentColor: accent,
+                            ),
+                            AnalysisStatCard(
+                              icon: Icons.trending_down,
+                              label: l10n.descent,
+                              value: '${elevationChange.loss.round()} m',
+                              accentColor: accent,
+                            ),
+                          ],
+                        ),
+                        if (hasSpeedChart || hasElevationChart) ...[
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (hasSpeedChart)
+                                  Expanded(
+                                    child: _MiniChart(
+                                      icon: Icons.speed,
+                                      title: l10n.speedChartTitle,
+                                      child: _SpeedTimeChart(
+                                        spots: speedSpots,
+                                      ),
+                                    ),
+                                  ),
+                                if (hasSpeedChart && hasElevationChart)
+                                  const SizedBox(width: 8),
+                                if (hasElevationChart)
+                                  Expanded(
+                                    child: _MiniChart(
+                                      icon: Icons.terrain,
+                                      title: l10n.elevationChartTitle,
+                                      child: AnalysisElevationChart(
+                                        samples: elevationSamples,
+                                        showPeakMarkers: true,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Center(child: _buildControls(l10n, recorder)),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1258,16 +1294,18 @@ class _StatRow extends StatelessWidget {
 }
 
 /// One of the two prominent duration readouts under the hero speed number
-/// on [RecordScreen]'s info page (active riding time / total time) - each
-/// gets its own accent color, same reasoning as [AnalysisStatCard]'s
-/// optional accent below it.
+/// on [RecordScreen]'s info page (active riding time / total time). Shares
+/// the same single accent color and glass/border treatment as
+/// [AnalysisStatCard] below it, differentiated only by icon and label.
 class _DurationTile extends StatelessWidget {
   const _DurationTile({
+    required this.icon,
     required this.label,
     required this.value,
     required this.color,
   });
 
+  final IconData icon;
   final String label;
   final String value;
   final Color color;
@@ -1276,23 +1314,26 @@ class _DurationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: color.withValues(
-          alpha: theme.brightness == Brightness.dark ? 0.24 : 0.14,
+          alpha: theme.brightness == Brightness.dark ? 0.20 : 0.12,
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(height: 2),
           FittedBox(
             child: Text(
               value,
               maxLines: 1,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w800,
-                color: color,
+                color: theme.colorScheme.onSurface,
               ),
             ),
           ),
@@ -1341,6 +1382,117 @@ class _MiniChart extends StatelessWidget {
   }
 }
 
+/// The info page's full-screen backdrop: a slowly breathing gradient plus
+/// two soft glow blobs, replacing the plain theme background so the page
+/// reads as a modern dashboard rather than a flat list of colored boxes.
+/// Driven by [animation] (a looping 0..1 controller owned by the screen),
+/// kept subtle and slow on purpose - this is glanced at while riding, not
+/// something that should demand attention.
+class _InfoPageBackground extends StatelessWidget {
+  const _InfoPageBackground({required this.animation});
+
+  final Animation<double> animation;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final primary = theme.colorScheme.primary;
+    final secondary = theme.colorScheme.secondary;
+
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        final t = animation.value;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.lerp(
+                    Alignment.topLeft,
+                    Alignment.topRight,
+                    t,
+                  )!,
+                  end: Alignment.lerp(
+                    Alignment.bottomRight,
+                    Alignment.bottomLeft,
+                    t,
+                  )!,
+                  colors: dark
+                      ? const [
+                          Color(0xFF0D0E1C),
+                          Color(0xFF16132E),
+                          Color(0xFF0A0C18),
+                        ]
+                      : const [
+                          Color(0xFFF1EEFF),
+                          Color(0xFFE9F2FF),
+                          Color(0xFFFBFBFF),
+                        ],
+                ),
+              ),
+            ),
+            Positioned(
+              top: -100 + 20 * t,
+              left: -80,
+              child: _GlowBlob(
+                color: primary,
+                size: 280,
+                opacity: (dark ? 0.28 : 0.18) + 0.08 * t,
+              ),
+            ),
+            Positioned(
+              bottom: -120,
+              right: -90 + 20 * t,
+              child: _GlowBlob(
+                color: secondary,
+                size: 320,
+                opacity: (dark ? 0.22 : 0.14) + 0.06 * (1 - t),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// A large, soft-edged radial glow used by [_InfoPageBackground] - fades to
+/// fully transparent at its own edge, so it reads as diffuse light rather
+/// than a hard-edged circle.
+class _GlowBlob extends StatelessWidget {
+  const _GlowBlob({
+    required this.color,
+    required this.size,
+    required this.opacity,
+  });
+
+  final Color color;
+  final double size;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              color.withValues(alpha: opacity),
+              color.withValues(alpha: 0),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RoundIconButton extends StatelessWidget {
   const _RoundIconButton({
     required this.icon,
@@ -1370,6 +1522,13 @@ class _RoundIconButton extends StatelessWidget {
 /// Speed-over-time line chart for [RecordScreen]'s info page - same visual
 /// language as [AnalysisElevationChart], just plotting km/h against minutes
 /// since the ride started instead of elevation against distance.
+///
+/// The top speed reached always stays marked on the chart itself (a dot
+/// plus a small floating label) rather than only being visible by touching
+/// the chart - as the ride goes on and the x-axis keeps rescaling to fit
+/// more time, the peak would otherwise scroll out of easy reach and there'd
+/// be no way to tell "how fast did I actually go" from the chart at a
+/// glance.
 class _SpeedTimeChart extends StatelessWidget {
   const _SpeedTimeChart({required this.spots});
 
@@ -1381,12 +1540,39 @@ class _SpeedTimeChart extends StatelessWidget {
     final maxX = spots.last.x;
     final theme = Theme.of(context);
 
+    var maxIndex = 0;
+    for (var i = 1; i < spots.length; i++) {
+      if (spots[i].y > spots[maxIndex].y) maxIndex = i;
+    }
+    final maxSpot = spots[maxIndex];
+
+    final barData = LineChartBarData(
+      spots: spots,
+      isCurved: true,
+      barWidth: 2,
+      color: theme.colorScheme.primary,
+      dotData: FlDotData(
+        show: true,
+        checkToShowDot: (spot, bar) => spot == maxSpot,
+        getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(
+          radius: 4,
+          color: theme.colorScheme.primary,
+          strokeWidth: 2,
+          strokeColor: theme.colorScheme.surface,
+        ),
+      ),
+      belowBarData: BarAreaData(
+        show: true,
+        color: theme.colorScheme.primary.withValues(alpha: 0.15),
+      ),
+    );
+
     return LineChart(
       LineChartData(
         minX: 0,
         maxX: maxX == 0 ? 1 : maxX,
         minY: 0,
-        maxY: maxY + 10,
+        maxY: maxY + 14,
         gridData: const FlGridData(drawVerticalLine: false),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
@@ -1421,20 +1607,34 @@ class _SpeedTimeChart extends StatelessWidget {
             ),
           ),
         ),
-        lineTouchData: const LineTouchData(enabled: true),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: true,
-            barWidth: 2,
-            color: theme.colorScheme.primary,
-            dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(
-              show: true,
-              color: theme.colorScheme.primary.withValues(alpha: 0.15),
+        lineTouchData: LineTouchData(
+          enabled: false,
+          touchTooltipData: LineTouchTooltipData(
+            tooltipPadding: const EdgeInsets.symmetric(
+              horizontal: 6,
+              vertical: 3,
             ),
+            tooltipMargin: 8,
+            getTooltipColor: (_) =>
+                theme.colorScheme.primary.withValues(alpha: 0.92),
+            getTooltipItems: (touchedSpots) => touchedSpots
+                .map(
+                  (s) => LineTooltipItem(
+                    '${s.y.round()} km/h',
+                    TextStyle(
+                      color: theme.colorScheme.onPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
+                )
+                .toList(),
           ),
+        ),
+        showingTooltipIndicators: [
+          ShowingTooltipIndicators([LineBarSpot(barData, 0, maxSpot)]),
         ],
+        lineBarsData: [barData],
       ),
     );
   }

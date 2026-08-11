@@ -20,6 +20,21 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.14 beta',
+    date: '2026-08-11',
+    note:
+        'Bilgi sayfası baştan tasarlandı: hız rakamı çok daha büyük ve '
+        'farklı (italik, kalın, parlamalı) bir fontla gösteriliyor; arka '
+        'plan artık düz renk yerine hafif hareketli, modern bir gradyan+'
+        'parlama efekti; önceki 7 farklı renkli kart tek bir tutarlı renge '
+        '(cam görünümlü, kenarlıklı) çevrildi. Hız ve yükseklik '
+        'grafiklerinde artık en yüksek (ve yükseklikte en düşük) noktalar '
+        'her zaman bir nokta+etiketle sabit olarak işaretli, grafiğin ekseni '
+        'zamanla yeniden ölçeklense bile pik değer görünür kalıyor. '
+        'Haritaya geçiş düğmesi sol '
+        'alttan sağ üste taşındı - artık iki sayfada da aynı köşede.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.13 beta',
     date: '2026-08-11',
     note:
