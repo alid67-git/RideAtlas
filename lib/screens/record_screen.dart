@@ -1025,11 +1025,14 @@ class _RecordScreenState extends State<RecordScreen>
   List<FlSpot> _speedTimeSpots(List<TrackPoint> points) {
     const minMovingKmh = 1.0;
     const maxPlausibleKmh = 250.0;
+    const maxAccelerationKmhPerSec = 30.0;
     if (points.length < 2) return const [];
     final start = points.first.time;
     if (start == null) return const [];
 
     final spots = <FlSpot>[];
+    double? lastAcceptedKmh;
+    DateTime? lastAcceptedTime;
     for (var i = 1; i < points.length; i++) {
       final prev = points[i - 1];
       final curr = points[i];
@@ -1041,6 +1044,20 @@ class _RecordScreenState extends State<RecordScreen>
       final meters = _speedDistance(prev.latLng, curr.latLng);
       final kmh = (meters / 1000.0) / (dtSeconds / 3600.0);
       if (kmh < minMovingKmh || kmh > maxPlausibleKmh) continue;
+      // Same GPS-glitch guard as buildSpeedStats - a segment implying
+      // implausible acceleration since the last accepted reading is a bad
+      // fix, not real riding.
+      if (lastAcceptedKmh != null && lastAcceptedTime != null) {
+        final accelDtSeconds =
+            t1.difference(lastAcceptedTime).inMilliseconds / 1000.0;
+        if (accelDtSeconds > 0 &&
+            (kmh - lastAcceptedKmh).abs() >
+                maxAccelerationKmhPerSec * accelDtSeconds) {
+          continue;
+        }
+      }
+      lastAcceptedKmh = kmh;
+      lastAcceptedTime = t1;
       spots.add(FlSpot(t1.difference(start).inSeconds / 60.0, kmh));
     }
 

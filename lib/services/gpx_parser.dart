@@ -201,10 +201,14 @@ List<ElevationSample> buildElevationProfile(List<TrackPoint> points) {
 /// Instantaneous speeds between consecutive timed points.
 ///
 /// Segments shorter than 1s, slower than 1 km/h (stopped / GPS jitter) or
-/// faster than 250 km/h (implausible GPS spikes) are ignored. [minKmh] /
-/// [maxKmh] / [averageMovingKmh] are therefore "while moving" figures;
-/// overall average (distance ÷ total duration) lives on [GpxRoute]. For how
-/// long the rider was actually moving, see [RouteGeographyAnalyzer.
+/// faster than 250 km/h (implausible GPS spikes) are ignored. A segment is
+/// also rejected if it implies acceleration/deceleration faster than
+/// [_maxAccelerationKmhPerSec] since the last accepted reading - a single
+/// bad fix jumping (and jumping back) reads as one impossibly sharp spike,
+/// not real riding, and would otherwise blow out [maxKmh]/[averageMovingKmh].
+/// [minKmh] / [maxKmh] / [averageMovingKmh] are therefore "while moving"
+/// figures; overall average (distance ÷ total duration) lives on [GpxRoute].
+/// For how long the rider was actually moving, see [RouteGeographyAnalyzer.
 /// detectStops] instead - a per-segment speed check is too noisy (GPS
 /// jitter keeps flickering a stationary rider just above/below the
 /// threshold) to use as a duration figure on its own.
@@ -212,11 +216,14 @@ SpeedStats buildSpeedStats(List<TrackPoint> points) {
   const minDtSeconds = 1.0;
   const minMovingKmh = 1.0;
   const maxPlausibleKmh = 250.0;
+  const maxAccelerationKmhPerSec = 30.0;
 
   double? minKmh;
   double? maxKmh;
   var sumKmh = 0.0;
   var count = 0;
+  double? lastAcceptedKmh;
+  DateTime? lastAcceptedTime;
 
   for (var i = 1; i < points.length; i++) {
     final prev = points[i - 1];
@@ -231,6 +238,18 @@ SpeedStats buildSpeedStats(List<TrackPoint> points) {
     final meters = _distance(prev.latLng, curr.latLng);
     final kmh = (meters / 1000.0) / (dtSeconds / 3600.0);
     if (kmh < minMovingKmh || kmh > maxPlausibleKmh) continue;
+
+    if (lastAcceptedKmh != null && lastAcceptedTime != null) {
+      final accelDtSeconds =
+          t1.difference(lastAcceptedTime).inMilliseconds / 1000.0;
+      if (accelDtSeconds > 0 &&
+          (kmh - lastAcceptedKmh).abs() >
+              maxAccelerationKmhPerSec * accelDtSeconds) {
+        continue;
+      }
+    }
+    lastAcceptedKmh = kmh;
+    lastAcceptedTime = t1;
 
     minKmh = minKmh == null ? kmh : (kmh < minKmh ? kmh : minKmh);
     maxKmh = maxKmh == null ? kmh : (kmh > maxKmh ? kmh : maxKmh);
