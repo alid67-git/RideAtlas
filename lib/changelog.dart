@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.13 beta',
+    date: '2026-08-11',
+    note:
+        'Harita sayfasının üst bilgi çubuğu istenen şablona göre '
+        'düzenlendi: solda tek büyük hız kutusu, sağda süre/mesafe/'
+        'yükseklik artık yan yana üç sütun değil, alt alta üç satır.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.12 beta',
     date: '2026-08-11',
     note:
