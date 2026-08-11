@@ -1093,6 +1093,7 @@ class AnalysisStatCard extends StatelessWidget {
     required this.label,
     required this.value,
     this.accentColor,
+    this.large = false,
   });
 
   final IconData icon;
@@ -1105,12 +1106,19 @@ class AnalysisStatCard extends StatelessWidget {
   /// rather than a wall of identical gray tiles.
   final Color? accentColor;
 
+  /// When true, the value reads at the same size/weight as
+  /// [RecordScreen]'s duration tiles above it, instead of the compact
+  /// titleSmall used by the Analysis sheet's own denser grids - readable at
+  /// a glance while riding was the whole point of enlarging it. Off by
+  /// default so the Analysis sheet's existing tabs are unaffected.
+  final bool large;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = accentColor;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: large ? 10 : 8),
       decoration: BoxDecoration(
         color: accent == null
             ? theme.colorScheme.surfaceContainerHighest
@@ -1122,8 +1130,8 @@ class AnalysisStatCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, color: accent ?? theme.colorScheme.primary, size: 20),
-          const SizedBox(width: 8),
+          Icon(icon, color: accent ?? theme.colorScheme.primary, size: large ? 26 : 20),
+          SizedBox(width: large ? 10 : 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1131,15 +1139,15 @@ class AnalysisStatCard extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: theme.textTheme.bodySmall,
+                  style: large ? theme.textTheme.bodyMedium : theme.textTheme.bodySmall,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   value,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: large
+                      ? theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)
+                      : theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1181,6 +1189,7 @@ class AnalysisElevationChart extends StatelessWidget {
     super.key,
     required this.samples,
     this.showPeakMarkers = false,
+    this.lineColor,
   });
 
   final List<ElevationSample> samples;
@@ -1193,6 +1202,12 @@ class AnalysisElevationChart extends StatelessWidget {
   /// keeps its plain touch-to-inspect behavior.
   final bool showPeakMarkers;
 
+  /// Overrides the line/dot/fill color, which otherwise defaults to
+  /// [ThemeData.colorScheme.primary] - used by [RecordScreen]'s info page so
+  /// this chart matches its own blue accent instead of the app's (reddish)
+  /// theme primary. The Analysis sheet's own elevation tab leaves this null.
+  final Color? lineColor;
+
   @override
   Widget build(BuildContext context) {
     final minY = samples
@@ -1203,6 +1218,7 @@ class AnalysisElevationChart extends StatelessWidget {
         .reduce((a, b) => a > b ? a : b);
     final maxX = samples.last.distanceKm;
     final theme = Theme.of(context);
+    final color = lineColor ?? theme.colorScheme.primary;
 
     final spots = [
       for (final s in samples) FlSpot(s.distanceKm, s.elevation),
@@ -1220,20 +1236,20 @@ class AnalysisElevationChart extends StatelessWidget {
       spots: spots,
       isCurved: true,
       barWidth: 2,
-      color: theme.colorScheme.primary,
+      color: color,
       dotData: FlDotData(
         show: showPeakMarkers,
         checkToShowDot: (spot, bar) => spot == maxSpot || spot == minSpot,
         getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(
           radius: 4,
-          color: theme.colorScheme.primary,
+          color: color,
           strokeWidth: 2,
           strokeColor: theme.colorScheme.surface,
         ),
       ),
       belowBarData: BarAreaData(
         show: true,
-        color: theme.colorScheme.primary.withValues(alpha: 0.15),
+        color: color.withValues(alpha: 0.15),
       ),
     );
 
@@ -1282,14 +1298,13 @@ class AnalysisElevationChart extends StatelessWidget {
               vertical: 3,
             ),
             tooltipMargin: 8,
-            getTooltipColor: (_) =>
-                theme.colorScheme.primary.withValues(alpha: 0.92),
+            getTooltipColor: (_) => color.withValues(alpha: 0.92),
             getTooltipItems: (touchedSpots) => touchedSpots
                 .map(
                   (s) => LineTooltipItem(
                     '${s.y.round()} m',
-                    TextStyle(
-                      color: theme.colorScheme.onPrimary,
+                    const TextStyle(
+                      color: Colors.white,
                       fontWeight: FontWeight.w700,
                       fontSize: 11,
                     ),
