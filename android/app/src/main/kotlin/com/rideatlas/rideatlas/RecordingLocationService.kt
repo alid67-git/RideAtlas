@@ -105,7 +105,24 @@ class RecordingLocationService : Service() {
                 val title = intent?.getStringExtra(EXTRA_TITLE) ?: "RideAtlas"
                 val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Recording your ride"
                 if (!isRunning) {
-                    clearPoints(this)
+                    // A null action means the system restarted this
+                    // START_STICKY service after Android (or an aggressive
+                    // OEM battery saver) killed the whole process mid-ride -
+                    // the in-memory isRunning flag resets to false along
+                    // with everything else, so this looks identical to a
+                    // genuine fresh start. The two must NOT be treated the
+                    // same: a real fresh start never has a leftover points
+                    // file (both the normal "stop" and "discard" paths
+                    // delete it themselves), so a file existing here means
+                    // recording was interrupted before it could be. Recover
+                    // it instead of wiping it - losing GPS history nobody
+                    // asked to discard is exactly the bug this guards
+                    // against.
+                    if (pointsFile(this).exists()) {
+                        reloadPointsFromFile()
+                    } else {
+                        clearPoints(this)
+                    }
                     startAsForeground(title, text)
                     acquireWakeLock()
                     startLocationUpdates()
@@ -228,11 +245,45 @@ class RecordingLocationService : Service() {
                     .put("longitude", point["longitude"])
                     .put("altitude", point["altitude"])
                     .put("speed", point["speed"])
+                    .put("bearing", point["bearing"])
                     .put("timeMs", point["timeMs"])
                     .put("accuracy", point["accuracy"])
             pointsFile(this).appendText(json.toString() + "\n")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to persist point", e)
+        }
+    }
+
+    /** Restores [points] from the append-only file after the system
+     * restarts this service post-kill (see the null-action branch of
+     * [onStartCommand]) - the in-memory list is empty again on a fresh
+     * process, but the file still has every fix collected before the kill. */
+    private fun reloadPointsFromFile() {
+        try {
+            val restored = mutableListOf<Map<String, Any>>()
+            pointsFile(this).forEachLine { line ->
+                if (line.isBlank()) return@forEachLine
+                val obj = JSONObject(line)
+                restored.add(
+                    mapOf(
+                        "latitude" to obj.optDouble("latitude"),
+                        "longitude" to obj.optDouble("longitude"),
+                        "altitude" to obj.optDouble("altitude"),
+                        "speed" to obj.optDouble("speed"),
+                        "bearing" to obj.optDouble("bearing", 0.0),
+                        "timeMs" to obj.optLong("timeMs"),
+                        "accuracy" to obj.optDouble("accuracy"),
+                    ),
+                )
+            }
+            synchronized(points) {
+                points.clear()
+                points.addAll(restored)
+            }
+            Log.i(TAG, "Recovered ${restored.size} points from an interrupted recording")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to reload persisted points, starting fresh", e)
+            clearPoints(this)
         }
     }
 }

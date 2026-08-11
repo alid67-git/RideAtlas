@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.7 beta',
+    date: '2026-08-11',
+    note:
+        'KRİTİK düzeltme: çok düşük pilde (veya OEM\'in agresif pil '
+        'yönetiminde) Android tüm uygulamayı öldürüp arka plandaki kayıt '
+        'servisini kendi kendine yeniden başlattığında, kod bunu "yeni bir '
+        'kayıt başlıyor" sanıp o ana kadar diskte biriken GPS verisini '
+        'siliyordu - kayıt "durmuş" gibi görünüyor, veri de gidiyordu. '
+        'Artık sistemin kendi yeniden başlatması ile gerçek bir yeni kayıt '
+        'ayırt ediliyor; önceki veri silinmek yerine geri yükleniyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.6 beta',
     date: '2026-08-10',
     note:
