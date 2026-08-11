@@ -724,12 +724,13 @@ class _RecordScreenState extends State<RecordScreen>
                 ),
               ),
               const SizedBox(width: 8),
+              // Three stacked rows instead of three side-by-side columns -
+              // each gets the box's full width to itself, so label+value
+              // never has to compete for horizontal space with its
+              // neighbors the way the old 3-column layout did.
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 10,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.surface.withValues(alpha: 0.92),
                     borderRadius: BorderRadius.circular(20),
@@ -737,25 +738,26 @@ class _RecordScreenState extends State<RecordScreen>
                       BoxShadow(color: Colors.black26, blurRadius: 6),
                     ],
                   ),
-                  child: Row(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Expanded(
-                        child: _StatColumn(
+                        child: _StatRow(
                           label: l10n.duration,
                           value: durationStr,
                         ),
                       ),
-                      _statDivider(theme),
+                      _statDividerHorizontal(theme),
                       Expanded(
-                        child: _StatColumn(
+                        child: _StatRow(
                           label: l10n.distance,
                           value:
                               '${recorder.distanceKm.toStringAsFixed(2)} km',
                         ),
                       ),
-                      _statDivider(theme),
+                      _statDividerHorizontal(theme),
                       Expanded(
-                        child: _StatColumn(
+                        child: _StatRow(
                           label: l10n.currentAltitudeLabel,
                           value: altitude == null
                               ? '—'
@@ -1092,12 +1094,10 @@ class _RecordScreenState extends State<RecordScreen>
   /// Thin vertical separator between the duration/distance/altitude
   /// columns, so their values read as distinct fields instead of running
   /// into each other on narrow screens.
-  Widget _statDivider(ThemeData theme) {
-    return Container(
-      width: 1,
-      height: 28,
-      color: theme.colorScheme.outlineVariant,
-    );
+  /// Thin horizontal separator between the stacked duration/distance/
+  /// altitude rows in the map page's header.
+  Widget _statDividerHorizontal(ThemeData theme) {
+    return Container(height: 1, color: theme.colorScheme.outlineVariant);
   }
 
   Widget _buildControls(AppLocalizations l10n, GpsRecorder recorder) {
@@ -1219,8 +1219,10 @@ class _RecordScreenState extends State<RecordScreen>
   }
 }
 
-class _StatColumn extends StatelessWidget {
-  const _StatColumn({required this.label, required this.value});
+/// One row of the map page's stacked duration/distance/altitude box - label
+/// on the left, value on the right, both on one line.
+class _StatRow extends StatelessWidget {
+  const _StatRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -1228,27 +1230,27 @@ class _StatColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Row(
       children: [
-        // FittedBox shrinks the value instead of letting it run into the
-        // next column (or wrap and get clipped) when this stat's column
-        // ends up narrower than the text - e.g. a multi-day duration or a
-        // long distance reading on a small phone screen.
-        FittedBox(
-          child: Text(
-            value,
-            maxLines: 1,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
         Text(
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.labelSmall,
+        ),
+        const Spacer(),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
         ),
       ],
     );
