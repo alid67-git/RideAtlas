@@ -906,20 +906,38 @@ class _RecordScreenState extends State<RecordScreen>
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: accent.withValues(alpha: 0.35)),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.schedule, size: 18, color: accent),
-                        const SizedBox(width: 8),
-                        Text(l10n.totalDurationLabel, style: theme.textTheme.bodyMedium),
-                        const SizedBox(width: 8),
-                        Text(
-                          _formatDuration(recorder.totalDuration ?? Duration.zero),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                    // At least double the old titleMedium size, and bigger
+                    // than the "large" stat cards below it (titleLarge) -
+                    // total duration is the one figure meant to stand out
+                    // above everything else on this strip. FittedBox keeps
+                    // it from overflowing on narrow screens/long durations.
+                    child: Center(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Icon(Icons.schedule, size: 30, color: accent),
+                            const SizedBox(width: 10),
+                            Text(
+                              l10n.totalDurationLabel,
+                              style: theme.textTheme.titleMedium,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              _formatDuration(
+                                recorder.totalDuration ?? Duration.zero,
+                              ),
+                              style: const TextStyle(
+                                fontSize: 40,
+                                fontWeight: FontWeight.w900,
+                                height: 1,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
