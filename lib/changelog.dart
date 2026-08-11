@@ -20,6 +20,22 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.16 beta',
+    date: '2026-08-11',
+    note:
+        'Bilgi sayfası yeniden düzenlendi: "Toplam süre" artık en üstte, '
+        '"Otomatik duraklatıldı" bandının üzerinde kendi şeridinde; süre '
+        'kutuları satırında toplam süre yerine artık mola süresi var '
+        '(aktif sürüş süresinin yanında); "Yükseklik" kartı istatistik '
+        'ızgarasında artık "Mesafe"nin hemen yanında; mavi kartlardaki '
+        'ikon+yazı bloğu artık kutunun ortasında (önceden sola yaslıydı); '
+        'hız/yükseklik grafiklerine ayrılan alan büyütüldü (mola süresi '
+        've toplam süre ızgaradan çıkınca boşta kalan yer değerlendirildi). '
+        'Harita sayfasında hız kutusuna biraz daha nefes alanı bırakmak '
+        'için sağdaki süre/mesafe/yükseklik kutusunun yazıları azıcık '
+        'küçültüldü (yine de eski halinden büyük).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.15 beta',
     date: '2026-08-11',
     note:

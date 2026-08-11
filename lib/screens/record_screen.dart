@@ -886,6 +886,43 @@ class _RecordScreenState extends State<RecordScreen>
                     ],
                   ),
                 ),
+                // Total duration lives here, above the auto-paused banner,
+                // rather than paired with "Aktif sürüş süresi" below the
+                // hero speed number - that slot now holds "Mola süresi"
+                // instead, which is the pairing riders actually want to see
+                // at a glance next to how long they've been moving.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(
+                        alpha: theme.brightness == Brightness.dark ? 0.20 : 0.12,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: accent.withValues(alpha: 0.35)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.schedule, size: 18, color: accent),
+                        const SizedBox(width: 8),
+                        Text(l10n.totalDurationLabel, style: theme.textTheme.bodyMedium),
+                        const SizedBox(width: 8),
+                        Text(
+                          _formatDuration(recorder.totalDuration ?? Duration.zero),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 if (recorder.isAutoPaused)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -974,11 +1011,9 @@ class _RecordScreenState extends State<RecordScreen>
                             const SizedBox(width: 8),
                             Expanded(
                               child: _DurationTile(
-                                icon: Icons.schedule,
-                                label: l10n.totalDurationLabel,
-                                value: _formatDuration(
-                                  recorder.totalDuration ?? Duration.zero,
-                                ),
+                                icon: Icons.pause_circle_outline,
+                                label: l10n.restDurationLabel,
+                                value: _formatDuration(recorder.restDuration),
                                 color: accent,
                               ),
                             ),
@@ -997,9 +1032,11 @@ class _RecordScreenState extends State<RecordScreen>
                               large: true,
                             ),
                             AnalysisStatCard(
-                              icon: Icons.pause_circle_outline,
-                              label: l10n.restDurationLabel,
-                              value: _formatDuration(recorder.restDuration),
+                              icon: Icons.terrain,
+                              label: l10n.currentAltitudeLabel,
+                              value: altitude == null
+                                  ? '—'
+                                  : '${altitude.round()} m',
                               accentColor: accent,
                               large: true,
                             ),
@@ -1018,15 +1055,6 @@ class _RecordScreenState extends State<RecordScreen>
                               value: speedStats.maxKmh == null
                                   ? '—'
                                   : '${speedStats.maxKmh!.toStringAsFixed(1)} km/h',
-                              accentColor: accent,
-                              large: true,
-                            ),
-                            AnalysisStatCard(
-                              icon: Icons.terrain,
-                              label: l10n.currentAltitudeLabel,
-                              value: altitude == null
-                                  ? '—'
-                                  : '${altitude.round()} m',
                               accentColor: accent,
                               large: true,
                             ),
@@ -1053,8 +1081,12 @@ class _RecordScreenState extends State<RecordScreen>
                           // (needed once the stat cards above grew this
                           // much), and a scroll view can't hand out
                           // unbounded height the way the old Expanded did.
+                          // Sized generously since removing "Mola süresi"
+                          // and "Toplam süre" from the grid (moved
+                          // elsewhere above) freed up real vertical room
+                          // that used to sit empty below these charts.
                           SizedBox(
-                            height: 160,
+                            height: 220,
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
@@ -1320,11 +1352,12 @@ class _StatRow extends StatelessWidget {
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodyMedium,
+          style: theme.textTheme.bodySmall,
         ),
         const Spacer(),
-        // At least double the old titleSmall size - readable at a glance
-        // while riding was the whole point of this box.
+        // Still comfortably bigger than the old titleSmall size, but eased
+        // back slightly from the first pass so this box doesn't compete
+        // with the speed box for space next to it.
         Flexible(
           child: FittedBox(
             fit: BoxFit.scaleDown,
@@ -1332,7 +1365,7 @@ class _StatRow extends StatelessWidget {
             child: Text(
               value,
               maxLines: 1,
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
             ),
           ),
         ),
