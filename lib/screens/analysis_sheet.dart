@@ -1114,8 +1114,11 @@ class AnalysisStatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: accent == null
             ? theme.colorScheme.surfaceContainerHighest
-            : accent.withValues(alpha: theme.brightness == Brightness.dark ? 0.24 : 0.14),
-        borderRadius: BorderRadius.circular(12),
+            : accent.withValues(alpha: theme.brightness == Brightness.dark ? 0.20 : 0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: accent == null
+            ? null
+            : Border.all(color: accent.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
@@ -1174,9 +1177,21 @@ class AnalysisStatGrid extends StatelessWidget {
 }
 
 class AnalysisElevationChart extends StatelessWidget {
-  const AnalysisElevationChart({super.key, required this.samples});
+  const AnalysisElevationChart({
+    super.key,
+    required this.samples,
+    this.showPeakMarkers = false,
+  });
 
   final List<ElevationSample> samples;
+
+  /// When true, permanently marks the highest and lowest points reached
+  /// with a dot and a small floating "N m" label, instead of only showing
+  /// on touch - used by [RecordScreen]'s live info page so the extremes
+  /// stay visible on the chart itself as the ride goes on, without needing
+  /// to tap it. Off by default so the existing Analysis-sheet elevation tab
+  /// keeps its plain touch-to-inspect behavior.
+  final bool showPeakMarkers;
 
   @override
   Widget build(BuildContext context) {
@@ -1188,6 +1203,39 @@ class AnalysisElevationChart extends StatelessWidget {
         .reduce((a, b) => a > b ? a : b);
     final maxX = samples.last.distanceKm;
     final theme = Theme.of(context);
+
+    final spots = [
+      for (final s in samples) FlSpot(s.distanceKm, s.elevation),
+    ];
+    var maxIndex = 0;
+    var minIndex = 0;
+    for (var i = 1; i < spots.length; i++) {
+      if (spots[i].y > spots[maxIndex].y) maxIndex = i;
+      if (spots[i].y < spots[minIndex].y) minIndex = i;
+    }
+    final maxSpot = spots[maxIndex];
+    final minSpot = spots[minIndex];
+
+    final barData = LineChartBarData(
+      spots: spots,
+      isCurved: true,
+      barWidth: 2,
+      color: theme.colorScheme.primary,
+      dotData: FlDotData(
+        show: showPeakMarkers,
+        checkToShowDot: (spot, bar) => spot == maxSpot || spot == minSpot,
+        getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(
+          radius: 4,
+          color: theme.colorScheme.primary,
+          strokeWidth: 2,
+          strokeColor: theme.colorScheme.surface,
+        ),
+      ),
+      belowBarData: BarAreaData(
+        show: true,
+        color: theme.colorScheme.primary.withValues(alpha: 0.15),
+      ),
+    );
 
     return LineChart(
       LineChartData(
@@ -1226,20 +1274,40 @@ class AnalysisElevationChart extends StatelessWidget {
             ),
           ),
         ),
-        lineTouchData: const LineTouchData(enabled: true),
-        lineBarsData: [
-          LineChartBarData(
-            spots: [for (final s in samples) FlSpot(s.distanceKm, s.elevation)],
-            isCurved: true,
-            barWidth: 2,
-            color: theme.colorScheme.primary,
-            dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(
-              show: true,
-              color: theme.colorScheme.primary.withValues(alpha: 0.15),
+        lineTouchData: LineTouchData(
+          enabled: !showPeakMarkers,
+          touchTooltipData: LineTouchTooltipData(
+            tooltipPadding: const EdgeInsets.symmetric(
+              horizontal: 6,
+              vertical: 3,
             ),
+            tooltipMargin: 8,
+            getTooltipColor: (_) =>
+                theme.colorScheme.primary.withValues(alpha: 0.92),
+            getTooltipItems: (touchedSpots) => touchedSpots
+                .map(
+                  (s) => LineTooltipItem(
+                    '${s.y.round()} m',
+                    TextStyle(
+                      color: theme.colorScheme.onPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
+                )
+                .toList(),
           ),
-        ],
+        ),
+        showingTooltipIndicators: !showPeakMarkers
+            ? const []
+            : [
+                ShowingTooltipIndicators([LineBarSpot(barData, 0, maxSpot)]),
+                if (minSpot != maxSpot)
+                  ShowingTooltipIndicators([
+                    LineBarSpot(barData, 0, minSpot),
+                  ]),
+              ],
+        lineBarsData: [barData],
       ),
     );
   }
