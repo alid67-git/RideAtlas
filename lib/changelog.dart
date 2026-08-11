@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.17 beta',
+    date: '2026-08-11',
+    note:
+        'Kayıt bilgi sayfasında "Toplam süre" şeridi en az 2 kat '
+        'büyütüldü - artık alttaki mavi kartların yazılarından belirgin '
+        'şekilde daha büyük. Rotalar listesinde: ayarlar ikonu artık çoklu '
+        'seçim modunda da görünüyor (önceden kayboluyordu); seçim '
+        'araç çubuğuna "Tümünü göster" onay kutusu eklendi (işaretlenince '
+        'tüm rotalar tek seferde seçilir); "Haritada göster"in yanına bir '
+        'sil ikonu eklendi, seçili rotaları tek dokunuşla (onay '
+        'istenerek) siler.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.16 beta',
     date: '2026-08-11',
     note:

@@ -207,6 +207,45 @@ class _RouteListScreenState extends State<RouteListScreen> {
     }
   }
 
+  /// Deletes every currently-selected route (and its attached photos/
+  /// videos) after one confirmation for the whole batch, mirroring
+  /// [_delete]'s single-route flow.
+  Future<void> _deleteSelected() async {
+    final l10n = AppLocalizations.of(context)!;
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.deleteRoutesTitle),
+        content: Text(l10n.deleteRoutesConfirm(count)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final repo = context.read<RouteRepository>();
+    final photoRepo = context.read<PhotoRepository>();
+    for (final id in _selectedIds.toList()) {
+      await repo.delete(id);
+      if (!mounted) return;
+      await photoRepo.deleteForRoute(id);
+      if (!mounted) return;
+    }
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
   Future<void> _delete(GpxRoute route) async {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
@@ -255,6 +294,45 @@ class _RouteListScreenState extends State<RouteListScreen> {
               )
             : null,
         actions: [
+          // "Tümünü göster" - ticking it selects every route at once (the
+          // opposite of tapping each card individually), so a rider with
+          // many recordings can jump straight to merging/showing all of
+          // them on the map without hand-picking each one.
+          if (_selectionMode)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => setState(() {
+                  if (_selectedIds.length == routes.length) {
+                    _selectedIds.clear();
+                  } else {
+                    _selectedIds
+                      ..clear()
+                      ..addAll(routes.map((r) => r.id));
+                  }
+                }),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Checkbox(
+                      value: routes.isNotEmpty &&
+                          _selectedIds.length == routes.length,
+                      onChanged: (checked) => setState(() {
+                        if (checked ?? false) {
+                          _selectedIds
+                            ..clear()
+                            ..addAll(routes.map((r) => r.id));
+                        } else {
+                          _selectedIds.clear();
+                        }
+                      }),
+                    ),
+                    Text(l10n.showAllRoutesLabel),
+                  ],
+                ),
+              ),
+            ),
           if (routes.isNotEmpty)
             IconButton(
               icon: Icon(_selectionMode ? Icons.close : Icons.checklist),
@@ -271,7 +349,10 @@ class _RouteListScreenState extends State<RouteListScreen> {
                 MaterialPageRoute(builder: (_) => const RecordScreen()),
               ),
             ),
-          if (!_selectionMode) const SettingsButton(),
+          // Kept visible during selection too - hiding it here left the
+          // rider with no way to reach Settings until they exited
+          // selection mode first.
+          const SettingsButton(),
           if (!_selectionMode) const RecordingRowIcon(),
         ],
       ),
@@ -308,27 +389,47 @@ class _RouteListScreenState extends State<RouteListScreen> {
       floatingActionButton: _selectionMode
           ? (_selectedIds.isEmpty
                 ? null
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_selectedIds.length > 1) ...[
+                // Horizontally scrollable - Birleştir + Haritada göster +
+                // the delete icon together can be wider than the screen on
+                // narrow phones once the count digits grow.
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    reverse: true,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_selectedIds.length > 1) ...[
+                          FloatingActionButton.extended(
+                            heroTag: 'mergeRoutes',
+                            onPressed: _mergeSelected,
+                            icon: const Icon(Icons.call_merge),
+                            label: Text(
+                              l10n.mergeRoutesButton(_selectedIds.length),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
                         FloatingActionButton.extended(
-                          heroTag: 'mergeRoutes',
-                          onPressed: _mergeSelected,
-                          icon: const Icon(Icons.call_merge),
+                          heroTag: 'showOnMap',
+                          onPressed: _showSelectedOnMap,
+                          icon: const Icon(Icons.map),
                           label: Text(
-                            l10n.mergeRoutesButton(_selectedIds.length),
+                            l10n.showOnMapButton(_selectedIds.length),
                           ),
                         ),
                         const SizedBox(width: 12),
+                        FloatingActionButton(
+                          heroTag: 'deleteSelected',
+                          onPressed: _deleteSelected,
+                          backgroundColor:
+                              Theme.of(context).colorScheme.errorContainer,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onErrorContainer,
+                          tooltip: l10n.deleteSelectedRoutesTooltip,
+                          child: const Icon(Icons.delete_outline),
+                        ),
                       ],
-                      FloatingActionButton.extended(
-                        heroTag: 'showOnMap',
-                        onPressed: _showSelectedOnMap,
-                        icon: const Icon(Icons.map),
-                        label: Text(l10n.showOnMapButton(_selectedIds.length)),
-                      ),
-                    ],
+                    ),
                   ))
           : FloatingActionButton.extended(
               onPressed: _importing ? null : _importTrack,
