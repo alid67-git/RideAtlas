@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.8 beta',
+    date: '2026-08-11',
+    note:
+        'v1.4.7\'nin devamı: bazı telefonlarda (özellikle MIUI gibi '
+        'agresif arka plan yönetimi olanlarda) sistem, öldürdüğü kayıt '
+        'servisini hiç yeniden başlatmıyor - START_STICKY yeniden '
+        'başlatması hiç tetiklenmiyor, dolayısıyla önceki düzeltmenin '
+        'kurtarma kodu da hiç çalışmıyordu. Veri dosyası diskte kalıyordu '
+        'ama kimse onu geri okumuyordu. Artık uygulama her açılışta '
+        'yarım kalmış bir kayıt olup olmadığını kontrol ediyor; varsa '
+        'otomatik olarak rota listesine kaydediyor ve bildirim gösteriyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.7 beta',
     date: '2026-08-11',
     note:
