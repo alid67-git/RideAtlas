@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.31 beta',
+    date: '2026-08-12',
+    note:
+        'Kayıt ekranı canlı bilgi sayfasında aktif sürüş süresi artık '
+        'mesafenin hemen yanında (Günlük sekmesindeki süre+km eşleşmesiyle '
+        'aynı mantık) - mola süresi de yükseklikle eşleşti. Harita '
+        'sayfasındaki küçük hız kutusu belirgin şekilde büyütüldü.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.30 beta',
     date: '2026-08-12',
     note:
