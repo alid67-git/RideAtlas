@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.24 beta',
+    date: '2026-08-12',
+    note:
+        'v1.4.23\'te Analiz panelinin Özet sekmesine eklenen "Son moladan '
+        'bu yana" kartı kaldırıldı - kaydedilmiş/içe aktarılmış bir rota '
+        'için "şu ana kadar" gibi bir zaman kavramı anlamsız, bu ancak '
+        'canlı, devam eden bir kayıt için mantıklı bir bilgi. Kayıt '
+        'ekranının bilgi sayfasında (canlı) olduğu gibi duruyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.23 beta',
     date: '2026-08-12',
     note:
