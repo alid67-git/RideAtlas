@@ -296,19 +296,6 @@ class _OverviewTab extends StatelessWidget {
         : (total - restDuration).isNegative
               ? Duration.zero
               : total - restDuration;
-    // How long the rider kept going after their last real rest before
-    // finishing - stops is chronological (built by scanning points in time
-    // order), so its last entry is the most recent one.
-    final routeEndTime = points.isEmpty ? null : points.last.time;
-    final lastStopEnd = stops.isEmpty ? null : stops.last.end;
-    Duration? timeSinceLastRest;
-    if (routeEndTime != null) {
-      if (lastStopEnd != null && !routeEndTime.isBefore(lastStopEnd)) {
-        timeSinceLastRest = routeEndTime.difference(lastStopEnd);
-      } else if (lastStopEnd == null) {
-        timeSinceLastRest = moving ?? total;
-      }
-    }
 
     return ListView(
       padding: const EdgeInsets.only(right: 8, top: 8),
@@ -366,13 +353,6 @@ class _OverviewTab extends StatelessWidget {
               value: restDuration == null
                   ? '—'
                   : formatAnalysisDuration(l10n, restDuration),
-            ),
-            AnalysisStatCard(
-              icon: Icons.hourglass_bottom,
-              label: l10n.timeSinceLastRestLabel,
-              value: timeSinceLastRest == null
-                  ? '—'
-                  : formatAnalysisDuration(l10n, timeSinceLastRest),
             ),
             AnalysisStatCard(
               icon: Icons.speed,
