@@ -258,7 +258,11 @@ class _RecordScreenState extends State<RecordScreen>
               ? AndroidSettings(
                   accuracy: LocationAccuracy.high,
                   distanceFilter: 0,
-                  intervalDuration: const Duration(seconds: 5),
+                  // Was 5s - far too slow for a course-up map to track real
+                  // turns/heading changes without visibly lagging behind
+                  // the actual road. 1s matches what a normal navigation
+                  // app polls at.
+                  intervalDuration: const Duration(seconds: 1),
                 )
               : const LocationSettings(
                   accuracy: LocationAccuracy.high,

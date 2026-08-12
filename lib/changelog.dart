@@ -20,6 +20,21 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.18 beta',
+    date: '2026-08-11',
+    note:
+        'KRİTİK düzeltme: hız göstergesi çok gecikmeli görünüyordu, harita '
+        'da bazen gerçek yönle uyuşmayan bir tarafa dönmüş kalıyordu - asıl '
+        'sebep, hem kayıt için kullanılan native GPS servisinin hem de '
+        'haritayı döndüren konum akışının sadece 5 saniyede bir '
+        'güncellenmesiydi (bir de native tarafta 2 saniyelik ek eşik '
+        'vardı). İkisi de artık saniyede bir güncelleniyor (native '
+        'tarafta ek eşik 0.5 saniyeye indirildi) - normal bir navigasyon '
+        'uygulamasının güncelleme hızına yakın. Hız artık gerçek '
+        'hızlanma/yavaşlamayı çok daha yakından takip ediyor, harita da '
+        'dönüşleri çok daha hızlı yakalıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.17 beta',
     date: '2026-08-11',
     note:
