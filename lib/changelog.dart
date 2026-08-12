@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.30 beta',
+    date: '2026-08-12',
+    note:
+        'KRİTİK CI düzeltmesi (3. adım): Gradle ve AGP\'den sonra bu sefer '
+        'de Kotlin sürümü (2.1.20) Flutter\'ın yeni minimum gereksinimini '
+        '(2.2.20) karşılamıyordu. Kotlin 2.2.20\'ye yükseltildi - hâlâ '
+        'AGP 9\'un altında kalınıyor (file_picker gibi eklentilerin Kotlin '
+        'derlemesini bozmaması için). Uygulama tarafında görünür bir '
+        'değişiklik yok.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.29 beta',
     date: '2026-08-12',
     note:
