@@ -20,6 +20,27 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.25 beta',
+    date: '2026-08-12',
+    note:
+        'Analiz paneli ve kayıt bilgi sayfasında bir dizi düzen '
+        'düzeltmesi: (1) Özet sekmesinin en üstteki 3\'lü şeridi '
+        '("Mesafe/Aktif sürüş süresi/Maks. hız") uzun etiket yüzünden '
+        'dengesiz görünüyordu - Maks. hız yerine Ortalama hız kondu, sürüş '
+        'süresi sütununa daha fazla yer ayrıldı. (2) Aynı sekmenin Zaman '
+        'grid\'inde: Ortalama hız\'ın yanına Maks. hız eklendi, Maksimum/'
+        'Minimum irtifa satırı Tırmanış/İniş\'in üstüne taşındı, Pil kutusu '
+        'grid\'den çıkarılıp ayrı, ortalanmış bir satır oldu. (3) Yükseklik '
+        'sekmesinin en altına büyük punto ile "Son irtifa" eklendi. (4) '
+        'Kayıt ekranının canlı bilgi sayfasında: Maksimum/Minimum irtifa '
+        'yukarı, Tırmanış/İniş aşağı taşındı, Ortalama hız\'ın yanına '
+        'Maks. hız geldi, Son moladan bu yana kendi satırına geçti. (5) '
+        'Günlük sekmesinde sürüş süresi artık mesafeden önce (yan yana '
+        'kalıyor). (6) Canlı harita üstündeki Süre/Mesafe/Yükseklik '
+        'kutularının değerleri artık etiketlerinin yanında değil altında, '
+        'ortalanmış.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.24 beta',
     date: '2026-08-12',
     note:

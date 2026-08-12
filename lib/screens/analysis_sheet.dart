@@ -263,18 +263,9 @@ class _OverviewTab extends StatelessWidget {
   final GpxRoute route;
   final List<TrackPoint> points;
 
-  /// The last GPS point that has elevation data - "where the ride's
-  /// altitude reading ended up", as opposed to [GpxRoute.maxElevation]/
-  /// [minElevation] which are the extremes across the whole track.
-  double? get _lastAltitude {
-    for (final p in points.reversed) {
-      if (p.elevation != null) return p.elevation;
-    }
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
+    final lastAltitude = lastAltitudeOf(points);
     final l10n = AppLocalizations.of(context)!;
     final speed = buildSpeedStats(points);
     final times = trackTimeRange(points);
@@ -300,6 +291,11 @@ class _OverviewTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(right: 8, top: 8),
       children: [
+        // Unequal widths instead of 3 plain Expanded columns - "Aktif sürüş
+        // süresi" is a much longer label than "Mesafe"/"Ortalama hız", which
+        // made every value shrink to match its cramped column and read as
+        // uneven at a glance. Giving it more room fixes that without
+        // dropping any of the three headline figures.
         Row(
           children: [
             Expanded(
@@ -310,6 +306,7 @@ class _OverviewTab extends StatelessWidget {
               ),
             ),
             Expanded(
+              flex: 2,
               child: AnalysisHeroStat(
                 label: l10n.netDurationLabel,
                 value: moving == null
@@ -320,8 +317,8 @@ class _OverviewTab extends StatelessWidget {
             ),
             Expanded(
               child: AnalysisHeroStat(
-                label: l10n.maxSpeed,
-                value: speed.maxKmh?.toStringAsFixed(1) ?? '—',
+                label: l10n.averageSpeedLabel,
+                value: speed.averageMovingKmh?.toStringAsFixed(1) ?? '—',
                 unit: 'km/s',
               ),
             ),
@@ -362,14 +359,11 @@ class _OverviewTab extends StatelessWidget {
                   : '${speed.averageMovingKmh!.toStringAsFixed(1)} km/s',
             ),
             AnalysisStatCard(
-              icon: Icons.trending_up,
-              label: l10n.climb,
-              value: '${route.elevationGainMeters.round()} m',
-            ),
-            AnalysisStatCard(
-              icon: Icons.trending_down,
-              label: l10n.descent,
-              value: '${route.elevationLossMeters.round()} m',
+              icon: Icons.bolt,
+              label: l10n.maxSpeed,
+              value: speed.maxKmh == null
+                  ? '—'
+                  : '${speed.maxKmh!.toStringAsFixed(1)} km/s',
             ),
             AnalysisStatCard(
               icon: Icons.arrow_upward,
@@ -386,15 +380,33 @@ class _OverviewTab extends StatelessWidget {
                   : '${route.minElevation!.round()} m',
             ),
             AnalysisStatCard(
+              icon: Icons.trending_up,
+              label: l10n.climb,
+              value: '${route.elevationGainMeters.round()} m',
+            ),
+            AnalysisStatCard(
+              icon: Icons.trending_down,
+              label: l10n.descent,
+              value: '${route.elevationLossMeters.round()} m',
+            ),
+            AnalysisStatCard(
               icon: Icons.landscape,
               label: l10n.lastAltitudeLabel,
-              value: _lastAltitude == null
+              value: lastAltitude == null
                   ? '—'
-                  : '${_lastAltitude!.round()} m',
+                  : '${lastAltitude.round()} m',
             ),
-            if (route.batteryStartPercent != null &&
-                route.batteryEndPercent != null)
-              AnalysisStatCard(
+          ],
+        ),
+        // Kept out of the grid (which would otherwise leave it alone in a
+        // half-empty last row, unbalanced) and centered on its own instead.
+        if (route.batteryStartPercent != null &&
+            route.batteryEndPercent != null) ...[
+          const SizedBox(height: 10),
+          Center(
+            child: SizedBox(
+              width: 220,
+              child: AnalysisStatCard(
                 icon: Icons.battery_std,
                 label: l10n.batteryLabel,
                 value: l10n.batteryRangeLabel(
@@ -402,8 +414,9 @@ class _OverviewTab extends StatelessWidget {
                   route.batteryEndPercent!,
                 ),
               ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -424,6 +437,7 @@ class _ElevationTab extends StatelessWidget {
         ? null
         : profile.map((s) => s.elevation).reduce((a, b) => a + b) /
               profile.length;
+    final lastAltitude = lastAltitudeOf(points);
     final theme = Theme.of(context);
 
     return ListView(
@@ -487,6 +501,15 @@ class _ElevationTab extends StatelessWidget {
                   : '${netEle >= 0 ? '+' : ''}${netEle.round()} m',
             ),
           ],
+        ),
+        const SizedBox(height: 20),
+        // The rider's own reading of "how high up am I now" - worth calling
+        // out large at the very bottom, separate from the grid above (which
+        // is all track-wide extremes/averages, not a single current value).
+        AnalysisHeroStat(
+          label: l10n.lastAltitudeLabel,
+          value: lastAltitude == null ? '—' : lastAltitude.round().toString(),
+          unit: 'm',
         ),
       ],
     );
@@ -942,16 +965,16 @@ class _DayCard extends StatelessWidget {
           AnalysisStatGrid(
             children: [
               AnalysisStatCard(
-                icon: Icons.straighten,
-                label: l10n.distance,
-                value: '${day.distanceKm.toStringAsFixed(0)} km',
-              ),
-              AnalysisStatCard(
                 icon: Icons.schedule,
                 label: l10n.ridingDuration,
                 value: day.ridingDuration == null
                     ? '—'
                     : formatAnalysisDuration(l10n, day.ridingDuration!),
+              ),
+              AnalysisStatCard(
+                icon: Icons.straighten,
+                label: l10n.distance,
+                value: '${day.distanceKm.toStringAsFixed(0)} km',
               ),
               AnalysisStatCard(
                 icon: Icons.hotel,
@@ -1006,6 +1029,16 @@ class _DayCard extends StatelessWidget {
 }
 
 // ─── Shared UI ──────────────────────────────────────────────────────────────
+
+/// The last GPS point that has elevation data - "where the ride's altitude
+/// reading ended up", as opposed to a route's max/min elevation which are
+/// the extremes across the whole track.
+double? lastAltitudeOf(List<TrackPoint> points) {
+  for (final p in points.reversed) {
+    if (p.elevation != null) return p.elevation;
+  }
+  return null;
+}
 
 String formatAnalysisDuration(AppLocalizations l10n, Duration d) {
   final h = d.inHours;
