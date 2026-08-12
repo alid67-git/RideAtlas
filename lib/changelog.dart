@@ -20,6 +20,20 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.26 beta',
+    date: '2026-08-12',
+    note:
+        'Bir önceki sürümde "ikon rengi/büyüklüğü" ayarı yanlışlıkla '
+        'sadece istatistik kartı ikonlarına eklenmişti - kullanıcı aslında '
+        'harita üzerindeki araç ikonunu (motor/araba işaretçisi) '
+        'kastetmişti. Araç ikonu seçim ekranı de aynı mantığa geçti: araç '
+        'türü (klasik nokta/motosiklet/araba), renk ve büyüklük artık üç '
+        'ayrı, birbirinden bağımsız seçim - önceden bunlar 10 sabit '
+        'kombinasyondan biri olarak seçilebiliyordu (ör. "seçenek 3" hem '
+        'belirli bir rengi hem belirli bir boyu birlikte getiriyordu), '
+        'artık istediğin rengi istediğin boyla eşleştirebilirsin.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.25 beta',
     date: '2026-08-12',
     note:
