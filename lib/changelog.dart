@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.22 beta',
+    date: '2026-08-12',
+    note:
+        'Özet sayfalarındaki (hem canlı kayıt hem kayıtlı rota) tırmanış/'
+        'iniş/maksimum irtifa/minimum irtifa kartları tek satırda 4\'lü '
+        'gösteriliyordu, çok sıkışık duruyordu. Artık iki satıra bölündü: '
+        'tırmanış ve iniş bir satırda, maksimum ve minimum irtifa hemen '
+        'altındaki satırda.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.21 beta',
     date: '2026-08-12',
     note:

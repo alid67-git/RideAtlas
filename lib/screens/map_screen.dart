@@ -1122,10 +1122,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        // Climb/descent/max/min altitude side by side - they
-                        // describe the same elevation profile, so reading
-                        // them together in one row beats splitting them
-                        // across separate rows.
+                        // Climb/descent paired, max/min altitude paired
+                        // right below - both pairs describe the same
+                        // elevation profile, so grouping them beats
+                        // scattering them across the grid.
                         Row(
                           children: [
                             Expanded(
@@ -1135,9 +1135,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                                 value:
                                     '${route.elevationGainMeters.round()} m',
                                 accentColor: accent,
+                                large: true,
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: AnalysisStatCard(
                                 icon: Icons.trending_down,
@@ -1145,9 +1146,14 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                                 value:
                                     '${route.elevationLossMeters.round()} m',
                                 accentColor: accent,
+                                large: true,
                               ),
                             ),
-                            const SizedBox(width: 6),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
                             Expanded(
                               child: AnalysisStatCard(
                                 icon: Icons.arrow_upward,
@@ -1156,9 +1162,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                                     ? '—'
                                     : '${route.maxElevation!.round()} m',
                                 accentColor: accent,
+                                large: true,
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: AnalysisStatCard(
                                 icon: Icons.arrow_downward,
@@ -1167,6 +1174,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                                     ? '—'
                                     : '${route.minElevation!.round()} m',
                                 accentColor: accent,
+                                large: true,
                               ),
                             ),
                           ],

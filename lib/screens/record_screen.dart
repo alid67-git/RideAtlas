@@ -1146,11 +1146,10 @@ class _RecordScreenState extends State<RecordScreen>
                           ],
                         ),
                         const SizedBox(height: 8),
-                        // Climb/descent/max/min altitude side by side - they
-                        // describe the same elevation profile, so reading
-                        // them together in one row beats splitting them
-                        // across separate rows. Replaces the old
-                        // speed/elevation mini-charts, whose axis labels
+                        // Climb/descent paired, max/min altitude paired
+                        // right below - both pairs describe the same
+                        // elevation profile. Replaces the old speed/
+                        // elevation mini-charts, whose axis labels
                         // overlapped and were unreadable at this size.
                         Row(
                           children: [
@@ -1160,18 +1159,24 @@ class _RecordScreenState extends State<RecordScreen>
                                 label: l10n.climb,
                                 value: '${elevationChange.gain.round()} m',
                                 accentColor: accent,
+                                large: true,
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: AnalysisStatCard(
                                 icon: Icons.trending_down,
                                 label: l10n.descent,
                                 value: '${elevationChange.loss.round()} m',
                                 accentColor: accent,
+                                large: true,
                               ),
                             ),
-                            const SizedBox(width: 6),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
                             Expanded(
                               child: AnalysisStatCard(
                                 icon: Icons.arrow_upward,
@@ -1180,9 +1185,10 @@ class _RecordScreenState extends State<RecordScreen>
                                     ? '—'
                                     : '${maxAltitude.round()} m',
                                 accentColor: accent,
+                                large: true,
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: AnalysisStatCard(
                                 icon: Icons.arrow_downward,
@@ -1191,6 +1197,7 @@ class _RecordScreenState extends State<RecordScreen>
                                     ? '—'
                                     : '${minAltitude.round()} m',
                                 accentColor: accent,
+                                large: true,
                               ),
                             ),
                           ],
