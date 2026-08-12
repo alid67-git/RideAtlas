@@ -752,10 +752,10 @@ class _RecordScreenState extends State<RecordScreen>
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
       ),
       child: Column(
@@ -772,13 +772,13 @@ class _RecordScreenState extends State<RecordScreen>
             builder: (context, value) => Text(
               value.round().toString(),
               style: const TextStyle(
-                fontSize: 62,
+                fontSize: 92,
                 fontWeight: FontWeight.w800,
                 height: 1,
               ),
             ),
           ),
-          Text(l10n.speedLabel, style: theme.textTheme.titleSmall),
+          Text(l10n.speedLabel, style: theme.textTheme.titleMedium),
         ],
       ),
     );
@@ -1066,6 +1066,12 @@ class _RecordScreenState extends State<RecordScreen>
                           ),
                         ),
                         const SizedBox(height: 8),
+                        // Riding duration paired directly with distance -
+                        // same pairing the saved-route Günlük tab uses
+                        // (_DayCard: ridingDuration next to distance), so
+                        // the "how long / how far so far today" pair reads
+                        // together here too instead of duration sitting
+                        // next to rest time.
                         Row(
                           children: [
                             Expanded(
@@ -1078,11 +1084,13 @@ class _RecordScreenState extends State<RecordScreen>
                             ),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: _DurationTile(
-                                icon: Icons.pause_circle_outline,
-                                label: l10n.restDurationLabel,
-                                value: _formatDuration(recorder.restDuration),
-                                color: accent,
+                              child: AnalysisStatCard(
+                                icon: Icons.route,
+                                label: l10n.distance,
+                                value:
+                                    '${recorder.distanceKm.toStringAsFixed(2)} km',
+                                accentColor: accent,
+                                large: true,
                               ),
                             ),
                           ],
@@ -1091,13 +1099,11 @@ class _RecordScreenState extends State<RecordScreen>
                         Row(
                           children: [
                             Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.route,
-                                label: l10n.distance,
-                                value:
-                                    '${recorder.distanceKm.toStringAsFixed(2)} km',
-                                accentColor: accent,
-                                large: true,
+                              child: _DurationTile(
+                                icon: Icons.pause_circle_outline,
+                                label: l10n.restDurationLabel,
+                                value: _formatDuration(recorder.restDuration),
+                                color: accent,
                               ),
                             ),
                             const SizedBox(width: 8),
