@@ -26,7 +26,7 @@ plugins {
     // (yet), which leaves classes like FilePickerPlugin uncompiled and
     // breaks the release build. Staying on 8.x keeps that plugin-applied
     // Kotlin path working.
-    id("com.android.application") version "8.11.0" apply false
+    id("com.android.application") version "8.11.1" apply false
     id("org.jetbrains.kotlin.android") version "2.1.20" apply false
 }
 
