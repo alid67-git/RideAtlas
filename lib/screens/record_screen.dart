@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -13,7 +12,6 @@ import 'package:provider/provider.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
-import '../models/track_point.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
@@ -27,13 +25,10 @@ import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
-import 'analysis_sheet.dart'
-    show AnalysisElevationChart, AnalysisStatCard, AnalysisStatGrid;
+import 'analysis_sheet.dart' show AnalysisStatCard, AnalysisStatGrid;
 import 'location_picker_screen.dart';
 import 'map_screen.dart' show RouteMapScreen;
 import 'ride_photo_picker_screen.dart';
-
-const _speedDistance = Distance();
 
 /// True on a native Android build, where [GpsRecorder] runs a foreground
 /// service and recording survives the app being minimized. Everywhere else
@@ -855,10 +850,17 @@ class _RecordScreenState extends State<RecordScreen>
     final speedStats = buildSpeedStats(points);
     final elevationChange = computeElevationChange(points);
     final elevationSamples = buildElevationProfile(points);
-    final speedSpots = _speedTimeSpots(points);
     final altitude = recorder.currentAltitude;
-    final hasSpeedChart = speedSpots.length >= 2;
-    final hasElevationChart = elevationSamples.length >= 2;
+    double? maxAltitude;
+    double? minAltitude;
+    for (final s in elevationSamples) {
+      if (maxAltitude == null || s.elevation > maxAltitude) {
+        maxAltitude = s.elevation;
+      }
+      if (minAltitude == null || s.elevation < minAltitude) {
+        minAltitude = s.elevation;
+      }
+    }
     final accent = _cardAccent(theme);
 
     return Scaffold(
@@ -1094,54 +1096,32 @@ class _RecordScreenState extends State<RecordScreen>
                               accentColor: accent,
                               large: true,
                             ),
+                            // Replaced the speed/elevation mini-charts that
+                            // used to live below this grid - at the size
+                            // available here their axis labels overlapped
+                            // and were unreadable at a glance. Two more
+                            // plain stat cards read instantly instead.
+                            AnalysisStatCard(
+                              icon: Icons.arrow_upward,
+                              label: l10n.maxAltitude,
+                              value: maxAltitude == null
+                                  ? '—'
+                                  : '${maxAltitude.round()} m',
+                              accentColor: accent,
+                              large: true,
+                            ),
+                            AnalysisStatCard(
+                              icon: Icons.arrow_downward,
+                              label: l10n.minAltitude,
+                              value: minAltitude == null
+                                  ? '—'
+                                  : '${minAltitude.round()} m',
+                              accentColor: accent,
+                              large: true,
+                            ),
                           ],
                         ),
-                        if (hasSpeedChart || hasElevationChart) ...[
-                          const SizedBox(height: 8),
-                          // Fixed height rather than Expanded - this whole
-                          // section now lives inside a SingleChildScrollView
-                          // (needed once the stat cards above grew this
-                          // much), and a scroll view can't hand out
-                          // unbounded height the way the old Expanded did.
-                          // Sized generously since removing "Mola süresi"
-                          // and "Toplam süre" from the grid (moved
-                          // elsewhere above) freed up real vertical room
-                          // that used to sit empty below these charts.
-                          SizedBox(
-                            height: 220,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (hasSpeedChart)
-                                  Expanded(
-                                    child: _MiniChart(
-                                      icon: Icons.speed,
-                                      title: l10n.speedChartTitle,
-                                      child: _SpeedTimeChart(
-                                        spots: speedSpots,
-                                        accent: accent,
-                                      ),
-                                    ),
-                                  ),
-                                if (hasSpeedChart && hasElevationChart)
-                                  const SizedBox(width: 8),
-                                if (hasElevationChart)
-                                  Expanded(
-                                    child: _MiniChart(
-                                      icon: Icons.terrain,
-                                      title: l10n.elevationChartTitle,
-                                      child: AnalysisElevationChart(
-                                        samples: elevationSamples,
-                                        showPeakMarkers: true,
-                                        lineColor: accent,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                        ],
+                        const SizedBox(height: 8),
                       ],
                     ),
                   ),
@@ -1156,66 +1136,6 @@ class _RecordScreenState extends State<RecordScreen>
         ],
       ),
     );
-  }
-
-  /// Per-segment speed samples (minutes since the first *moving* sample,
-  /// km/h) for the speed-over-time chart, using the same plausibility
-  /// filter [buildSpeedStats] does (ignores stopped/GPS-jitter and
-  /// implausible spikes) so the chart and the max/average speed stats above
-  /// it always agree. Downsampled to a bounded point count so the chart
-  /// stays cheap to rebuild every second even on a multi-hour ride.
-  List<FlSpot> _speedTimeSpots(List<TrackPoint> points) {
-    const minMovingKmh = 1.0;
-    const maxPlausibleKmh = 250.0;
-    const maxAccelerationKmhPerSec = 30.0;
-    if (points.length < 2) return const [];
-
-    final spots = <FlSpot>[];
-    double? lastAcceptedKmh;
-    DateTime? lastAcceptedTime;
-    for (var i = 1; i < points.length; i++) {
-      final prev = points[i - 1];
-      final curr = points[i];
-      final t0 = prev.time;
-      final t1 = curr.time;
-      if (t0 == null || t1 == null) continue;
-      final dtSeconds = t1.difference(t0).inMilliseconds / 1000.0;
-      if (dtSeconds < 1) continue;
-      final meters = _speedDistance(prev.latLng, curr.latLng);
-      final kmh = (meters / 1000.0) / (dtSeconds / 3600.0);
-      if (kmh < minMovingKmh || kmh > maxPlausibleKmh) continue;
-      // Same GPS-glitch guard as buildSpeedStats - a segment implying
-      // implausible acceleration since the last accepted reading is a bad
-      // fix, not real riding.
-      if (lastAcceptedKmh != null && lastAcceptedTime != null) {
-        final accelDtSeconds =
-            t1.difference(lastAcceptedTime).inMilliseconds / 1000.0;
-        if (accelDtSeconds > 0 &&
-            (kmh - lastAcceptedKmh).abs() >
-                maxAccelerationKmhPerSec * accelDtSeconds) {
-          continue;
-        }
-      }
-      lastAcceptedKmh = kmh;
-      lastAcceptedTime = t1;
-      // Minutes since t1 for now - shifted below once the first accepted
-      // sample's own time is known, so the chart starts right where actual
-      // riding does instead of at whenever recording began. A ride that
-      // sits still (or in a pre-departure rest) for a few minutes before
-      // moving used to leave a blank, meaningless stretch at the start of
-      // this exact chart.
-      spots.add(FlSpot(t1.millisecondsSinceEpoch / 60000.0, kmh));
-    }
-    if (spots.isEmpty) return spots;
-    final offset = spots.first.x;
-    for (var i = 0; i < spots.length; i++) {
-      spots[i] = FlSpot(spots[i].x - offset, spots[i].y);
-    }
-
-    const maxChartPoints = 200;
-    if (spots.length <= maxChartPoints) return spots;
-    final step = (spots.length / maxChartPoints).ceil();
-    return [for (var i = 0; i < spots.length; i += step) spots[i]];
   }
 
   /// Thin vertical separator between the duration/distance/altitude
@@ -1452,39 +1372,6 @@ class _DurationTile extends StatelessWidget {
   }
 }
 
-/// Wraps a chart with a small colored title, for the side-by-side speed/
-/// elevation charts at the bottom of the info page.
-class _MiniChart extends StatelessWidget {
-  const _MiniChart({
-    required this.icon,
-    required this.title,
-    required this.child,
-  });
-
-  final IconData icon;
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 16, color: _RecordScreenState._infoAccent),
-            const SizedBox(width: 4),
-            Text(title, style: theme.textTheme.labelMedium),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Expanded(child: child),
-      ],
-    );
-  }
-}
-
 /// The info page's full-screen backdrop: a slowly breathing gradient plus
 /// two soft glow blobs, replacing the plain theme background so the page
 /// reads as a modern dashboard rather than a flat list of colored boxes.
@@ -1622,127 +1509,6 @@ class _RoundIconButton extends StatelessWidget {
         icon: Icon(icon),
         tooltip: tooltip,
         onPressed: onPressed,
-      ),
-    );
-  }
-}
-
-/// Speed-over-time line chart for [RecordScreen]'s info page - same visual
-/// language as [AnalysisElevationChart], just plotting km/h against minutes
-/// since the ride started instead of elevation against distance.
-///
-/// The top speed reached always stays marked on the chart itself (a dot
-/// plus a small floating label) rather than only being visible by touching
-/// the chart - as the ride goes on and the x-axis keeps rescaling to fit
-/// more time, the peak would otherwise scroll out of easy reach and there'd
-/// be no way to tell "how fast did I actually go" from the chart at a
-/// glance.
-class _SpeedTimeChart extends StatelessWidget {
-  const _SpeedTimeChart({required this.spots, required this.accent});
-
-  final List<FlSpot> spots;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
-    final maxX = spots.last.x;
-    final theme = Theme.of(context);
-
-    var maxIndex = 0;
-    for (var i = 1; i < spots.length; i++) {
-      if (spots[i].y > spots[maxIndex].y) maxIndex = i;
-    }
-    final maxSpot = spots[maxIndex];
-
-    final barData = LineChartBarData(
-      spots: spots,
-      isCurved: true,
-      barWidth: 2,
-      color: accent,
-      dotData: FlDotData(
-        show: true,
-        checkToShowDot: (spot, bar) => spot == maxSpot,
-        getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(
-          radius: 4,
-          color: accent,
-          strokeWidth: 2,
-          strokeColor: theme.colorScheme.surface,
-        ),
-      ),
-      belowBarData: BarAreaData(
-        show: true,
-        color: accent.withValues(alpha: 0.15),
-      ),
-    );
-
-    return LineChart(
-      LineChartData(
-        minX: 0,
-        maxX: maxX == 0 ? 1 : maxX,
-        minY: 0,
-        maxY: maxY + 14,
-        gridData: const FlGridData(drawVerticalLine: false),
-        borderData: FlBorderData(show: false),
-        titlesData: FlTitlesData(
-          topTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
-          ),
-          rightTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
-          ),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 40,
-              getTitlesWidget: (v, meta) {
-                return Text(
-                  '${v.round()}',
-                  style: theme.textTheme.bodySmall,
-                );
-              },
-            ),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 24,
-              getTitlesWidget: (v, meta) {
-                return Text(
-                  '${v.round()}dk',
-                  style: theme.textTheme.bodySmall,
-                );
-              },
-            ),
-          ),
-        ),
-        lineTouchData: LineTouchData(
-          enabled: false,
-          touchTooltipData: LineTouchTooltipData(
-            tooltipPadding: const EdgeInsets.symmetric(
-              horizontal: 6,
-              vertical: 3,
-            ),
-            tooltipMargin: 8,
-            getTooltipColor: (_) => accent.withValues(alpha: 0.92),
-            getTooltipItems: (touchedSpots) => touchedSpots
-                .map(
-                  (s) => LineTooltipItem(
-                    '${s.y.round()} km/h',
-                    const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11,
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-        ),
-        showingTooltipIndicators: [
-          ShowingTooltipIndicators([LineBarSpot(barData, 0, maxSpot)]),
-        ],
-        lineBarsData: [barData],
       ),
     );
   }
