@@ -6,12 +6,14 @@ import 'package:provider/provider.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../repositories/locale_controller.dart';
 import '../repositories/satellite_visibility_controller.dart';
+import '../repositories/stat_icon_settings_controller.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/battery_optimization.dart';
 import '../widgets/vehicle_marker.dart';
 import 'about_screen.dart';
 import 'help_screen.dart';
 import 'language_picker.dart';
+import 'stat_icon_settings_screen.dart';
 import 'vehicle_icon_picker_screen.dart';
 
 /// App-bar-style icon that opens [SettingsScreen]. Replaces the old
@@ -99,6 +101,19 @@ class SettingsScreen extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const VehicleIconPickerScreen()),
+            ),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: Icon(
+              Icons.route,
+              color: context.watch<StatIconSettingsController>().color,
+            ),
+            title: Text(l10n.statIconSettingsTitle),
+            subtitle: Text(l10n.statIconSettingsSubtitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const StatIconSettingsScreen()),
             ),
           ),
           const Divider(height: 1),

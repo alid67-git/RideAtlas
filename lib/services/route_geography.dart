@@ -71,7 +71,7 @@ class RouteGeographyAnalyzer {
   Future<RouteGeography> analyze(
     List<TrackPoint> points, {
     double sampleEveryKm = 30,
-    Duration minStop = const Duration(minutes: 20),
+    Duration minStop = const Duration(minutes: 10),
     double stopRadiusMeters = 180,
     GeographyProgress? onProgress,
   }) async {
@@ -132,7 +132,7 @@ class RouteGeographyAnalyzer {
   /// Dwell clusters: stay within [radiusMeters] for at least [minDuration].
   List<DetectedStop> detectStops(
     List<TrackPoint> points, {
-    Duration minDuration = const Duration(minutes: 20),
+    Duration minDuration = const Duration(minutes: 10),
     double radiusMeters = 180,
   }) {
     final stops = <DetectedStop>[];

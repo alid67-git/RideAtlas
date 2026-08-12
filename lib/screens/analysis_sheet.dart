@@ -1,10 +1,12 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
 import '../models/track_point.dart';
+import '../repositories/stat_icon_settings_controller.dart';
 import '../services/daily_analysis.dart';
 import '../services/gpx_parser.dart';
 import '../services/route_geography.dart';
@@ -1117,6 +1119,11 @@ class AnalysisStatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = accentColor;
+    // Icon color/size are a user-wide choice (Settings > icon look) rather
+    // than decided per card here - previously every card picked its own
+    // icon color (accent or theme primary), which read as arbitrary to
+    // riders who wanted a say in it.
+    final iconSettings = context.watch<StatIconSettingsController>();
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: large ? 10 : 8),
       decoration: BoxDecoration(
@@ -1137,7 +1144,11 @@ class AnalysisStatCard extends StatelessWidget {
         mainAxisAlignment: large ? MainAxisAlignment.center : MainAxisAlignment.start,
         mainAxisSize: large ? MainAxisSize.min : MainAxisSize.max,
         children: [
-          Icon(icon, color: accent ?? theme.colorScheme.primary, size: large ? 26 : 20),
+          Icon(
+            icon,
+            color: iconSettings.color,
+            size: (large ? 26 : 20) * iconSettings.sizeScale,
+          ),
           SizedBox(width: large ? 10 : 8),
           if (large)
             Flexible(

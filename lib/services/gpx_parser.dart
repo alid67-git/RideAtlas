@@ -207,8 +207,10 @@ List<ElevationSample> buildElevationProfile(List<TrackPoint> points) {
 /// bad fix jumping (and jumping back) reads as one impossibly sharp spike,
 /// not real riding, and would otherwise blow out [maxKmh]/[averageMovingKmh].
 /// [minKmh] / [maxKmh] / [averageMovingKmh] are therefore "while moving"
-/// figures; overall average (distance ÷ total duration) lives on [GpxRoute].
-/// For how long the rider was actually moving, see [RouteGeographyAnalyzer.
+/// figures - [averageMovingKmh] is distance ÷ time over just the accepted
+/// moving segments (riding-only, rests excluded), not a plain mean of the
+/// per-segment kmh values. For how long the rider was actually moving, see
+/// [RouteGeographyAnalyzer.
 /// detectStops] instead - a per-segment speed check is too noisy (GPS
 /// jitter keeps flickering a stationary rider just above/below the
 /// threshold) to use as a duration figure on its own.
@@ -220,7 +222,13 @@ SpeedStats buildSpeedStats(List<TrackPoint> points) {
 
   double? minKmh;
   double? maxKmh;
-  var sumKmh = 0.0;
+  // Distance/time over every accepted moving segment, not a plain mean of
+  // per-segment kmh values - a rider means "how fast was I actually going
+  // while riding" (distance ÷ riding time), not an unweighted average that
+  // lets a handful of short slow segments drag the figure down as much as
+  // a long fast one.
+  var movingMeters = 0.0;
+  var movingSeconds = 0.0;
   var count = 0;
   double? lastAcceptedKmh;
   DateTime? lastAcceptedTime;
@@ -253,14 +261,17 @@ SpeedStats buildSpeedStats(List<TrackPoint> points) {
 
     minKmh = minKmh == null ? kmh : (kmh < minKmh ? kmh : minKmh);
     maxKmh = maxKmh == null ? kmh : (kmh > maxKmh ? kmh : maxKmh);
-    sumKmh += kmh;
+    movingMeters += meters;
+    movingSeconds += dtSeconds;
     count++;
   }
 
   return SpeedStats(
     minKmh: minKmh,
     maxKmh: maxKmh,
-    averageMovingKmh: count == 0 ? null : sumKmh / count,
+    averageMovingKmh: count == 0
+        ? null
+        : (movingMeters / 1000.0) / (movingSeconds / 3600.0),
   );
 }
 

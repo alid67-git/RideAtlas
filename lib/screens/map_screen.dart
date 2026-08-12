@@ -933,13 +933,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   static const _summaryAccent = Color(0xFF4FA3FF);
 
   /// The stat-summary "page 2" for a saved/imported route - the same kind
-  /// of dashboard [RecordScreen] shows for a ride in progress (blue cards,
-  /// a big hero duration figure), reusing [AnalysisStatCard]/
-  /// [AnalysisStatGrid] rather than duplicating them. Unlike the live
-  /// recorder there's no current speed/altitude to show, so this leads with
-  /// total duration instead and covers the ride's finished statistics: the
-  /// same riding/rest split the Overview and Daily tabs already use, min/
-  /// max altitude, average/max speed, climb/descent.
+  /// of dashboard [RecordScreen] shows for a ride in progress (blue cards),
+  /// reusing [AnalysisStatCard] rather than duplicating it. Covers the
+  /// ride's finished statistics: the same riding/rest split the Overview
+  /// and Daily tabs already use, min/max altitude, average/max speed,
+  /// climb/descent.
   Widget _buildSummaryPage(
     BuildContext context,
     GpxRoute route,
@@ -950,16 +948,28 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     const accent = _summaryAccent;
     final speed = buildSpeedStats(points);
     final total = route.duration;
+    final stops = RouteGeographyAnalyzer().detectStops(points);
     final restDuration = total == null
         ? null
-        : RouteGeographyAnalyzer()
-              .detectStops(points)
-              .fold<Duration>(Duration.zero, (sum, stop) => sum + stop.duration);
+        : stops.fold<Duration>(Duration.zero, (sum, stop) => sum + stop.duration);
     final moving = (total == null || restDuration == null)
         ? null
         : (total - restDuration).isNegative
               ? Duration.zero
               : total - restDuration;
+    // How long the rider kept going after their last real rest before
+    // finishing - stops is already chronological (built by scanning points
+    // in time order), so its last entry is the most recent one.
+    final routeEndTime = points.isEmpty ? null : points.last.time;
+    final lastStopEnd = stops.isEmpty ? null : stops.last.end;
+    Duration? timeSinceLastRest;
+    if (routeEndTime != null) {
+      if (lastStopEnd != null && !routeEndTime.isBefore(lastStopEnd)) {
+        timeSinceLastRest = routeEndTime.difference(lastStopEnd);
+      } else if (lastStopEnd == null) {
+        timeSinceLastRest = moving ?? total;
+      }
+    }
 
     return Scaffold(
       body: Stack(
@@ -1021,51 +1031,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: accent.withValues(
-                        alpha: theme.brightness == Brightness.dark ? 0.20 : 0.12,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: accent.withValues(alpha: 0.35)),
-                    ),
-                    child: Center(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Icon(Icons.schedule, size: 30, color: accent),
-                            const SizedBox(width: 10),
-                            Text(
-                              l10n.totalDurationLabel,
-                              style: theme.textTheme.titleMedium,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              total == null
-                                  ? '—'
-                                  : formatAnalysisDuration(l10n, total),
-                              style: const TextStyle(
-                                fontSize: 40,
-                                fontWeight: FontWeight.w900,
-                                height: 1,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1099,65 +1064,110 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        AnalysisStatGrid(
-                          childAspectRatio: 2.3,
+                        Row(
                           children: [
-                            AnalysisStatCard(
-                              icon: Icons.route,
-                              label: l10n.distance,
-                              value: '${route.distanceKm.toStringAsFixed(2)} km',
-                              accentColor: accent,
-                              large: true,
+                            Expanded(
+                              child: AnalysisStatCard(
+                                icon: Icons.route,
+                                label: l10n.distance,
+                                value:
+                                    '${route.distanceKm.toStringAsFixed(2)} km',
+                                accentColor: accent,
+                                large: true,
+                              ),
                             ),
-                            AnalysisStatCard(
-                              icon: Icons.equalizer,
-                              label: l10n.averageSpeedLabel,
-                              value: speed.averageMovingKmh == null
-                                  ? '—'
-                                  : '${speed.averageMovingKmh!.toStringAsFixed(1)} km/h',
-                              accentColor: accent,
-                              large: true,
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: AnalysisStatCard(
+                                icon: Icons.equalizer,
+                                label: l10n.averageSpeedLabel,
+                                value: speed.averageMovingKmh == null
+                                    ? '—'
+                                    : '${speed.averageMovingKmh!.toStringAsFixed(1)} km/h',
+                                accentColor: accent,
+                                large: true,
+                              ),
                             ),
-                            AnalysisStatCard(
-                              icon: Icons.bolt,
-                              label: l10n.maxSpeed,
-                              value: speed.maxKmh == null
-                                  ? '—'
-                                  : '${speed.maxKmh!.toStringAsFixed(1)} km/h',
-                              accentColor: accent,
-                              large: true,
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: AnalysisStatCard(
+                                icon: Icons.bolt,
+                                label: l10n.maxSpeed,
+                                value: speed.maxKmh == null
+                                    ? '—'
+                                    : '${speed.maxKmh!.toStringAsFixed(1)} km/h',
+                                accentColor: accent,
+                                large: true,
+                              ),
                             ),
-                            AnalysisStatCard(
-                              icon: Icons.trending_up,
-                              label: l10n.climb,
-                              value: '${route.elevationGainMeters.round()} m',
-                              accentColor: accent,
-                              large: true,
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: AnalysisStatCard(
+                                icon: Icons.hourglass_bottom,
+                                label: l10n.timeSinceLastRestLabel,
+                                value: timeSinceLastRest == null
+                                    ? '—'
+                                    : formatAnalysisDuration(
+                                        l10n,
+                                        timeSinceLastRest,
+                                      ),
+                                accentColor: accent,
+                                large: true,
+                              ),
                             ),
-                            AnalysisStatCard(
-                              icon: Icons.trending_down,
-                              label: l10n.descent,
-                              value: '${route.elevationLossMeters.round()} m',
-                              accentColor: accent,
-                              large: true,
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // Climb/descent/max/min altitude side by side - they
+                        // describe the same elevation profile, so reading
+                        // them together in one row beats splitting them
+                        // across separate rows.
+                        Row(
+                          children: [
+                            Expanded(
+                              child: AnalysisStatCard(
+                                icon: Icons.trending_up,
+                                label: l10n.climb,
+                                value:
+                                    '${route.elevationGainMeters.round()} m',
+                                accentColor: accent,
+                              ),
                             ),
-                            AnalysisStatCard(
-                              icon: Icons.arrow_upward,
-                              label: l10n.maxAltitude,
-                              value: route.maxElevation == null
-                                  ? '—'
-                                  : '${route.maxElevation!.round()} m',
-                              accentColor: accent,
-                              large: true,
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: AnalysisStatCard(
+                                icon: Icons.trending_down,
+                                label: l10n.descent,
+                                value:
+                                    '${route.elevationLossMeters.round()} m',
+                                accentColor: accent,
+                              ),
                             ),
-                            AnalysisStatCard(
-                              icon: Icons.arrow_downward,
-                              label: l10n.minAltitude,
-                              value: route.minElevation == null
-                                  ? '—'
-                                  : '${route.minElevation!.round()} m',
-                              accentColor: accent,
-                              large: true,
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: AnalysisStatCard(
+                                icon: Icons.arrow_upward,
+                                label: l10n.maxAltitude,
+                                value: route.maxElevation == null
+                                    ? '—'
+                                    : '${route.maxElevation!.round()} m',
+                                accentColor: accent,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: AnalysisStatCard(
+                                icon: Icons.arrow_downward,
+                                label: l10n.minAltitude,
+                                value: route.minElevation == null
+                                    ? '—'
+                                    : '${route.minElevation!.round()} m',
+                                accentColor: accent,
+                              ),
                             ),
                           ],
                         ),

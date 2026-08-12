@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,11 +12,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../build_info.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
-import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/gps_recorder.dart';
 import '../services/native_recording.dart';
-import '../services/track_io.dart';
 import '../services/update_checker.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/satellite_count_badge.dart';
@@ -26,21 +23,6 @@ import 'map_screen.dart' show MapStylePickerDialog;
 import 'record_screen.dart';
 import 'route_list_screen.dart';
 import 'settings_screen.dart';
-
-const _monthNamesTr = [
-  'Oca',
-  'Şub',
-  'Mar',
-  'Nis',
-  'May',
-  'Haz',
-  'Tem',
-  'Ağu',
-  'Eyl',
-  'Eki',
-  'Kas',
-  'Ara',
-];
 
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
@@ -99,63 +81,23 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     if (NativeRecording.isSupported) _recoverOrphanedRecording();
   }
 
-  /// Recovers GPS points left over from a recording the app never got to
+  /// Clears GPS points left over from a recording the app never got to
   /// stop/discard itself - the process was killed mid-ride (OEM background
-  /// app management, very low battery, ...) before that could happen. Saves
-  /// them as a normal route, same as tapping "Bitir" would have, so an
-  /// interruption never silently loses a ride - see
-  /// RecordingLocationService.onStartCommand (native) for where the data
-  /// itself gets protected from being wiped in the first place.
+  /// app management, very low battery, ...) before that could happen. Used
+  /// to auto-import these as a new route on next launch, but a momentary
+  /// GPS/process hiccup could leave behind a tiny, bogus leftover file that
+  /// then silently appeared as a phantom route mixed in with real ones -
+  /// confusing, and hard to tell apart from an intentional ride. Simplest
+  /// fix: just drop it. Leaving it on disk instead would risk it bleeding
+  /// into the *next* real recording (RecordingLocationService.
+  /// onStartCommand reloads any leftover file it finds when a new recording
+  /// starts), which would be worse.
   Future<void> _recoverOrphanedRecording() async {
-    List<Map<Object?, Object?>> raw;
     try {
-      raw = await NativeRecording.getOrphanedPoints();
-    } catch (_) {
-      // No native handler registered (e.g. widget tests, which default to
-      // TargetPlatform.android with no platform side to answer channel
-      // calls at all) - nothing to recover from in that case anyway.
-      return;
-    }
-    if (raw.isEmpty) return;
-    final points = NativeRecording.parsePoints(raw);
-    if (points.length < 2) {
-      await NativeRecording.clearOrphanedPoints();
-      return;
-    }
-    if (!mounted) return;
-
-    final start = points.first.time ?? DateTime.now();
-    final name =
-        'Kayıt ${start.day} ${_monthNamesTr[start.month - 1]} ${start.year} '
-        '${start.hour.toString().padLeft(2, '0')}:'
-        '${start.minute.toString().padLeft(2, '0')}';
-    final gpx = exportTrack(
-      name: name,
-      points: points,
-      waypoints: const [],
-      format: TrackFormat.gpx,
-    );
-    final bytes = Uint8List.fromList(utf8.encode(gpx));
-
-    try {
-      await context.read<RouteRepository>().importFromBytes(
-        bytes: bytes,
-        suggestedFileName: '$name.gpx',
-      );
       await NativeRecording.clearOrphanedPoints();
     } catch (_) {
-      // Leave the file in place and retry on the next launch, rather than
-      // silently losing it over a one-off import failure.
-      return;
+      // No native handler registered (e.g. widget tests) - nothing to do.
     }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          AppLocalizations.of(context)!.orphanedRecordingRecovered(name),
-        ),
-      ),
-    );
   }
 
   void _showGpsFlash(String message) {

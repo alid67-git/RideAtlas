@@ -1,11 +1,15 @@
 /// Bumped by hand on every push so the running build can be eyeballed on
 /// screen (Chrome tabs / dev servers can otherwise silently serve stale JS).
-const String kAppBuildLabel = 'v1.4.20 beta';
+const String kAppBuildLabel = 'v1.4.21 beta';
 
 /// Shown once, in a dialog, the first time this build label is seen.
 const String kAppBuildNote =
-    'GPS hız/yön gecikmesine farklı bir çözüm: bir telefonun GPS çipi zaten '
-    'saniyede birden hızlı ölçüm üretemiyor, bu yüzden aralığı daha da '
-    'kısaltmak yerine hız rakamı ve harita kamerası artık her yeni ölçüm '
-    'geldiğinde sürekli, akıcı bir animasyonla o değere doğru kayıyor - '
-    'donup birden zıplamak yerine hep hareket hâlinde görünüyor.';
+    'Bir sürü küçük düzeltme: gereksiz "geçmiş kaydı kurtarma" özelliği '
+    'kaldırıldı (karışıklığa yol açıyordu); anlık duruşlar artık mola '
+    'sayılmıyor, sadece 10 dakika ve üzeri duruşlar mola - ortalama hız da '
+    'artık sadece sürüş süresine göre hesaplanıyor; kayıt ekranındaki '
+    'Süre/Mesafe/Yükseklik kutuları hız büyüdükçe sıkışmasın diye kendi '
+    'satırına taşındı; istatistik kartı ikonlarının rengi ve büyüklüğü artık '
+    'Ayarlar\'dan seçilebiliyor; özet sayfaları sadeleşti: Maks. hız yanına '
+    'son moladan bu yana geçen süre eklendi, tırmanış/iniş/maks-min irtifa '
+    'tek satırda yan yana.';

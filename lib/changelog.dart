@@ -20,6 +20,32 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.21 beta',
+    date: '2026-08-12',
+    note:
+        'Bir seferde birçok küçük düzeltme: (1) Uygulama açılışında '
+        'yarım kalmış kayıtları otomatik "kurtarıp" rota listesine ekleyen '
+        'özellik kaldırıldı - anlık aksaklıklarda ortaya çıkan sahte '
+        'kayıtlarla listeyi karıştırıyordu, artık böyle bir kalıntı '
+        'sessizce siliniyor. (2) Mola tanımı değişti: artık sadece 10 '
+        'dakika ve üzeri süren duruşlar "mola" sayılıyor - kısa bir kırmızı '
+        'ışık/duraklama artık sürüş süresine dahil kalıyor, mola süresini '
+        'şişirmiyor (hem canlı kayıtta hem kayıtlı rota özetinde). (3) '
+        '"Ortalama hız" artık gerçekten sadece sürüş süresi üzerinden '
+        '(mesafe ÷ hareket hâlindeki süre) hesaplanıyor. (4) Kayıt '
+        'ekranındaki canlı haritanın üstündeki Süre/Mesafe/Yükseklik '
+        'kutuları artık hız rakamının kendi satırında değil, altında ayrı '
+        'bir satırda - hız 3 haneye çıkınca artık o kutuları sıkıştırıp '
+        'okunmaz hâle getirmiyor. (5) Ayarlar\'a yeni bir "İstatistik ikon '
+        'görünümü" eklendi: kart ikonlarının rengini ve büyüklüğünü '
+        'istediğin gibi seçebiliyorsun. (6) Hem canlı kayıt hem kayıtlı '
+        'rota özet sayfalarında: "Toplam süre" şeridi kaldırıldı (Sürüş '
+        'süresi + Mola süresi zaten yeterli), "Maks. hız" kartının yanına '
+        '"Son moladan bu yana" geçen süre eklendi, tırmanış/iniş/maksimum '
+        'irtifa/minimum irtifa artık tek satırda yan yana - hepsi aynı '
+        'irtifa profiline ait oldukları için birlikte okunuyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.20 beta',
     date: '2026-08-12',
     note:
