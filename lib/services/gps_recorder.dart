@@ -35,6 +35,14 @@ class GpsRecorder extends ChangeNotifier {
   static const _autoPauseDelay = Duration(seconds: 15);
   static const _speedSmoothingWindow = 4;
 
+  /// Only a stop lasting this long or more counts as an actual "mola" -
+  /// shorter ones (a red light, a junction) are momentary, not rest, and
+  /// riders don't want them padding out the rest-time figure or breaking up
+  /// the ride into false stops. Matches the threshold
+  /// [RouteGeographyAnalyzer.detectStops] uses for already-saved routes, so
+  /// live and saved figures agree.
+  static const _minMolaDuration = Duration(minutes: 10);
+
   RecordingState _state = RecordingState.idle;
   final List<TrackPoint> _points = [];
   StreamSubscription<Position>? _sub;
@@ -43,7 +51,11 @@ class GpsRecorder extends ChangeNotifier {
   int _nativeIngestedCount = 0;
   final Set<int> _seenNativeTimeMs = {};
   DateTime? _startedAt;
-  Duration _pausedDuration = Duration.zero;
+  // Each completed pause (manual or auto), so only ones >= _minMolaDuration
+  // count as "mola" - short ones fold back into elapsed/riding time instead
+  // of their own bucket. Records the end time too, so "time since last
+  // mola" can be reported.
+  final List<({Duration duration, DateTime end})> _completedPauses = [];
   DateTime? _pauseStartedAt;
   double _currentSpeedKmh = 0;
   double? _currentAltitude;
@@ -89,15 +101,13 @@ class GpsRecorder extends ChangeNotifier {
   }
 
   /// Active/moving duration - wall-clock time since [start] minus every
-  /// pause (manual or auto-pause). This is what most riders mean by "how
-  /// long have I actually been riding".
+  /// pause of [_minMolaDuration] or longer. This is what most riders mean
+  /// by "how long have I actually been riding": a red light or a junction
+  /// stop still counts as riding, only a genuine break doesn't.
   Duration get elapsed {
     final started = _startedAt;
     if (started == null) return Duration.zero;
-    final pausedSoFar = _pauseStartedAt != null
-        ? _pausedDuration + DateTime.now().difference(_pauseStartedAt!)
-        : _pausedDuration;
-    return DateTime.now().difference(started) - pausedSoFar;
+    return DateTime.now().difference(started) - restDuration;
   }
 
   /// Raw wall-clock time since [start], including every stop/pause - unlike
@@ -107,12 +117,32 @@ class GpsRecorder extends ChangeNotifier {
     return started == null ? null : DateTime.now().difference(started);
   }
 
-  /// Time spent paused/stopped (manual pause + auto-pause) since [start].
+  /// Time spent on qualifying rests ([_minMolaDuration] or longer, manual or
+  /// auto-pause) since [start]. Shorter stops don't count - see [elapsed].
   Duration get restDuration {
-    final total = totalDuration;
-    if (total == null) return Duration.zero;
-    final diff = total - elapsed;
-    return diff.isNegative ? Duration.zero : diff;
+    var total = Duration.zero;
+    for (final pause in _completedPauses) {
+      if (pause.duration >= _minMolaDuration) total += pause.duration;
+    }
+    final pauseStarted = _pauseStartedAt;
+    if (pauseStarted != null) {
+      final current = DateTime.now().difference(pauseStarted);
+      if (current >= _minMolaDuration) total += current;
+    }
+    return total;
+  }
+
+  /// Wall-clock time since the end of the last qualifying rest (see
+  /// [restDuration]), or since [start] if there hasn't been one yet. Null
+  /// while idle.
+  Duration? get timeSinceLastRest {
+    final started = _startedAt;
+    if (started == null) return null;
+    DateTime? lastRestEnd;
+    for (final pause in _completedPauses) {
+      if (pause.duration >= _minMolaDuration) lastRestEnd = pause.end;
+    }
+    return DateTime.now().difference(lastRestEnd ?? started);
   }
 
   Future<RecordingStartError?> start({
@@ -145,7 +175,7 @@ class GpsRecorder extends ChangeNotifier {
     _nativeIngestedCount = 0;
     _seenNativeTimeMs.clear();
     _startedAt = DateTime.now();
-    _pausedDuration = Duration.zero;
+    _completedPauses.clear();
     _pauseStartedAt = null;
     _currentSpeedKmh = 0;
     _currentAltitude = null;
@@ -272,7 +302,8 @@ class GpsRecorder extends ChangeNotifier {
         _stationarySince = null;
         final pauseStarted = _pauseStartedAt;
         if (pauseStarted != null) {
-          _pausedDuration += DateTime.now().difference(pauseStarted);
+          final now = DateTime.now();
+          _completedPauses.add((duration: now.difference(pauseStarted), end: now));
           _pauseStartedAt = null;
         }
       } else {
@@ -315,7 +346,8 @@ class GpsRecorder extends ChangeNotifier {
     if (_state != RecordingState.paused) return;
     final pauseStarted = _pauseStartedAt;
     if (pauseStarted != null) {
-      _pausedDuration += DateTime.now().difference(pauseStarted);
+      final now = DateTime.now();
+      _completedPauses.add((duration: now.difference(pauseStarted), end: now));
       _pauseStartedAt = null;
     }
     _isAutoPaused = false;
@@ -399,7 +431,7 @@ class GpsRecorder extends ChangeNotifier {
     _points.clear();
     _startedAt = null;
     _pauseStartedAt = null;
-    _pausedDuration = Duration.zero;
+    _completedPauses.clear();
     _currentSpeedKmh = 0;
     _currentAltitude = null;
     _currentHeading = null;
