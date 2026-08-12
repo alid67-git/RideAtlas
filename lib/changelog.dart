@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.27 beta',
+    date: '2026-08-12',
+    note:
+        'KRİTİK CI düzeltmesi: bir önceki push\'ta Android APK derlemesi '
+        'başarısız oldu - CI\'daki Flutter "stable" kanalı kendiliğinden '
+        'yeni bir sürüme geçmiş ve artık en az Gradle 8.14.0 istiyor, '
+        'projeyse 8.13\'e sabitliydi. android/gradle/wrapper/'
+        'gradle-wrapper.properties 8.14\'e yükseltildi. Uygulama '
+        'tarafında görünür bir değişiklik yok.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.26 beta',
     date: '2026-08-12',
     note:
