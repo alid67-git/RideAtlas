@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.33 beta',
+    date: '2026-08-12',
+    note:
+        'Kayıt ekranının canlı bilgi sayfasındaki kartlar çok küçük '
+        'kalıyordu, altta boş yer duruyordu - artık her satır kalan dikey '
+        'alanı doldurup büyüyor, kartların içindeki yazı da kart boyutuna '
+        'göre otomatik ölçekleniyor. Ayrıca artık Ayarlar\'a gitmeden, tam '
+        'telefon ana ekranındaki uygulama ikonlarını taşıma gibi: bir '
+        'kartı parmakla basılı tutup başka bir kartın üzerine sürükleyip '
+        'bırakarak yerlerini doğrudan değiştirebilirsiniz.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.32 beta',
     date: '2026-08-12',
     note:

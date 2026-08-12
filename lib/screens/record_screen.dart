@@ -886,6 +886,7 @@ class _RecordScreenState extends State<RecordScreen>
       }
     }
     final accent = _cardAccent(theme);
+    final layoutController = context.watch<LiveStatsLayoutController>();
 
     return Scaffold(
       body: Stack(
@@ -999,7 +1000,7 @@ class _RecordScreenState extends State<RecordScreen>
                     ),
                   ),
                 Expanded(
-                  child: SingleChildScrollView(
+                  child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       children: [
@@ -1055,58 +1056,79 @@ class _RecordScreenState extends State<RecordScreen>
                         const SizedBox(height: 8),
                         // Which cards show and in what order is a
                         // per-rider choice (Settings > Kayıt ekranı
-                        // kartları) rather than fixed here - paired two
-                        // per row in whatever order the rider picked, an
-                        // odd one out at the end goes full width.
-                        for (final row in _pairUp(
-                          context.watch<LiveStatsLayoutController>().visibleOrder,
-                        ))
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: row.length == 1
-                                ? _liveStatCard(
-                                    row[0],
-                                    l10n,
-                                    recorder,
-                                    speedStats,
-                                    elevationChange,
-                                    altitude,
-                                    maxAltitude,
-                                    minAltitude,
-                                    accent,
-                                  )
-                                : Row(
-                                    children: [
-                                      Expanded(
-                                        child: _liveStatCard(
-                                          row[0],
-                                          l10n,
-                                          recorder,
-                                          speedStats,
-                                          elevationChange,
-                                          altitude,
-                                          maxAltitude,
-                                          minAltitude,
-                                          accent,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: _liveStatCard(
-                                          row[1],
-                                          l10n,
-                                          recorder,
-                                          speedStats,
-                                          elevationChange,
-                                          altitude,
-                                          maxAltitude,
-                                          minAltitude,
-                                          accent,
-                                        ),
-                                      ),
-                                    ],
+                        // kartları, or press-and-hold directly on a card
+                        // below) rather than fixed here. Each row is
+                        // Expanded so the cards grow to fill whatever
+                        // vertical space is left instead of a small stack
+                        // sitting above empty screen.
+                        Expanded(
+                          child: Column(
+                            children: [
+                              for (final row in _pairUp(
+                                layoutController.visibleOrder,
+                              ))
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: row.length == 1
+                                        ? _draggableStatCard(
+                                            row[0],
+                                            layoutController,
+                                            l10n,
+                                            recorder,
+                                            speedStats,
+                                            elevationChange,
+                                            altitude,
+                                            maxAltitude,
+                                            minAltitude,
+                                            accent,
+                                          )
+                                        : Row(
+                                            // Without this the row's own
+                                            // height only wraps its (small)
+                                            // content and centers it in the
+                                            // Expanded slot above - stretch
+                                            // makes each card's colored box
+                                            // actually fill that slot.
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              Expanded(
+                                                child: _draggableStatCard(
+                                                  row[0],
+                                                  layoutController,
+                                                  l10n,
+                                                  recorder,
+                                                  speedStats,
+                                                  elevationChange,
+                                                  altitude,
+                                                  maxAltitude,
+                                                  minAltitude,
+                                                  accent,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: _draggableStatCard(
+                                                  row[1],
+                                                  layoutController,
+                                                  l10n,
+                                                  recorder,
+                                                  speedStats,
+                                                  elevationChange,
+                                                  altitude,
+                                                  maxAltitude,
+                                                  minAltitude,
+                                                  accent,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                   ),
+                                ),
+                            ],
                           ),
+                        ),
                       ],
                     ),
                   ),
@@ -1323,6 +1345,69 @@ List<List<LiveStatKey>> _pairUp(List<LiveStatKey> keys) {
     );
   }
   return rows;
+}
+
+/// Wraps [_liveStatCard] so a rider can press-and-hold a card and drag it
+/// onto another to swap their positions, right on this screen - the phone
+/// home-screen icon-rearranging gesture riders already know, rather than
+/// only being able to reorder from a separate settings screen.
+Widget _draggableStatCard(
+  LiveStatKey key,
+  LiveStatsLayoutController layoutController,
+  AppLocalizations l10n,
+  GpsRecorder recorder,
+  SpeedStats speedStats,
+  ({double gain, double loss}) elevationChange,
+  double? altitude,
+  double? maxAltitude,
+  double? minAltitude,
+  Color accent,
+) {
+  final card = _liveStatCard(
+    key,
+    l10n,
+    recorder,
+    speedStats,
+    elevationChange,
+    altitude,
+    maxAltitude,
+    minAltitude,
+    accent,
+  );
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      return LongPressDraggable<LiveStatKey>(
+        data: key,
+        delay: const Duration(milliseconds: 350),
+        // Matches the cell's own size so the floating copy doesn't jump
+        // to some arbitrary width mid-drag.
+        feedback: SizedBox(
+          width: constraints.maxWidth,
+          height: constraints.maxHeight,
+          child: Material(
+            color: Colors.transparent,
+            child: Opacity(opacity: 0.9, child: card),
+          ),
+        ),
+        childWhenDragging: Opacity(opacity: 0.25, child: card),
+        child: DragTarget<LiveStatKey>(
+          onWillAcceptWithDetails: (details) => details.data != key,
+          onAcceptWithDetails: (details) =>
+              layoutController.swap(details.data, key),
+          builder: (context, candidateData, rejectedData) {
+            if (candidateData.isEmpty) return card;
+            return DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: accent, width: 2),
+              ),
+              child: card,
+            );
+          },
+        ),
+      );
+    },
+  );
 }
 
 /// Builds the [AnalysisStatCard] for a single stat on the live info page -

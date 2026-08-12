@@ -152,6 +152,21 @@ class LiveStatsLayoutController extends ChangeNotifier {
     await box.put(_orderKey, newOrder.map((k) => k.name).join(','));
   }
 
+  /// Swaps two cards' positions directly - what the live info page's
+  /// press-and-hold drag reorder uses (drop one card onto another), as
+  /// opposed to [setOrder]'s full-list reorder used by the settings
+  /// screen's drag list.
+  Future<void> swap(LiveStatKey a, LiveStatKey b) async {
+    if (a == b) return;
+    final newOrder = List.of(_order);
+    final indexA = newOrder.indexOf(a);
+    final indexB = newOrder.indexOf(b);
+    if (indexA == -1 || indexB == -1) return;
+    newOrder[indexA] = b;
+    newOrder[indexB] = a;
+    await setOrder(newOrder);
+  }
+
   Future<void> setVisible(LiveStatKey key, bool visible) async {
     if (visible) {
       _hidden.remove(key);
