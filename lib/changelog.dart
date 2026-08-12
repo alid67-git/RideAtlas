@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.28 beta',
+    date: '2026-08-12',
+    note:
+        'Kayıt ekranındaki en üstteki "Toplam süre" şeridi (ikon+etiket+'
+        'rakam hepsi tek satırda) dengesiz duruyordu - artık ikon+etiket '
+        'üstte, büyük süre rakamı hemen altında ortalanmış. Ayrıca: '
+        'Günlük sekmesindeki gün ayrımının zaten takvim günü (gece yarısı) '
+        'sınırına göre otomatik olduğu doğrulandı - ek bir değişiklik '
+        'gerekmedi.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.27 beta',
     date: '2026-08-12',
     note:
