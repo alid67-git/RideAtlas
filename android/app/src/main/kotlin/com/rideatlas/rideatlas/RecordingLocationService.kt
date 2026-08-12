@@ -233,9 +233,14 @@ class RecordingLocationService : Service() {
     }
 
     private fun startLocationUpdates() {
+        // Was 5s/2s - riders reported the displayed speed feeling very
+        // delayed, which traces straight back to this interval: the
+        // current-speed figure on screen can only refresh as often as a
+        // new fix arrives. 1s (matching a typical navigation app) makes it
+        // track real acceleration/deceleration promptly.
         val request =
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5_000L)
-                .setMinUpdateIntervalMillis(2_000L)
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000L)
+                .setMinUpdateIntervalMillis(500L)
                 .setMinUpdateDistanceMeters(0f)
                 .setWaitForAccurateLocation(false)
                 .build()
