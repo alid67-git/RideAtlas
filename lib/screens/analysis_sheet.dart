@@ -1177,70 +1177,81 @@ class AnalysisStatCard extends StatelessWidget {
             ? null
             : Border.all(color: accent.withValues(alpha: 0.35)),
       ),
-      child: Row(
-        // large cards (RecordScreen's info page) center their whole
-        // icon+text block as a unit instead of hugging the left edge -
-        // requested so a grid of short numeric values reads as tidy rather
-        // than ragged. The Analysis sheet's own denser cards (large:false)
-        // keep the original left-aligned, Expanded+ellipsis layout.
-        mainAxisAlignment: large ? MainAxisAlignment.center : MainAxisAlignment.start,
-        mainAxisSize: large ? MainAxisSize.min : MainAxisSize.max,
-        children: [
-          Icon(
-            icon,
-            color: iconSettings.color,
-            size: (large ? 22 : 20) * iconSettings.sizeScale,
-          ),
-          SizedBox(width: large ? 10 : 8),
-          if (large)
-            Flexible(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // A size down from before (was bodyMedium) - long labels
-                  // like "Maks. irtifa" were clipping mid-word on narrower
-                  // screens with the icon eating into the card's width.
-                  Text(
-                    label,
-                    style: theme.textTheme.bodySmall,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    value,
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+      child: large
+          // The record screen's live info page now gives each card a
+          // generous, screen-filling slot (see RecordScreen's stat grid) -
+          // a fixed small font would just leave that space mostly empty.
+          // FittedBox scales the icon+text block (at its natural size) up
+          // or down to exactly fill whatever box the card ends up with, so
+          // a card that gets taller/wider genuinely reads bigger instead of
+          // padding out around unchanged text. No maxLines/ellipsis here -
+          // FittedBox lays the text out at its natural width first, so a
+          // long value just scales the whole block down a bit instead of
+          // clipping mid-word.
+          ? Center(
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      color: iconSettings.color,
+                      size: 22 * iconSettings.sizeScale,
+                    ),
+                    const SizedBox(width: 10),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          label,
+                          style: theme.textTheme.bodySmall,
+                          textAlign: TextAlign.center,
+                        ),
+                        Text(
+                          value,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             )
-          else
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    label,
-                    style: theme.textTheme.bodySmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+          : Row(
+              children: [
+                Icon(
+                  icon,
+                  color: iconSettings.color,
+                  size: 20 * iconSettings.sizeScale,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        label,
+                        style: theme.textTheme.bodySmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        value,
+                        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
-                  Text(
-                    value,
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-        ],
-      ),
     );
   }
 }
