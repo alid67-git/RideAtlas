@@ -20,6 +20,21 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.20 beta',
+    date: '2026-08-12',
+    note:
+        'GPS hız/yön gecikmesine farklı bir çözüm denendi: bir telefonun '
+        'GPS çipi zaten gerçekçi olarak saniyede birden hızlı ölçüm '
+        'üretemiyor (bir önceki sürümde aralık zaten bu tavana çekilmişti), '
+        'yani aralığı daha da kısaltmanın faydası yok - asıl sorun her yeni '
+        'ölçüm gelene kadar rakamın/haritanın olduğu yerde donup sonra bir '
+        'anda zıplaması. Artık hız rakamı (hem kayıt hem bilgi sayfasında) '
+        've harita kamerası (konum + yön birlikte) her yeni ölçümde hedefe '
+        'doğru sürekli, akıcı bir animasyonla kayıyor - veri gerçekte hâlâ '
+        '~1 saniyede bir gelse de ekran hiç durağan görünmüyor, sürekli '
+        'canlı/hareket hâlinde hissettiriyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.19 beta',
     date: '2026-08-12',
     note:

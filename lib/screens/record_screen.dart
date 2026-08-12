@@ -118,7 +118,13 @@ class _RecordScreenState extends State<RecordScreen>
     recordScreenVisible.value = true;
     _rotationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      // Close to the ~1s cadence real GPS fixes arrive at (a phone's GPS
+      // chip realistically can't produce fixes much faster than that) -
+      // long enough that one camera animation is still finishing when the
+      // next fix retargets it, so the map is continuously gliding/turning
+      // instead of snapping into place and sitting still for most of each
+      // second.
+      duration: const Duration(milliseconds: 950),
     );
     _bgController = AnimationController(
       vsync: this,
@@ -171,7 +177,7 @@ class _RecordScreenState extends State<RecordScreen>
   /// Rotates the map to the live heading (course-up), if known yet.
   void _applyRotation() {
     final heading = _currentHeading;
-    if (heading != null) _rotateMapTo(heading);
+    if (heading != null) _animateCameraTo(heading: heading);
   }
 
   /// Rejects a heading reading that implies a physically implausible turn
@@ -203,22 +209,52 @@ class _RecordScreenState extends State<RecordScreen>
     return rawHeading;
   }
 
-  /// Animates the map's rotation to [targetHeading] instead of snapping
-  /// instantly, taking the shorter way round (e.g. 350deg -> 10deg animates
-  /// as +20, not -340) - reads the map's actual current rotation each call
-  /// rather than tracking a separate copy of it, so this can't drift out of
-  /// sync with the map itself.
-  void _rotateMapTo(double targetHeading) {
-    final current = _mapController.camera.rotation;
-    var delta = (targetHeading - current) % 360;
-    if (delta > 180) delta -= 360;
-    if (delta < -180) delta += 360;
-    if (delta.abs() < 0.5) return;
-    final target = current + delta;
-    final animation = Tween<double>(begin: current, end: target).animate(
-      CurvedAnimation(parent: _rotationController, curve: Curves.easeOut),
+  /// Animates the map's center and/or rotation to the given target(s)
+  /// together, over the same [_rotationController] duration, instead of
+  /// snapping instantly - a real GPS chip can't reasonably produce fixes
+  /// much faster than about once a second, so without this the map would
+  /// otherwise sit still for most of every second and then jump, which
+  /// reads as laggy even once the fixes themselves arrive as fast as
+  /// they realistically can. Rotation takes the shorter way round (e.g.
+  /// 350deg -> 10deg animates as +20, not -340). Reads the map's actual
+  /// current center/rotation each call rather than tracking separate
+  /// copies of them, so this can't drift out of sync with the map itself.
+  void _animateCameraTo({LatLng? location, double? heading}) {
+    final camera = _mapController.camera;
+    final startLat = camera.center.latitude;
+    final startLng = camera.center.longitude;
+    final startRotation = camera.rotation;
+    final endLat = location?.latitude ?? startLat;
+    final endLng = location?.longitude ?? startLng;
+    var endRotation = startRotation;
+    if (heading != null) {
+      var delta = (heading - startRotation) % 360;
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
+      endRotation = startRotation + delta;
+    }
+    if (location == null && (endRotation - startRotation).abs() < 0.5) return;
+
+    final zoom = camera.zoom;
+    final latTween = Tween<double>(begin: startLat, end: endLat);
+    final lngTween = Tween<double>(begin: startLng, end: endLng);
+    final rotationTween = Tween<double>(begin: startRotation, end: endRotation);
+    // Linear, not eased - this approximates constant real-world motion
+    // between two fixes rather than a one-off discrete correction, so
+    // decelerating toward the end (like the old easeOut) would read as a
+    // stutter right before the next fix retargets it anyway.
+    final animation = CurvedAnimation(
+      parent: _rotationController,
+      curve: Curves.linear,
     );
-    void listener() => _mapController.rotate(animation.value);
+    void listener() {
+      _mapController.moveAndRotate(
+        LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
+        zoom,
+        rotationTween.evaluate(animation),
+      );
+    }
+
     animation.addListener(listener);
     _rotationController
       ..stop()
@@ -283,10 +319,11 @@ class _RecordScreenState extends State<RecordScreen>
             _centeredOnce = true;
             _mapController.move(location, 16);
           } else if (_followMe) {
-            _mapController.move(location, _mapController.camera.zoom);
-          }
-          if (_followMe && heading != null) {
-            _rotateMapTo(heading);
+            // Position and rotation animate together over the same
+            // duration - see _animateCameraTo - rather than the map
+            // snapping to the new spot and then separately swinging to
+            // the new heading.
+            _animateCameraTo(location: location, heading: heading);
           }
         });
   }
@@ -726,12 +763,15 @@ class _RecordScreenState extends State<RecordScreen>
                     // At least double the old headlineMedium size - this is
                     // the number a rider needs to read at a glance while
                     // moving, the old size was too small for that.
-                    Text(
-                      recorder.currentSpeedKmh.toStringAsFixed(0),
-                      style: const TextStyle(
-                        fontSize: 62,
-                        fontWeight: FontWeight.w800,
-                        height: 1,
+                    _AnimatedNumber(
+                      value: recorder.currentSpeedKmh,
+                      builder: (context, value) => Text(
+                        value.round().toString(),
+                        style: const TextStyle(
+                          fontSize: 62,
+                          fontWeight: FontWeight.w800,
+                          height: 1,
+                        ),
                       ),
                     ),
                     Text(
@@ -985,24 +1025,27 @@ class _RecordScreenState extends State<RecordScreen>
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Text(
-                                recorder.currentSpeedKmh.toStringAsFixed(0),
-                                style: TextStyle(
-                                  fontSize: 150,
-                                  fontWeight: FontWeight.w900,
-                                  fontStyle: FontStyle.italic,
-                                  letterSpacing: -6,
-                                  height: 0.95,
-                                  color: theme.colorScheme.onSurface,
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures(),
-                                  ],
-                                  shadows: [
-                                    Shadow(
-                                      color: accent.withValues(alpha: 0.55),
-                                      blurRadius: 32,
-                                    ),
-                                  ],
+                              _AnimatedNumber(
+                                value: recorder.currentSpeedKmh,
+                                builder: (context, value) => Text(
+                                  value.round().toString(),
+                                  style: TextStyle(
+                                    fontSize: 150,
+                                    fontWeight: FontWeight.w900,
+                                    fontStyle: FontStyle.italic,
+                                    letterSpacing: -6,
+                                    height: 0.95,
+                                    color: theme.colorScheme.onSurface,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                    shadows: [
+                                      Shadow(
+                                        color: accent.withValues(alpha: 0.55),
+                                        blurRadius: 32,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                               Padding(
@@ -1510,6 +1553,68 @@ class _RoundIconButton extends StatelessWidget {
         tooltip: tooltip,
         onPressed: onPressed,
       ),
+    );
+  }
+}
+
+/// Smoothly animates [value] toward each new reading instead of snapping
+/// straight to it, so a number fed by GPS fixes that only arrive roughly
+/// once a second (the fastest a phone's GPS chip realistically produces
+/// them) still reads as continuously live rather than static-then-jump.
+/// [duration] is chosen close to that update cadence, so one animation is
+/// just finishing as the next fix retargets it - this doesn't make the
+/// underlying data any fresher, but it removes the "did it freeze?" feel
+/// of a value sitting motionless for the better part of a second.
+class _AnimatedNumber extends StatefulWidget {
+  const _AnimatedNumber({required this.value, required this.builder});
+
+  final double value;
+  final Widget Function(BuildContext context, double value) builder;
+
+  @override
+  State<_AnimatedNumber> createState() => _AnimatedNumberState();
+}
+
+class _AnimatedNumberState extends State<_AnimatedNumber>
+    with SingleTickerProviderStateMixin {
+  static const _duration = Duration(milliseconds: 900);
+
+  late final AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: _duration);
+    _animation = AlwaysStoppedAnimation(widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnimatedNumber oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _animation =
+          Tween<double>(begin: _animation.value, end: widget.value).animate(
+            CurvedAnimation(parent: _controller, curve: Curves.linear),
+          );
+      _controller
+        ..stop()
+        ..reset()
+        ..forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => widget.builder(context, _animation.value),
     );
   }
 }
