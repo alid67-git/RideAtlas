@@ -287,16 +287,28 @@ class _OverviewTab extends StatelessWidget {
     // riding/rest split already use (RouteGeographyAnalyzer.detectStops),
     // so "Aktif sürüş süresi" here agrees with "Sürüş süresi" on the Daily
     // tab instead of using a different, looser definition of "moving".
+    final stops = RouteGeographyAnalyzer().detectStops(points);
     final restDuration = total == null
         ? null
-        : RouteGeographyAnalyzer()
-              .detectStops(points)
-              .fold<Duration>(Duration.zero, (sum, stop) => sum + stop.duration);
+        : stops.fold<Duration>(Duration.zero, (sum, stop) => sum + stop.duration);
     final moving = (total == null || restDuration == null)
         ? null
         : (total - restDuration).isNegative
               ? Duration.zero
               : total - restDuration;
+    // How long the rider kept going after their last real rest before
+    // finishing - stops is chronological (built by scanning points in time
+    // order), so its last entry is the most recent one.
+    final routeEndTime = points.isEmpty ? null : points.last.time;
+    final lastStopEnd = stops.isEmpty ? null : stops.last.end;
+    Duration? timeSinceLastRest;
+    if (routeEndTime != null) {
+      if (lastStopEnd != null && !routeEndTime.isBefore(lastStopEnd)) {
+        timeSinceLastRest = routeEndTime.difference(lastStopEnd);
+      } else if (lastStopEnd == null) {
+        timeSinceLastRest = moving ?? total;
+      }
+    }
 
     return ListView(
       padding: const EdgeInsets.only(right: 8, top: 8),
@@ -356,11 +368,28 @@ class _OverviewTab extends StatelessWidget {
                   : formatAnalysisDuration(l10n, restDuration),
             ),
             AnalysisStatCard(
+              icon: Icons.hourglass_bottom,
+              label: l10n.timeSinceLastRestLabel,
+              value: timeSinceLastRest == null
+                  ? '—'
+                  : formatAnalysisDuration(l10n, timeSinceLastRest),
+            ),
+            AnalysisStatCard(
               icon: Icons.speed,
               label: l10n.averageSpeedLabel,
               value: speed.averageMovingKmh == null
                   ? '—'
                   : '${speed.averageMovingKmh!.toStringAsFixed(1)} km/s',
+            ),
+            AnalysisStatCard(
+              icon: Icons.trending_up,
+              label: l10n.climb,
+              value: '${route.elevationGainMeters.round()} m',
+            ),
+            AnalysisStatCard(
+              icon: Icons.trending_down,
+              label: l10n.descent,
+              value: '${route.elevationLossMeters.round()} m',
             ),
             AnalysisStatCard(
               icon: Icons.arrow_upward,
