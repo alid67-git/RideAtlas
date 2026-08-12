@@ -944,26 +944,35 @@ class _RecordScreenState extends State<RecordScreen>
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: accent.withValues(alpha: 0.35)),
                     ),
+                    // Label (with icon) on top, the duration itself centered
+                    // below, large - was a single crammed row (icon+label+
+                    // value all inline), which read unevenly since the
+                    // label and the giant value fought for the same line.
                     // At least double the old titleMedium size, and bigger
                     // than the "large" stat cards below it (titleLarge) -
                     // total duration is the one figure meant to stand out
                     // above everything else on this strip. FittedBox keeps
                     // it from overflowing on narrow screens/long durations.
                     child: Center(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Icon(Icons.schedule, size: 30, color: accent),
-                            const SizedBox(width: 10),
-                            Text(
-                              l10n.totalDurationLabel,
-                              style: theme.textTheme.titleMedium,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Icon(Icons.schedule, size: 18, color: accent),
+                              const SizedBox(width: 6),
+                              Text(
+                                l10n.totalDurationLabel,
+                                style: theme.textTheme.titleMedium,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
                               _formatDuration(
                                 recorder.totalDuration ?? Duration.zero,
                               ),
@@ -973,8 +982,8 @@ class _RecordScreenState extends State<RecordScreen>
                                 height: 1,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
