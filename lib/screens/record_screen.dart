@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
+import '../repositories/live_stats_layout_controller.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
@@ -846,15 +847,6 @@ class _RecordScreenState extends State<RecordScreen>
     );
   }
 
-  static String _formatDuration(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    final s = d.inSeconds % 60;
-    return h > 0
-        ? '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
-        : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-
   /// The single accent every card/tile on the info page shares - a
   /// deliberate departure from the earlier per-stat rainbow of colors
   /// (blue/orange/teal/pink/brown/green/red/...), which read as busy and
@@ -953,23 +945,18 @@ class _RecordScreenState extends State<RecordScreen>
                     // total duration is the one figure meant to stand out
                     // above everything else on this strip. FittedBox keeps
                     // it from overflowing on narrow screens/long durations.
+                    //
+                    // No "Toplam süre" text label here anymore - this is
+                    // the very first thing on the screen and a big clock
+                    // icon next to a big duration already says what it is
+                    // without spelling it out.
                     child: Center(
-                      child: Column(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Icon(Icons.schedule, size: 18, color: accent),
-                              const SizedBox(width: 6),
-                              Text(
-                                l10n.totalDurationLabel,
-                                style: theme.textTheme.titleMedium,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
+                          Icon(Icons.schedule, size: 28, color: accent),
+                          const SizedBox(width: 10),
                           FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
@@ -1066,157 +1053,60 @@ class _RecordScreenState extends State<RecordScreen>
                           ),
                         ),
                         const SizedBox(height: 8),
-                        // Riding duration paired directly with distance -
-                        // same pairing the saved-route Günlük tab uses
-                        // (_DayCard: ridingDuration next to distance), so
-                        // the "how long / how far so far today" pair reads
-                        // together here too instead of duration sitting
-                        // next to rest time.
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _DurationTile(
-                                icon: Icons.timer_outlined,
-                                label: l10n.netDurationLabel,
-                                value: _formatDuration(recorder.elapsed),
-                                color: accent,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.route,
-                                label: l10n.distance,
-                                value:
-                                    '${recorder.distanceKm.toStringAsFixed(2)} km',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _DurationTile(
-                                icon: Icons.pause_circle_outline,
-                                label: l10n.restDurationLabel,
-                                value: _formatDuration(recorder.restDuration),
-                                color: accent,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.terrain,
-                                label: l10n.currentAltitudeLabel,
-                                value: altitude == null
-                                    ? '—'
-                                    : '${altitude.round()} m',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        // Max/min altitude right after distance/current
-                        // altitude - all four describe "where am I" rather
-                        // than pace, so they read together at a glance.
-                        Row(
-                          children: [
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.arrow_upward,
-                                label: l10n.maxAltitude,
-                                value: maxAltitude == null
-                                    ? '—'
-                                    : '${maxAltitude.round()} m',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.arrow_downward,
-                                label: l10n.minAltitude,
-                                value: minAltitude == null
-                                    ? '—'
-                                    : '${minAltitude.round()} m',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        AnalysisStatCard(
-                          icon: Icons.hourglass_bottom,
-                          label: l10n.timeSinceLastRestLabel,
-                          value: recorder.timeSinceLastRest == null
-                              ? '—'
-                              : _formatDuration(recorder.timeSinceLastRest!),
-                          accentColor: accent,
-                          large: true,
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.equalizer,
-                                label: l10n.averageSpeedLabel,
-                                value: speedStats.averageMovingKmh == null
-                                    ? '—'
-                                    : '${speedStats.averageMovingKmh!.toStringAsFixed(1)} km/h',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.bolt,
-                                label: l10n.maxSpeed,
-                                value: speedStats.maxKmh == null
-                                    ? '—'
-                                    : '${speedStats.maxKmh!.toStringAsFixed(1)} km/h',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        // Climb/descent last - the elevation-extremes row
-                        // above already covers "where am I", this is "how
-                        // much up/down along the way".
-                        Row(
-                          children: [
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.trending_up,
-                                label: l10n.climb,
-                                value: '${elevationChange.gain.round()} m',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.trending_down,
-                                label: l10n.descent,
-                                value: '${elevationChange.loss.round()} m',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
+                        // Which cards show and in what order is a
+                        // per-rider choice (Settings > Kayıt ekranı
+                        // kartları) rather than fixed here - paired two
+                        // per row in whatever order the rider picked, an
+                        // odd one out at the end goes full width.
+                        for (final row in _pairUp(
+                          context.watch<LiveStatsLayoutController>().visibleOrder,
+                        ))
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: row.length == 1
+                                ? _liveStatCard(
+                                    row[0],
+                                    l10n,
+                                    recorder,
+                                    speedStats,
+                                    elevationChange,
+                                    altitude,
+                                    maxAltitude,
+                                    minAltitude,
+                                    accent,
+                                  )
+                                : Row(
+                                    children: [
+                                      Expanded(
+                                        child: _liveStatCard(
+                                          row[0],
+                                          l10n,
+                                          recorder,
+                                          speedStats,
+                                          elevationChange,
+                                          altitude,
+                                          maxAltitude,
+                                          minAltitude,
+                                          accent,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: _liveStatCard(
+                                          row[1],
+                                          l10n,
+                                          recorder,
+                                          speedStats,
+                                          elevationChange,
+                                          altitude,
+                                          maxAltitude,
+                                          minAltitude,
+                                          accent,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
                       ],
                     ),
                   ),
@@ -1413,60 +1303,80 @@ class _StatRow extends StatelessWidget {
   }
 }
 
-/// One of the two prominent duration readouts under the hero speed number
-/// on [RecordScreen]'s info page (active riding time / total time). Shares
-/// the same single accent color and glass/border treatment as
-/// [AnalysisStatCard] below it, differentiated only by icon and label.
-class _DurationTile extends StatelessWidget {
-  const _DurationTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+String _formatDuration(Duration d) {
+  final h = d.inHours;
+  final m = d.inMinutes % 60;
+  final s = d.inSeconds % 60;
+  return h > 0
+      ? '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
+      : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+}
 
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(
-          alpha: theme.brightness == Brightness.dark ? 0.20 : 0.12,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(height: 2),
-          FittedBox(
-            child: Text(
-              value,
-              maxLines: 1,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-          ),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall,
-          ),
-        ],
-      ),
+/// Groups a flat list into consecutive pairs, a trailing odd one out kept
+/// as a single-element group - used to lay the live info page's stat cards
+/// out two-per-row regardless of how many are currently visible.
+List<List<LiveStatKey>> _pairUp(List<LiveStatKey> keys) {
+  final rows = <List<LiveStatKey>>[];
+  for (var i = 0; i < keys.length; i += 2) {
+    rows.add(
+      i + 1 < keys.length ? [keys[i], keys[i + 1]] : [keys[i]],
     );
   }
+  return rows;
+}
+
+/// Builds the [AnalysisStatCard] for a single stat on the live info page -
+/// the icon/label come from [liveStatIcon]/[liveStatLabel], only the value
+/// string depends on the current recording state.
+Widget _liveStatCard(
+  LiveStatKey key,
+  AppLocalizations l10n,
+  GpsRecorder recorder,
+  SpeedStats speedStats,
+  ({double gain, double loss}) elevationChange,
+  double? altitude,
+  double? maxAltitude,
+  double? minAltitude,
+  Color accent,
+) {
+  final String value;
+  switch (key) {
+    case LiveStatKey.ridingDuration:
+      value = _formatDuration(recorder.elapsed);
+    case LiveStatKey.distance:
+      value = '${recorder.distanceKm.toStringAsFixed(2)} km';
+    case LiveStatKey.restDuration:
+      value = _formatDuration(recorder.restDuration);
+    case LiveStatKey.currentAltitude:
+      value = altitude == null ? '—' : '${altitude.round()} m';
+    case LiveStatKey.maxAltitude:
+      value = maxAltitude == null ? '—' : '${maxAltitude.round()} m';
+    case LiveStatKey.minAltitude:
+      value = minAltitude == null ? '—' : '${minAltitude.round()} m';
+    case LiveStatKey.timeSinceLastRest:
+      value = recorder.timeSinceLastRest == null
+          ? '—'
+          : _formatDuration(recorder.timeSinceLastRest!);
+    case LiveStatKey.averageSpeed:
+      value = speedStats.averageMovingKmh == null
+          ? '—'
+          : '${speedStats.averageMovingKmh!.toStringAsFixed(1)} km/h';
+    case LiveStatKey.maxSpeed:
+      value = speedStats.maxKmh == null
+          ? '—'
+          : '${speedStats.maxKmh!.toStringAsFixed(1)} km/h';
+    case LiveStatKey.climb:
+      value = '${elevationChange.gain.round()} m';
+    case LiveStatKey.descent:
+      value = '${elevationChange.loss.round()} m';
+  }
+  return AnalysisStatCard(
+    icon: liveStatIcon(key),
+    label: liveStatLabel(key, l10n),
+    value: value,
+    accentColor: accent,
+    large: true,
+  );
 }
 
 /// The info page's full-screen backdrop: a slowly breathing gradient plus

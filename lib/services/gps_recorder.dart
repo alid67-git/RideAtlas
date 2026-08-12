@@ -32,7 +32,11 @@ enum RecordingStartError {
 class GpsRecorder extends ChangeNotifier {
   static const _autoPauseSpeedThresholdKmh = 3.0;
   static const _autoPauseResumeThresholdKmh = 6.0;
-  static const _autoPauseDelay = Duration(seconds: 15);
+  // Just a visual "waiting" cue while genuinely stationary (traffic light,
+  // junction) - separate from what counts as a "mola" (see
+  // _minMolaDuration below), so making this quick doesn't affect rest
+  // detection at all.
+  static const _autoPauseDelay = Duration(seconds: 3);
   static const _speedSmoothingWindow = 4;
 
   /// Only a stop lasting this long or more counts as an actual "mola" -
