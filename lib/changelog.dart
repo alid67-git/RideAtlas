@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.29 beta',
+    date: '2026-08-12',
+    note:
+        'KRİTİK CI düzeltmesi (devam): bir önceki Gradle yükseltmesi tek '
+        'başına yetmedi - Flutter bu sefer de Android Gradle Plugin '
+        'sürümünün (8.11.0) en az 8.11.1 olmasını istedi. AGP 8.11.1\'e '
+        'yükseltildi (hâlâ 9\'un altında - file_picker gibi bazı '
+        'eklentilerin Kotlin derlemesini bozmaması için AGP 9+\'a '
+        'geçilmiyor). Uygulama tarafında görünür bir değişiklik yok.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.28 beta',
     date: '2026-08-12',
     note:
