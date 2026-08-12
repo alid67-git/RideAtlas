@@ -1106,75 +1106,9 @@ class _RecordScreenState extends State<RecordScreen>
                           ],
                         ),
                         const SizedBox(height: 8),
-                        AnalysisStatCard(
-                          icon: Icons.equalizer,
-                          label: l10n.averageSpeedLabel,
-                          value: speedStats.averageMovingKmh == null
-                              ? '—'
-                              : '${speedStats.averageMovingKmh!.toStringAsFixed(1)} km/h',
-                          accentColor: accent,
-                          large: true,
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.bolt,
-                                label: l10n.maxSpeed,
-                                value: speedStats.maxKmh == null
-                                    ? '—'
-                                    : '${speedStats.maxKmh!.toStringAsFixed(1)} km/h',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.hourglass_bottom,
-                                label: l10n.timeSinceLastRestLabel,
-                                value: recorder.timeSinceLastRest == null
-                                    ? '—'
-                                    : _formatDuration(
-                                        recorder.timeSinceLastRest!,
-                                      ),
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        // Climb/descent paired, max/min altitude paired
-                        // right below - both pairs describe the same
-                        // elevation profile. Replaces the old speed/
-                        // elevation mini-charts, whose axis labels
-                        // overlapped and were unreadable at this size.
-                        Row(
-                          children: [
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.trending_up,
-                                label: l10n.climb,
-                                value: '${elevationChange.gain.round()} m',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.trending_down,
-                                label: l10n.descent,
-                                value: '${elevationChange.loss.round()} m',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
+                        // Max/min altitude right after distance/current
+                        // altitude - all four describe "where am I" rather
+                        // than pace, so they read together at a glance.
                         Row(
                           children: [
                             Expanded(
@@ -1196,6 +1130,71 @@ class _RecordScreenState extends State<RecordScreen>
                                 value: minAltitude == null
                                     ? '—'
                                     : '${minAltitude.round()} m',
+                                accentColor: accent,
+                                large: true,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        AnalysisStatCard(
+                          icon: Icons.hourglass_bottom,
+                          label: l10n.timeSinceLastRestLabel,
+                          value: recorder.timeSinceLastRest == null
+                              ? '—'
+                              : _formatDuration(recorder.timeSinceLastRest!),
+                          accentColor: accent,
+                          large: true,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: AnalysisStatCard(
+                                icon: Icons.equalizer,
+                                label: l10n.averageSpeedLabel,
+                                value: speedStats.averageMovingKmh == null
+                                    ? '—'
+                                    : '${speedStats.averageMovingKmh!.toStringAsFixed(1)} km/h',
+                                accentColor: accent,
+                                large: true,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: AnalysisStatCard(
+                                icon: Icons.bolt,
+                                label: l10n.maxSpeed,
+                                value: speedStats.maxKmh == null
+                                    ? '—'
+                                    : '${speedStats.maxKmh!.toStringAsFixed(1)} km/h',
+                                accentColor: accent,
+                                large: true,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // Climb/descent last - the elevation-extremes row
+                        // above already covers "where am I", this is "how
+                        // much up/down along the way".
+                        Row(
+                          children: [
+                            Expanded(
+                              child: AnalysisStatCard(
+                                icon: Icons.trending_up,
+                                label: l10n.climb,
+                                value: '${elevationChange.gain.round()} m',
+                                accentColor: accent,
+                                large: true,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: AnalysisStatCard(
+                                icon: Icons.trending_down,
+                                label: l10n.descent,
+                                value: '${elevationChange.loss.round()} m',
                                 accentColor: accent,
                                 large: true,
                               ),
@@ -1372,27 +1371,26 @@ class _StatRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Row(
+    // Label on top, value centered below - reads more clearly than the old
+    // label-left/value-right row, especially once the mini stats row got
+    // its own full-width strip (see _buildMiniStatsRow) with room to spare.
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall,
         ),
-        const Spacer(),
-        // Still comfortably bigger than the old titleSmall size, but eased
-        // back slightly from the first pass so this box doesn't compete
-        // with the speed box for space next to it.
-        Flexible(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerRight,
-            child: Text(
-              value,
-              maxLines: 1,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-            ),
+        const SizedBox(height: 2),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
           ),
         ),
       ],
