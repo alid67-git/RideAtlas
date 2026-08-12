@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.23 beta',
+    date: '2026-08-12',
+    note:
+        'Kayıtlı/yüklenmiş rotalar için ayrı bir tam ekran "özet" sayfası '
+        '(mavi kartlı) eklenmişti (v1.4.19), ama zaten var olan Analiz '
+        'panelinin Özet sekmesiyle neredeyse aynı bilgileri gösteriyordu - '
+        'aynı rota için iki ayrı özet ekranı olması kafa karıştırıcıydı. '
+        'Ayrı mavi sayfa tamamen kaldırıldı; onda olup Analiz panelinde '
+        'olmayan bilgiler (tırmanış, iniş, son moladan bu yana geçen süre) '
+        'Analiz panelinin Özet sekmesine eklendi. Artık rota istatistikleri '
+        'için tek bir yer var.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.22 beta',
     date: '2026-08-12',
     note:

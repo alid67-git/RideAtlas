@@ -20,7 +20,6 @@ import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart';
 import '../services/exif_gps.dart';
-import '../services/gpx_parser.dart';
 import '../services/route_geography.dart';
 import '../services/track_io.dart';
 import '../widgets/recording_indicator.dart';
@@ -113,13 +112,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   /// on the map. Off by default so a ride's first view is uncluttered; a
   /// button lets riders reveal them when they want the detail.
   bool _showStops = false;
-
-  /// True while showing the stat-summary page instead of the map - the same
-  /// kind of dashboard [RecordScreen] shows for a ride in progress, but for
-  /// a route that's already finished/imported. The map itself is one tap
-  /// away via the toggle button in either page's header, mirroring
-  /// RecordScreen's own map/info split.
-  bool _showSummary = false;
 
   /// Whether geotagged photo/video pins are drawn on the map. On by default
   /// (unlike [_showStops]) since these are media the rider deliberately
@@ -531,12 +523,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
             .where((p) => p.hasLocation)
             .length;
 
-        if (_showSummary) {
-          return points == null
-              ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-              : _buildSummaryPage(context, route, points);
-        }
-
         return Scaffold(
           body: Stack(
             children: [
@@ -860,14 +846,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 ),
                 const Spacer(),
                 _RoundIconButton(
-                  icon: Icons.dashboard_outlined,
-                  tooltip: AppLocalizations.of(context)!.recordInfoTabTooltip,
-                  onPressed: _points == null
-                      ? null
-                      : () => setState(() => _showSummary = true),
-                ),
-                const SizedBox(width: 8),
-                _RoundIconButton(
                   icon: Icons.insights,
                   onPressed: _points == null
                       ? null
@@ -926,268 +904,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  static const _summaryAccent = Color(0xFF4FA3FF);
-
-  /// The stat-summary "page 2" for a saved/imported route - the same kind
-  /// of dashboard [RecordScreen] shows for a ride in progress (blue cards),
-  /// reusing [AnalysisStatCard] rather than duplicating it. Covers the
-  /// ride's finished statistics: the same riding/rest split the Overview
-  /// and Daily tabs already use, min/max altitude, average/max speed,
-  /// climb/descent.
-  Widget _buildSummaryPage(
-    BuildContext context,
-    GpxRoute route,
-    List<TrackPoint> points,
-  ) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    const accent = _summaryAccent;
-    final speed = buildSpeedStats(points);
-    final total = route.duration;
-    final stops = RouteGeographyAnalyzer().detectStops(points);
-    final restDuration = total == null
-        ? null
-        : stops.fold<Duration>(Duration.zero, (sum, stop) => sum + stop.duration);
-    final moving = (total == null || restDuration == null)
-        ? null
-        : (total - restDuration).isNegative
-              ? Duration.zero
-              : total - restDuration;
-    // How long the rider kept going after their last real rest before
-    // finishing - stops is already chronological (built by scanning points
-    // in time order), so its last entry is the most recent one.
-    final routeEndTime = points.isEmpty ? null : points.last.time;
-    final lastStopEnd = stops.isEmpty ? null : stops.last.end;
-    Duration? timeSinceLastRest;
-    if (routeEndTime != null) {
-      if (lastStopEnd != null && !routeEndTime.isBefore(lastStopEnd)) {
-        timeSinceLastRest = routeEndTime.difference(lastStopEnd);
-      } else if (lastStopEnd == null) {
-        timeSinceLastRest = moving ?? total;
-      }
-    }
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: theme.brightness == Brightness.dark
-                      ? const [
-                          Color(0xFF0A0E1C),
-                          Color(0xFF0F2038),
-                          Color(0xFF090C14),
-                        ]
-                      : const [
-                          Color(0xFFE8F2FF),
-                          Color(0xFFEFF6FF),
-                          Color(0xFFFFFFFF),
-                        ],
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      _RoundIconButton(
-                        icon: Icons.arrow_back,
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                      const Spacer(),
-                      _RoundIconButton(
-                        icon: Icons.map_outlined,
-                        tooltip: l10n.recordMapTabTooltip,
-                        onPressed: () =>
-                            setState(() => _showSummary = false),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text(
-                    cleanRouteName(route.name),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.timer_outlined,
-                                label: l10n.ridingDuration,
-                                value: moving == null
-                                    ? '—'
-                                    : formatAnalysisDuration(l10n, moving),
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.pause_circle_outline,
-                                label: l10n.restDurationLabel,
-                                value: restDuration == null
-                                    ? '—'
-                                    : formatAnalysisDuration(l10n, restDuration),
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.route,
-                                label: l10n.distance,
-                                value:
-                                    '${route.distanceKm.toStringAsFixed(2)} km',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.equalizer,
-                                label: l10n.averageSpeedLabel,
-                                value: speed.averageMovingKmh == null
-                                    ? '—'
-                                    : '${speed.averageMovingKmh!.toStringAsFixed(1)} km/h',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.bolt,
-                                label: l10n.maxSpeed,
-                                value: speed.maxKmh == null
-                                    ? '—'
-                                    : '${speed.maxKmh!.toStringAsFixed(1)} km/h',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.hourglass_bottom,
-                                label: l10n.timeSinceLastRestLabel,
-                                value: timeSinceLastRest == null
-                                    ? '—'
-                                    : formatAnalysisDuration(
-                                        l10n,
-                                        timeSinceLastRest,
-                                      ),
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        // Climb/descent paired, max/min altitude paired
-                        // right below - both pairs describe the same
-                        // elevation profile, so grouping them beats
-                        // scattering them across the grid.
-                        Row(
-                          children: [
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.trending_up,
-                                label: l10n.climb,
-                                value:
-                                    '${route.elevationGainMeters.round()} m',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.trending_down,
-                                label: l10n.descent,
-                                value:
-                                    '${route.elevationLossMeters.round()} m',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.arrow_upward,
-                                label: l10n.maxAltitude,
-                                value: route.maxElevation == null
-                                    ? '—'
-                                    : '${route.maxElevation!.round()} m',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: AnalysisStatCard(
-                                icon: Icons.arrow_downward,
-                                label: l10n.minAltitude,
-                                value: route.minElevation == null
-                                    ? '—'
-                                    : '${route.minElevation!.round()} m',
-                                accentColor: accent,
-                                large: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1692,15 +1408,10 @@ Future<void> _deleteRoute(
 }
 
 class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({
-    required this.icon,
-    required this.onPressed,
-    this.tooltip,
-  });
+  const _RoundIconButton({required this.icon, required this.onPressed});
 
   final IconData icon;
   final VoidCallback? onPressed;
-  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -1708,11 +1419,7 @@ class _RoundIconButton extends StatelessWidget {
       color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
       shape: const CircleBorder(),
       elevation: 2,
-      child: IconButton(
-        icon: Icon(icon),
-        tooltip: tooltip,
-        onPressed: onPressed,
-      ),
+      child: IconButton(icon: Icon(icon), onPressed: onPressed),
     );
   }
 }
