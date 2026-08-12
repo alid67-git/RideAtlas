@@ -1,11 +1,12 @@
 /// Bumped by hand on every push so the running build can be eyeballed on
 /// screen (Chrome tabs / dev servers can otherwise silently serve stale JS).
-const String kAppBuildLabel = 'v1.4.18 beta';
+const String kAppBuildLabel = 'v1.4.19 beta';
 
 /// Shown once, in a dialog, the first time this build label is seen.
 const String kAppBuildNote =
-    'KRİTİK düzeltme: hız göstergesi çok gecikmeli görünüyordu ve harita '
-    'bazen yanlış yöne dönmüş kalıyordu - gerçek sebep, GPS konumunun hem '
-    'kayıt servisinde hem de haritada sadece 5 saniyede bir güncellenmesiydi. '
-    'Artık saniyede bir güncelleniyor, hız ve yön çok daha hızlı tepki '
-    'veriyor.';
+    'Kayıtlı/yüklenmiş rotalara da kayıt ekranındaki gibi bir özet sayfası '
+    'eklendi: toplam süre, sürüş/mola süresi, mesafe, ortalama/maks hız, '
+    'tırmanış/iniş, maksimum/minimum irtifa - harita ikonuyla geçiş '
+    'yapılıyor. Kayıt ekranının bilgi sayfasındaki okunması güç hız/'
+    'yükseklik mini grafikleri kaldırıldı, yerine maksimum/minimum irtifa '
+    'kutuları eklendi.';

@@ -20,6 +20,20 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.19 beta',
+    date: '2026-08-12',
+    note:
+        'Kayıtlı/yüklenmiş rotalar için de kayıt ekranının bilgi sayfasına '
+        'benzer bir "özet" sayfası eklendi (harita ekranındaki yeni ikonla '
+        'geçiliyor): en üstte büyük bir "Toplam süre" şeridi, altında '
+        'sürüş süresi/mola süresi çifti, ardından mesafe, ortalama hız, '
+        'maks. hız, tırmanış, iniş, maksimum irtifa ve minimum irtifa - '
+        'hepsi aynı mavi kart tasarımıyla. Ayrıca kayıt ekranının bilgi '
+        'sayfasındaki, küçük olduğu için okunması güç hız/yükseklik mini '
+        'grafikleri kaldırıldı; yerlerine maksimum irtifa ve minimum '
+        'irtifa kutuları eklendi.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.18 beta',
     date: '2026-08-11',
     note:
