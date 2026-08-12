@@ -1,5 +1,10 @@
 enum VehicleIconCategory { classic, motorcycle, car }
 
+/// Size multipliers the vehicle icon picker offers - same 5-step scale as
+/// the stat card icon settings, so both "size" pickers in the app behave
+/// the same way.
+const vehicleIconSizeOptions = <double>[0.8, 1.0, 1.2, 1.4, 1.6];
+
 /// A selectable icon for the "you are here" marker on the map. [classic]
 /// (the plain blue dot) has no image/scale - those only apply to the
 /// motorcycle/car options, which render a real top-down vehicle photo
