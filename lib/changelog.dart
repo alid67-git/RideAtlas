@@ -20,6 +20,21 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.32 beta',
+    date: '2026-08-12',
+    note:
+        'Maks./Min. irtifa etiketleri taşıyordu ("Maksimum ..." gibi '
+        'kesiliyordu) - kısaltıldı ve kart yazı boyutu küçültüldü. Kayıt '
+        'ekranındaki "Toplam süre" yazısı kaldırıldı, sadece ikon+süre '
+        'kaldı. Oto-duraklama artık 3 saniye durunca devreye giriyor '
+        '(önceden 15 saniyeydi) - bu sadece görsel "bekleniyor" rozeti, '
+        'mola sayımını (10 dakika eşiği) etkilemiyor. Ayarlar\'a yeni bir '
+        'ekran eklendi: "Kayıt ekranı kartları" - kayıt ekranının canlı '
+        'bilgi sayfasındaki kartları (sürüş süresi, mesafe, irtifa, hız '
+        'vb.) sürükleyip istediğiniz sıraya koyabilir, istemediklerinizi '
+        'anahtarla kapatabilirsiniz.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.31 beta',
     date: '2026-08-12',
     note:

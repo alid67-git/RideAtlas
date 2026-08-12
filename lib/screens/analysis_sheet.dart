@@ -1167,7 +1167,7 @@ class AnalysisStatCard extends StatelessWidget {
     // riders who wanted a say in it.
     final iconSettings = context.watch<StatIconSettingsController>();
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: large ? 10 : 8),
+      padding: EdgeInsets.symmetric(horizontal: large ? 8 : 12, vertical: large ? 8 : 8),
       decoration: BoxDecoration(
         color: accent == null
             ? theme.colorScheme.surfaceContainerHighest
@@ -1189,7 +1189,7 @@ class AnalysisStatCard extends StatelessWidget {
           Icon(
             icon,
             color: iconSettings.color,
-            size: (large ? 26 : 20) * iconSettings.sizeScale,
+            size: (large ? 22 : 20) * iconSettings.sizeScale,
           ),
           SizedBox(width: large ? 10 : 8),
           if (large)
@@ -1198,16 +1198,19 @@ class AnalysisStatCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  // A size down from before (was bodyMedium) - long labels
+                  // like "Maks. irtifa" were clipping mid-word on narrower
+                  // screens with the icon eating into the card's width.
                   Text(
                     label,
-                    style: theme.textTheme.bodyMedium,
+                    style: theme.textTheme.bodySmall,
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
                     value,
-                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
