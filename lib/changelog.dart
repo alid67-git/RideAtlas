@@ -20,6 +20,23 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.36 beta',
+    date: '2026-08-13',
+    note:
+        'İki ekran görüntüsüyle yakalanan iki gerçek harita hatası '
+        'düzeltildi: (1) Kırmızı rota çizgisinde ara sıra beliren keskin '
+        '"sıçrama"lar (özellikle kavşak/yüksek bina yakınlarında) - GPS '
+        'servisinden gelen fiziksel olarak imkansız hızlı sıçramalar artık '
+        'rotaya hiç eklenmiyor, kaydedilen iz temiz kalıyor. (2) Harita '
+        'yön-takip (course-up) modunun "neden yukarı gitmiyor" sorunu - '
+        'kök neden bulundu: bilgi sayfasından haritaya her geçişte, harita '
+        'widget\'ı yeniden kurulurken flutter_map kütüphanesinin kendi iç '
+        'olayı ("boyut değişti") yanlışlıkla "kullanıcı haritayı elle '
+        'kaydırdı" sanılıp yön-takip modunu sessizce kapatıyordu - siz hiç '
+        'dokunmasanız bile. Artık sadece gerçek sürükleme/yakınlaştırma '
+        'hareketleri modu kapatıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.35 beta',
     date: '2026-08-13',
     note:
