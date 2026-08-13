@@ -20,6 +20,21 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.34 beta',
+    date: '2026-08-12',
+    note:
+        'Aktif sürüş süresi mantığı gözden geçirildi: artık her durduğunuzda '
+        '(kısa duraklama da olsa) ekranda anında donuyor - önceden hiç '
+        'donmuyordu, sadece 10dk+ molalar sonradan düşülüyordu. Tekrar '
+        'harekete geçince: duraklama 10 dakikanın altındaysa o süre geriye '
+        'dönük olarak aktif sürüşe eklenir (küçük bir sıçrama görürsünüz), '
+        '10 dakika ve üzeriyse mola sayılır. Toplam süre = Aktif sürüş + '
+        'Mola süresi eşitliği hep korunuyor. Ayrıca "Son moladan bu yana" '
+        'sayacı, devam eden bir molayı (10dk+ duraklamayı) artık kendi '
+        'içine katmıyor - mola sürerken sıfırda duruyor, mola bitip tekrar '
+        'harekete geçince sıfırdan saymaya başlıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.33 beta',
     date: '2026-08-12',
     note:
