@@ -111,6 +111,33 @@ class _RecordScreenState extends State<RecordScreen>
   /// button turns it back on (see [_recenter]).
   bool _followMe = true;
 
+  /// Whether a [MapEvent] represents the rider actually touching/panning
+  /// the map, as opposed to flutter_map's own internal bookkeeping events
+  /// (constructing the map fresh when switching from the info page back to
+  /// the map tab fires a [MapEventSource.nonRotatedSizeChange] the instant
+  /// it's laid out, for one) - those aren't gestures and shouldn't silently
+  /// cancel course-up follow the way a real drag/pinch should. This was the
+  /// actual root cause behind the map seemingly refusing to rotate to
+  /// course-up: follow mode was being turned off on essentially every
+  /// screen switch, well before the rider ever touched anything.
+  static bool _isUserMapGesture(MapEventSource source) {
+    switch (source) {
+      case MapEventSource.dragStart:
+      case MapEventSource.onDrag:
+      case MapEventSource.dragEnd:
+      case MapEventSource.multiFingerGestureStart:
+      case MapEventSource.onMultiFinger:
+      case MapEventSource.multiFingerEnd:
+      case MapEventSource.flingAnimationController:
+      case MapEventSource.doubleTapZoomAnimationController:
+      case MapEventSource.scrollWheel:
+      case MapEventSource.cursorKeyboardRotation:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   late final StreamSubscription<MapEvent> _mapEventSub;
 
   @override
@@ -133,7 +160,7 @@ class _RecordScreenState extends State<RecordScreen>
     )..repeat(reverse: true);
     _startLiveLocation();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
-      if (event.source != MapEventSource.mapController && _followMe) {
+      if (_isUserMapGesture(event.source) && _followMe) {
         setState(() => _followMe = false);
       }
     });

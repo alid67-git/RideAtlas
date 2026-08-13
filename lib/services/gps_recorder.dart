@@ -309,6 +309,29 @@ class GpsRecorder extends ChangeNotifier {
     return rawKmh;
   }
 
+  /// Above any real vehicle speed this app expects to record - a fix that
+  /// implies faster than this since the last *accepted* point is a
+  /// reflected/multipath GPS glitch (common near junctions, tall buildings,
+  /// underpasses), not real motion. Rejected points are simply left out of
+  /// the track rather than accepted-then-corrected, so a bad fix can't
+  /// spike the drawn route out to some other spot and back. Comparing
+  /// against the last *accepted* point (not the last raw fix) means a run
+  /// of several consecutive bad fixes gets skipped in full rather than each
+  /// one anchoring the next comparison to more noise.
+  static const _maxPlausibleSpeedKmh = 300.0;
+
+  bool _isPlausiblePoint(LatLng latLng, DateTime time) {
+    if (_points.isEmpty) return true;
+    final last = _points.last;
+    final lastTime = last.time;
+    if (lastTime == null) return true;
+    final dtSeconds = time.difference(lastTime).inMilliseconds / 1000.0;
+    if (dtSeconds <= 0) return true;
+    final meters = _distance(last.latLng, latLng);
+    final impliedKmh = (meters / dtSeconds) * 3.6;
+    return impliedKmh <= _maxPlausibleSpeedKmh;
+  }
+
   void _onPosition(Position pos) {
     if (_state != RecordingState.recording) return;
 
@@ -349,13 +372,16 @@ class GpsRecorder extends ChangeNotifier {
       _stationarySince = null;
     }
 
-    _points.add(
-      TrackPoint(
-        latLng: LatLng(pos.latitude, pos.longitude),
-        elevation: pos.altitude,
-        time: pos.timestamp,
-      ),
-    );
+    final latLng = LatLng(pos.latitude, pos.longitude);
+    if (_isPlausiblePoint(latLng, pos.timestamp)) {
+      _points.add(
+        TrackPoint(
+          latLng: latLng,
+          elevation: pos.altitude,
+          time: pos.timestamp,
+        ),
+      );
+    }
     notifyListeners();
   }
 
