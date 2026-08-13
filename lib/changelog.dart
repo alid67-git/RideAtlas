@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.37 beta',
+    date: '2026-08-14',
+    note:
+        'Test sürümü: yerel Flutter + Android SDK derleme zinciri '
+        'doğrulandı. Ürün davranışı v1.4.36 ile aynı; etiket yeni APK/web '
+        'yayınının geldiğini doğrulamak için.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.36 beta',
     date: '2026-08-13',
     note:

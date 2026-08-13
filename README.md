@@ -29,6 +29,20 @@ Windows’ta hızlı başlatma: `run_dev_web.bat` (Chrome, port 8080, hot reload
 
 Release web derlemesi: `build_web.bat` → `run_web.bat`
 
+Release Android APK (yerel, push’suz test için): `build_apk.bat`  
+Çıktı: `build/app/outputs/flutter-apk/app-release.apk` — telefona kopyala veya `adb install -r` ile kur.
+
+Flutter SDK beklenen konum: `C:\src\flutter` (yoksa [Flutter kurulum](https://docs.flutter.dev/get-started/install/windows) + Android Studio/SDK gerekir).
+
+**Not (Windows):** Proje Google Drive / OneDrive senkron klasöründeyse Flutter sıkça `arb-dir` / `.plugin_symlinks` yazma hatası verir. Yerel derleme için repo’yu `C:\src\RideAtlas` gibi senkron dışı bir yola klonlayın.
+
+## Sürüm / iş akışı (kısa)
+
+- Her kullanıcıya görünen push’ta `build_info.dart` + `changelog.dart` güncelle.
+- CI/toolchain yükseltmelerini **tek commit**te topla; ürün sürümünü sadece altyapı için şişirme.
+- `main`’e mümkünse squash merge.
+- GPS/UI’da önce hipotez, tek değişiklik, sonra doğrula.
+
 ## GitHub Pages (ilk kurulum)
 
 Repo ayarlarında bir kez:

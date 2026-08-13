@@ -5,9 +5,13 @@ cd /d "%~dp0"
 
 set "FLUTTER=C:\src\flutter\bin\flutter.bat"
 if not exist "%FLUTTER%" (
-    echo Flutter bulunamadi: %FLUTTER%
-    pause
-    exit /b 1
+    where flutter >nul 2>&1
+    if errorlevel 1 (
+        echo Flutter bulunamadi: C:\src\flutter ve PATH
+        pause
+        exit /b 1
+    )
+    set "FLUTTER=flutter"
 )
 
 echo RideAtlas web surumu derleniyor, bu birkac dakika surebilir...
