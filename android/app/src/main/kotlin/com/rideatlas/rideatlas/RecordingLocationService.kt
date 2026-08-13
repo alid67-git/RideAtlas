@@ -126,7 +126,16 @@ class RecordingLocationService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_SET_PAUSED -> {
-                isPaused = intent.getBooleanExtra(EXTRA_PAUSED, false)
+                val newPaused = intent.getBooleanExtra(EXTRA_PAUSED, false)
+                val changed = newPaused != isPaused
+                isPaused = newPaused
+                // Re-request updates at the paused/active cadence - the
+                // foreground service + wake lock otherwise keep the GPS
+                // chip working at full rate the whole ride regardless of
+                // whether a rider is actually moving, which was needlessly
+                // draining battery every time the ride auto-paused at a
+                // light or a stop.
+                if (changed && isRunning) startLocationUpdates()
                 return START_STICKY
             }
             ACTION_START, null -> {
@@ -151,11 +160,14 @@ class RecordingLocationService : Service() {
                     } else {
                         clearPoints(this)
                     }
+                    // Set before startLocationUpdates() so a fresh start
+                    // always begins at the active/fast cadence, even if a
+                    // previous run crashed mid-pause and left the flag true.
+                    isPaused = false
                     startAsForeground(title, text)
                     acquireWakeLock()
                     startLocationUpdates()
                     isRunning = true
-                    isPaused = false
                 } else {
                     // Already running - refresh the notification text if sent again.
                     startAsForeground(title, text)
@@ -233,17 +245,10 @@ class RecordingLocationService : Service() {
     }
 
     private fun startLocationUpdates() {
-        // Was 5s/2s - riders reported the displayed speed feeling very
-        // delayed, which traces straight back to this interval: the
-        // current-speed figure on screen can only refresh as often as a
-        // new fix arrives. 1s (matching a typical navigation app) makes it
-        // track real acceleration/deceleration promptly.
-        val request =
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000L)
-                .setMinUpdateIntervalMillis(500L)
-                .setMinUpdateDistanceMeters(0f)
-                .setWaitForAccurateLocation(false)
-                .build()
+        // Re-requesting with the same callback replaces whatever request
+        // was previously registered for it - used both for the initial
+        // start and to swap cadence when [isPaused] changes.
+        val request = buildLocationRequest(isPaused)
         try {
             fusedClient.requestLocationUpdates(request, locationCallback, mainLooper)
         } catch (e: SecurityException) {
@@ -251,6 +256,34 @@ class RecordingLocationService : Service() {
             stopSelf()
         }
     }
+
+    /**
+     * Active: was 5s/2s - riders reported the displayed speed feeling very
+     * delayed, which traces straight back to this interval: the
+     * current-speed figure on screen can only refresh as often as a new fix
+     * arrives. 1s (matching a typical navigation app) makes it track real
+     * acceleration/deceleration promptly.
+     *
+     * Paused (manual or auto): nothing is being recorded, so there's no
+     * reason to keep pulling high-accuracy fixes every second - this was
+     * draining battery identically whether a rider was actually moving or
+     * sitting at a light. A slower, lower-power request still delivers
+     * occasional fixes so auto-pause can detect the ride resuming, just
+     * without the same battery cost while stationary.
+     */
+    private fun buildLocationRequest(paused: Boolean): LocationRequest =
+        if (paused) {
+            LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 8_000L)
+                .setMinUpdateIntervalMillis(8_000L)
+                .setWaitForAccurateLocation(false)
+                .build()
+        } else {
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000L)
+                .setMinUpdateIntervalMillis(500L)
+                .setMinUpdateDistanceMeters(0f)
+                .setWaitForAccurateLocation(false)
+                .build()
+        }
 
     private fun acquireWakeLock() {
         if (wakeLock?.isHeld == true) return

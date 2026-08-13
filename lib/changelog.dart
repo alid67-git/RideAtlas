@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.38 beta',
+    date: '2026-08-14',
+    note:
+        'Pil tasarrufu: incelendiğinde ortaya çıktı ki oto-duraklama ve '
+        'manuel duraklama sadece görsel/kayıt filtresiydi - GPS çipi '
+        'arkada hâlâ tam hızda (1 saniyede bir, yüksek hassasiyet) çalışıp '
+        'pil tüketmeye devam ediyordu. Artık duraklama başlar başlamaz '
+        'native GPS isteği yavaşlıyor (8 saniyede bir, düşük güç modu); '
+        'hareket algılanır algılanmaz eski hızına (1sn/yüksek hassasiyet) '
+        'dönüyor. Hem otomatik hem elle duraklatma bu değişiklikten '
+        'yararlanıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.37 beta',
     date: '2026-08-14',
     note:

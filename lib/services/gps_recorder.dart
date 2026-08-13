@@ -356,6 +356,11 @@ class GpsRecorder extends ChangeNotifier {
           _completedPauses.add((duration: now.difference(pauseStarted), end: now));
           _pauseStartedAt = null;
         }
+        // Back to the fast/high-accuracy GPS cadence now that the ride
+        // has actually resumed - see the matching setPaused(true) below.
+        if (NativeRecording.isSupported) {
+          unawaited(NativeRecording.setPaused(false));
+        }
       } else {
         notifyListeners();
         return;
@@ -365,6 +370,14 @@ class GpsRecorder extends ChangeNotifier {
       if (DateTime.now().difference(_stationarySince!) >= _autoPauseDelay) {
         _isAutoPaused = true;
         _pauseStartedAt = DateTime.now();
+        // Slows the native GPS request cadence while genuinely stationary
+        // (see RecordingLocationService.buildLocationRequest) - auto-pause
+        // was previously a display-only/recording filter that left GPS
+        // polling at full rate the whole time, burning battery identically
+        // whether the rider was moving or sitting at a light.
+        if (NativeRecording.isSupported) {
+          unawaited(NativeRecording.setPaused(true));
+        }
         notifyListeners();
         return;
       }
