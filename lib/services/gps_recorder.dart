@@ -105,13 +105,28 @@ class GpsRecorder extends ChangeNotifier {
   }
 
   /// Active/moving duration - wall-clock time since [start] minus every
-  /// pause of [_minMolaDuration] or longer. This is what most riders mean
-  /// by "how long have I actually been riding": a red light or a junction
-  /// stop still counts as riding, only a genuine break doesn't.
+  /// pause of [_minMolaDuration] or longer, AND minus whatever pause is
+  /// currently in progress (however short). Riders want this to visibly
+  /// freeze the instant they stop, not just once a stop turns into a real
+  /// "mola" - but a stop under [_minMolaDuration] still doesn't count as
+  /// rest once it ends, so its frozen time gets folded back in then (see
+  /// the jump this produces: [elapsed] holds steady while paused, then
+  /// catches up by the pause's length the moment it resumes, as long as
+  /// that pause stayed under the mola threshold).
   Duration get elapsed {
     final started = _startedAt;
     if (started == null) return Duration.zero;
-    return DateTime.now().difference(started) - restDuration;
+    final now = DateTime.now();
+    var result = now.difference(started) - restDuration;
+    final pauseStarted = _pauseStartedAt;
+    if (pauseStarted != null) {
+      final currentPause = now.difference(pauseStarted);
+      // Only subtract here if restDuration hasn't already counted it (it
+      // starts counting in-progress pauses once they hit the threshold) -
+      // otherwise this would double-subtract the same stretch.
+      if (currentPause < _minMolaDuration) result -= currentPause;
+    }
+    return result;
   }
 
   /// Raw wall-clock time since [start], including every stop/pause - unlike
@@ -138,15 +153,23 @@ class GpsRecorder extends ChangeNotifier {
 
   /// Wall-clock time since the end of the last qualifying rest (see
   /// [restDuration]), or since [start] if there hasn't been one yet. Null
-  /// while idle.
+  /// while idle. Zero while currently mid-mola (an in-progress pause that
+  /// has already crossed [_minMolaDuration]) - "since the last rest ended"
+  /// doesn't apply while still inside it; this starts counting up again
+  /// only once that pause actually ends and riding resumes.
   Duration? get timeSinceLastRest {
     final started = _startedAt;
     if (started == null) return null;
+    final now = DateTime.now();
+    final pauseStarted = _pauseStartedAt;
+    if (pauseStarted != null && now.difference(pauseStarted) >= _minMolaDuration) {
+      return Duration.zero;
+    }
     DateTime? lastRestEnd;
     for (final pause in _completedPauses) {
       if (pause.duration >= _minMolaDuration) lastRestEnd = pause.end;
     }
-    return DateTime.now().difference(lastRestEnd ?? started);
+    return now.difference(lastRestEnd ?? started);
   }
 
   Future<RecordingStartError?> start({
