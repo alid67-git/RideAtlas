@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.35 beta',
+    date: '2026-08-13',
+    note:
+        'Kayıt ekranının canlı bilgi sayfasındaki kartların varsayılan '
+        'sırası değişti: Aktif sürüş süresi/Mesafe, Mola süresi/Son '
+        'moladan bu yana, Ortalama hız/Maks. hız, Maks. irtifa/Min. '
+        'irtifa, İniş/Tırmanış, en altta tek başına Yükseklik. Bu sadece '
+        'varsayılan - kartları basılı tutup sürükleyerek istediğiniz gibi '
+        'değiştirmeye devam edebilirsiniz.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.34 beta',
     date: '2026-08-12',
     note:

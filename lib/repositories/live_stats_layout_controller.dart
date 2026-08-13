@@ -24,20 +24,21 @@ enum LiveStatKey {
   descent,
 }
 
-/// Order the app ships with - matches what the screen looked like before
-/// this became configurable.
+/// Order the app ships with for anyone who hasn't dragged their own -
+/// riders can always rearrange or hide any of these from here (see
+/// [LiveStatsLayoutScreen] / the live info page's press-and-hold drag).
 const List<LiveStatKey> defaultLiveStatOrder = [
   LiveStatKey.ridingDuration,
   LiveStatKey.distance,
   LiveStatKey.restDuration,
-  LiveStatKey.currentAltitude,
-  LiveStatKey.maxAltitude,
-  LiveStatKey.minAltitude,
   LiveStatKey.timeSinceLastRest,
   LiveStatKey.averageSpeed,
   LiveStatKey.maxSpeed,
-  LiveStatKey.climb,
+  LiveStatKey.maxAltitude,
+  LiveStatKey.minAltitude,
   LiveStatKey.descent,
+  LiveStatKey.climb,
+  LiveStatKey.currentAltitude,
 ];
 
 IconData liveStatIcon(LiveStatKey key) {
