@@ -20,6 +20,25 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.43 beta',
+    date: '2026-08-14',
+    note:
+        'v1.4.42\'deki düzeltme (duraklamada düşük hassasiyetli konuma '
+        'geçmeyi engellemek) yeterli değilmiş - kullanıcı gerçek bir '
+        'sürüşte ekran görüntüsüyle yine "Otomatik duraklatıldı"nın hiç '
+        'kapanmadığını, sadece elle duraklat/devam ettirince çalıştığını '
+        'gösterdi. Kod içinde asıl sebep bulundu: '
+        'RecordingLocationService.kt\'deki konum callback\'i duraklama '
+        'sırasında gelen HER fix\'i "if (isPaused) return" ile en baştan '
+        'yok sayıyordu - GPS\'in kendisi düzelse bile hiçbir konum '
+        'Flutter tarafına ulaşmıyordu, o yüzden hızı kontrol edip '
+        'duraklamayı kaldıran mantık hiç çalıştırılamıyordu. Elle '
+        'duraklat/devam ettir çalışıyordu çünkü o buton konum beklemeden '
+        'direkt durumu değiştiriyor. Düzeltildi: duraklama sırasında da '
+        'her konum artık Flutter\'a iletiliyor (hız kontrolü için) - sadece '
+        'kayıtlı rotaya eklenmiyor, o davranış değişmedi.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.42 beta',
     date: '2026-08-14',
     note:

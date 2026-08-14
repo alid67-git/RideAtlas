@@ -97,7 +97,6 @@ class RecordingLocationService : Service() {
     private val locationCallback =
         object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                if (isPaused) return
                 for (location in result.locations) {
                     val point =
                         mapOf(
@@ -109,8 +108,23 @@ class RecordingLocationService : Service() {
                             "timeMs" to location.time,
                             "accuracy" to location.accuracy.toDouble(),
                         )
-                    points.add(point)
-                    appendPointToFile(point)
+                    // The actual root cause of auto-pause never clearing by
+                    // itself: this used to `return` entirely while paused,
+                    // so NO fix ever reached Dart during a pause - the
+                    // speed check that's supposed to notice the rider
+                    // moving off again literally never ran (GpsRecorder's
+                    // _onPosition was never called at all). Manually
+                    // pausing/resuming "worked" only because that path sets
+                    // the state directly, bypassing this stream entirely.
+                    // Still keep paused fixes out of the persisted/recorded
+                    // track and the restart-recovery file - GpsRecorder
+                    // itself already excludes them from the saved route
+                    // (see the _isAutoPaused branch in _onPosition), this
+                    // just also skips writing them to disk here.
+                    if (!isPaused) {
+                        points.add(point)
+                        appendPointToFile(point)
+                    }
                     RecordingNativeBridge.emitPoint(point)
                 }
             }
