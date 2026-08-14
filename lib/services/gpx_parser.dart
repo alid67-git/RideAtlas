@@ -203,15 +203,57 @@ double totalDistanceKm(List<TrackPoint> points) {
 /// way after the fact.
 const maxPlausibleTrackSpeedKmh = 300.0;
 
+/// A single-hop jump has to imply at least this speed *and* cover at least
+/// [_excursionMinJumpMeters] before [findExcursionPointIndices] even
+/// considers it a candidate - low, deliberately, so it catches jumps a real
+/// motorcycle ride would never produce, without also catching the routine
+/// couple-km/h-implying jitter GPS reports while genuinely stationary (a
+/// few meters of noise over a 1-2s gap can misleadingly imply tens of
+/// km/h on its own, which a lower distance-only or speed-only gate would
+/// wrongly flag).
+const _excursionTriggerKmh = 60.0;
+const _excursionMinJumpMeters = 150.0;
+
+/// How close a later point has to land to the pre-excursion position to
+/// count as "came back" - larger than ordinary GPS jitter (tens of
+/// meters) so a real nearby-but-not-identical revisit doesn't confuse the
+/// detector into merging unrelated points.
+const _excursionReturnRadiusMeters = 60.0;
+
+/// How many points ahead to search for a return before giving up and
+/// treating the jump as real (sustained fast riding, or a genuine GPS gap)
+/// rather than a glitch - a real excursion glitch snaps back within
+/// seconds to a couple of minutes, not further out.
+const _excursionMaxLookaheadPoints = 150;
+
 /// Indices of points in [points] that imply a physically-impossible speed
 /// jump from the last plausible point before them. Comparing against the
 /// last point that itself passed this check (not just the previous point)
 /// means a run of several consecutive bad fixes gets flagged in full rather
-/// than each one anchoring the next comparison to more noise. Used both to
-/// silently clean a route for display ([filterImplausiblePoints]) and to
-/// let a rider review exactly which points would be removed before
-/// deleting them from a saved route (see the route anomaly editor).
+/// than each one anchoring the next comparison to more noise. This alone
+/// only catches a jump that's *instantly* impossible (over
+/// [maxPlausibleTrackSpeedKmh]) - see [findExcursionPointIndices] for the
+/// more common case of a jump that's individually fast-but-plausible yet
+/// snaps back to nearly where it started a few points later (confirmed in
+/// practice: a device sitting still reported one frozen, wrong coordinate
+/// for about a minute, then reported the true position again - each hop
+/// alone implied "only" ~140 km/h, not an instantly-rejectable spike).
+/// Used both to silently clean a route for display
+/// ([filterImplausiblePoints]) and to let a rider review exactly which
+/// points would be removed before deleting them from a saved route (see the
+/// route anomaly editor).
 List<int> findImplausiblePointIndices(
+  List<TrackPoint> points, {
+  double maxKmh = maxPlausibleTrackSpeedKmh,
+}) {
+  final flagged = <int>{
+    ..._findInstantSpikeIndices(points, maxKmh: maxKmh),
+    ...findExcursionPointIndices(points),
+  }.toList()..sort();
+  return flagged;
+}
+
+List<int> _findInstantSpikeIndices(
   List<TrackPoint> points, {
   double maxKmh = maxPlausibleTrackSpeedKmh,
 }) {
@@ -236,6 +278,71 @@ List<int> findImplausiblePointIndices(
       continue;
     }
     lastPlausible = p;
+  }
+  return flagged;
+}
+
+/// Indices of points that form a "spike and return": the track suddenly
+/// jumps far from its last stable point fast enough to be implausible, then
+/// - within [_excursionMaxLookaheadPoints] points - lands back within
+/// [_excursionReturnRadiusMeters] of that same stable point. Real riding
+/// doesn't do this (a genuine detour takes time proportional to the
+/// distance covered and doesn't return to the exact same spot); a reflected
+/// or cached GPS fix does. Points strictly between the jump and the return
+/// are flagged; the returning point itself becomes the new stable point so
+/// scanning continues cleanly rather than re-triggering on it.
+List<int> findExcursionPointIndices(
+  List<TrackPoint> points, {
+  double triggerKmh = _excursionTriggerKmh,
+  double minJumpMeters = _excursionMinJumpMeters,
+  double returnRadiusMeters = _excursionReturnRadiusMeters,
+  int maxLookaheadPoints = _excursionMaxLookaheadPoints,
+}) {
+  final flagged = <int>[];
+  var stableIndex = 0;
+  var i = 1;
+  while (i < points.length) {
+    final stable = points[stableIndex];
+    final p = points[i];
+    final meters = _distance(stable.latLng, p.latLng);
+    var isCandidate = false;
+    if (meters >= minJumpMeters) {
+      final t0 = stable.time;
+      final t1 = p.time;
+      if (t0 != null && t1 != null) {
+        final dtSeconds = t1.difference(t0).inMilliseconds / 1000.0;
+        isCandidate = dtSeconds <= 0 || (meters / dtSeconds) * 3.6 >= triggerKmh;
+      } else {
+        isCandidate = true;
+      }
+    }
+    if (!isCandidate) {
+      stableIndex = i;
+      i++;
+      continue;
+    }
+    final limit = (i + maxLookaheadPoints < points.length)
+        ? i + maxLookaheadPoints
+        : points.length;
+    var returnIndex = -1;
+    for (var j = i + 1; j < limit; j++) {
+      if (_distance(stable.latLng, points[j].latLng) <= returnRadiusMeters) {
+        returnIndex = j;
+        break;
+      }
+    }
+    if (returnIndex == -1) {
+      // Never comes back nearby within the window - treat as real movement
+      // (sustained fast riding, or a genuine GPS gap), not a glitch.
+      stableIndex = i;
+      i++;
+      continue;
+    }
+    for (var k = i; k < returnIndex; k++) {
+      flagged.add(k);
+    }
+    stableIndex = returnIndex;
+    i = returnIndex + 1;
   }
   return flagged;
 }

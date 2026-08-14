@@ -20,6 +20,27 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.45 beta',
+    date: '2026-08-14',
+    note:
+        'Kullanıcı, v1.4.44\'teki sıçrama filtresinin haritadaki büyük '
+        'zıplamayı yine de temizlemediğini gösterdi ve gerçek rota '
+        'dosyasını paylaştı. Dosyayı inceleyince kök sebep netleşti: '
+        'sıçrama tek bir "anlık imkansız" hız değil, cihaz dururken GPS\'in '
+        'yaklaşık bir dakika boyunca ~1.7km uzakta donup kalıp sonra '
+        'gerçek konuma geri dönmesiydi - her tek adım kendi başına "sadece '
+        'hızlı" (~140 km/s) görünüyordu, mevcut mutlak hız eşiğini '
+        '(300 km/s) geçmiyordu. gpx_parser.dart\'a yeni bir '
+        'findExcursionPointIndices dedektörü eklendi: rota aniden uzağa '
+        'sıçrayıp birkaç ölçüm içinde neredeyse aynı noktaya geri '
+        'dönüyorsa (gerçek bir sürüşün asla yapmayacağı bir şey), aradaki '
+        'noktalar GPS aksaklığı sayılıp otomatik filtreye ve "Anormal '
+        'noktaları düzenle" ekranına dahil ediliyor. Kullanıcının '
+        'paylaştığı 36.628 noktalık gerçek dosya üzerinde doğrulandı: '
+        'algoritma tam olarak bozuk 11 noktayı buluyor, başka hiçbir '
+        'gerçek sürüş/duraklama anını yanlışlıkla işaretlemiyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.44 beta',
     date: '2026-08-14',
     note:
