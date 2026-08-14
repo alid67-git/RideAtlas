@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hive/hive.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -325,17 +328,29 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       waypoints: _waypoints ?? const [],
       format: format,
     );
+    XFile shareFile;
+    if (kIsWeb) {
+      // No filesystem to write a real file to - the browser's own
+      // save/share affordance reads the name from XFile.fromData directly.
+      shareFile = XFile.fromData(
+        export.bytes,
+        name: '$name.${export.extension}',
+        mimeType: export.mimeType,
+      );
+    } else {
+      // XFile.fromData doesn't reliably carry its `name:` through to the
+      // share sheet on Android - the receiving app shows some internal
+      // random-looking temp name instead of the one just chosen above. A
+      // real file on disk, named up front, is what actually shows up in
+      // the share sheet.
+      final safeName = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/$safeName.${export.extension}');
+      await file.writeAsBytes(export.bytes);
+      shareFile = XFile(file.path, mimeType: export.mimeType);
+    }
     await SharePlus.instance.share(
-      ShareParams(
-        files: [
-          XFile.fromData(
-            export.bytes,
-            name: '$name.${export.extension}',
-            mimeType: export.mimeType,
-          ),
-        ],
-        subject: name,
-      ),
+      ShareParams(files: [shareFile], subject: name),
     );
   }
 

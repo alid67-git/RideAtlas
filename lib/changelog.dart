@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.40 beta',
+    date: '2026-08-14',
+    note:
+        'v1.4.39\'daki isim sorma diyaloğunda gerçek bir hata vardı: '
+        'girilen isim doğru soruluyordu ama Android\'in paylaşım ekranına '
+        'geçince dosya rastgele/anlamsız bir isimle (UUID benzeri) '
+        'görünüyordu - XFile.fromData Android\'de verilen ismi paylaşım '
+        'sayfasına taşımıyormuş. Artık dosya önce gerçek adıyla diske '
+        'yazılıp öyle paylaşılıyor, paylaşım ekranında da doğru isim '
+        'görünüyor. Web tarafı etkilenmedi, orada zaten doğru çalışıyordu.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.39 beta',
     date: '2026-08-14',
     note:
