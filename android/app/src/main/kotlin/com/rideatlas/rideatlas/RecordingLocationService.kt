@@ -277,10 +277,20 @@ class RecordingLocationService : Service() {
      * GpsRecorder's own stationary-detection delay before entering pause in
      * the first place) keeps that resume latency tolerable while still
      * cutting fix frequency to a third of the active rate.
+     *
+     * Priority was also PRIORITY_BALANCED_POWER_ACCURACY while paused, which
+     * lets Play Services substitute WiFi/cell-tower positioning for the GPS
+     * chip - those fixes commonly report speed 0 (no Doppler data), so once
+     * a rider actually pulled away the smoothed speed could sit near zero
+     * indefinitely and auto-pause never cleared ("takılı kalıyor", not just
+     * slow to notice). Kept at PRIORITY_HIGH_ACCURACY so paused fixes still
+     * come from the GPS chip with real speed - the interval alone (not the
+     * priority) is what saves battery here, since the chip can duty-cycle
+     * down between fixes either way.
      */
     private fun buildLocationRequest(paused: Boolean): LocationRequest =
         if (paused) {
-            LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 3_000L)
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3_000L)
                 .setMinUpdateIntervalMillis(3_000L)
                 .setWaitForAccurateLocation(false)
                 .build()

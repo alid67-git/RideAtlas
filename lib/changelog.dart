@@ -20,6 +20,25 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.42 beta',
+    date: '2026-08-14',
+    note:
+        'v1.4.38/v1.4.41\'deki pil tasarrufu değişikliğinde daha ciddi bir '
+        'hata vardı: kullanıcı mola sonrası bazen "Otomatik duraklatıldı" '
+        'yazısının hiç kapanmadığını, gerçekten takılı kaldığını bildirdi '
+        '(geçen sürümde ele alınan birkaç saniyelik gecikmeden farklı). '
+        'Kök sebep: duraklama sırasında GPS isteği düşük hassasiyetli '
+        '(PRIORITY_BALANCED_POWER_ACCURACY) moddaydı - bu Android\'in GPS '
+        'çipi yerine WiFi/baz istasyonu konumlamasına geçmesine izin '
+        'veriyor, ve bu kaynaklar genelde hız bilgisi vermiyor (0 '
+        'dönüyor). Gerçekten hareket etmeye başlasanız bile ölçülen hız '
+        'sıfıra yakın kalıp 6km/s eşiğini hiç geçemiyor, duraklama asla '
+        'kapanmıyordu. Duraklama sırasında GPS çipi devrede kalacak '
+        'şekilde (PRIORITY_HIGH_ACCURACY, sadece yenileme aralığı seyrek) '
+        'düzeltildi - pil tasarrufu yenileme aralığından geliyor zaten, '
+        'artık gerçek hız her zaman ölçülüyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.41 beta',
     date: '2026-08-14',
     note:
