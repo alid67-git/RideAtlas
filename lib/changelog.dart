@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.41 beta',
+    date: '2026-08-14',
+    note:
+        'v1.4.38\'deki pil tasarrufu değişikliğinin yan etkisi düzeltildi: '
+        'duraklama sırasında GPS 8 saniyede bire kadar yavaşlıyordu, bu da '
+        'tekrar harekete geçtiğinizde "Otomatik duraklatıldı" yazısının '
+        '8 saniyeye kadar ekranda asılı kalmasına neden oluyordu - '
+        'kullanıcı bir ekran görüntüsüyle bunu yakaladı. Duraklamadaki GPS '
+        'yenileme aralığı 3 saniyeye düşürüldü (aktif haldeki 1sn\'nin '
+        '3 katı - hâlâ ciddi pil tasarrufu sağlıyor) - harekete geçiş artık '
+        'çok daha hızlı fark ediliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.40 beta',
     date: '2026-08-14',
     note:

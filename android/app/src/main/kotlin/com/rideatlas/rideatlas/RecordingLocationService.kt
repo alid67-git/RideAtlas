@@ -270,11 +270,18 @@ class RecordingLocationService : Service() {
      * sitting at a light. A slower, lower-power request still delivers
      * occasional fixes so auto-pause can detect the ride resuming, just
      * without the same battery cost while stationary.
+     *
+     * Was 8s, but that meant up to 8s of riding with the map still showing
+     * "Otomatik duraklatıldı" before a fix arrived to notice the rider had
+     * actually moved off again - too laggy to ride with. 3s (matching
+     * GpsRecorder's own stationary-detection delay before entering pause in
+     * the first place) keeps that resume latency tolerable while still
+     * cutting fix frequency to a third of the active rate.
      */
     private fun buildLocationRequest(paused: Boolean): LocationRequest =
         if (paused) {
-            LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 8_000L)
-                .setMinUpdateIntervalMillis(8_000L)
+            LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 3_000L)
+                .setMinUpdateIntervalMillis(3_000L)
                 .setWaitForAccurateLocation(false)
                 .build()
         } else {
