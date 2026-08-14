@@ -20,6 +20,25 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.44 beta',
+    date: '2026-08-14',
+    note:
+        'Kullanıcı, kayıtlı bir rotanın "Ortalama hız"ının başka bir GPX '
+        'programındakiyle uyuşmadığını bildirdi. İnceleme RideAtlas\'ın '
+        'kendi içinde de bir tutarsızlık ortaya çıkardı: Özet sekmesindeki '
+        '"Aktif sürüş süresi" molaları >=10dk eşiğiyle hesaplarken, hemen '
+        'yanındaki "Ortalama hız" 1km/s altındaki her segmenti ayrıca '
+        'tamamen hesap dışı bırakan farklı bir yöntem kullanıyordu - iki '
+        'rakam Mesafe/Süre ile çarpıldığında birbirini tutmuyordu. Artık '
+        '"Ortalama hız" da "Aktif sürüş süresi" ile aynı süreyi kullanıyor. '
+        'Aynı bildirimde, tek bir kötü GPS noktasından kaynaklanan '
+        'haritadaki "sıçrama" da gündeme geldi - iki parçalı çözüm eklendi: '
+        '(1) böyle noktalar artık harita ve istatistik hesaplarında otomatik '
+        'olarak yok sayılıyor (dosya değişmiyor), (2) "Rotalar" listesindeki '
+        '⋮ menüsüne "Anormal noktaları düzenle" eklendi - tespit edilen '
+        'noktaları görüp istediklerinizi kalıcı olarak rotadan silebilirsiniz.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.43 beta',
     date: '2026-08-14',
     note:

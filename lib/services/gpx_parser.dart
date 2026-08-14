@@ -181,6 +181,82 @@ GpxRoute buildRouteMetadata({
   return (gain: gain, loss: loss);
 }
 
+/// Plain point-to-point distance sum - the same total [buildRouteMetadata]
+/// uses for [GpxRoute.distanceMeters], exposed here too so a derived figure
+/// (like an average speed) can divide by exactly this distance instead of
+/// quietly using a smaller one (e.g. [SpeedStats.averageMovingKmh]'s, which
+/// only counts segments its own speed filter accepted).
+double totalDistanceKm(List<TrackPoint> points) {
+  var total = 0.0;
+  for (var i = 1; i < points.length; i++) {
+    total += _distance(points[i - 1].latLng, points[i].latLng) / 1000;
+  }
+  return total;
+}
+
+/// Above any real vehicle speed this app expects to record - a fix that
+/// implies faster than this since the last *plausible* point before it is a
+/// reflected/multipath GPS glitch (common near junctions, tall buildings,
+/// underpasses), not real motion. Matches the threshold GpsRecorder rejects
+/// live during recording, so a route recorded before that live filter
+/// existed (or imported from another app/device) can be cleaned up the same
+/// way after the fact.
+const maxPlausibleTrackSpeedKmh = 300.0;
+
+/// Indices of points in [points] that imply a physically-impossible speed
+/// jump from the last plausible point before them. Comparing against the
+/// last point that itself passed this check (not just the previous point)
+/// means a run of several consecutive bad fixes gets flagged in full rather
+/// than each one anchoring the next comparison to more noise. Used both to
+/// silently clean a route for display ([filterImplausiblePoints]) and to
+/// let a rider review exactly which points would be removed before
+/// deleting them from a saved route (see the route anomaly editor).
+List<int> findImplausiblePointIndices(
+  List<TrackPoint> points, {
+  double maxKmh = maxPlausibleTrackSpeedKmh,
+}) {
+  final flagged = <int>[];
+  TrackPoint? lastPlausible;
+  for (var i = 0; i < points.length; i++) {
+    final p = points[i];
+    final lastTime = lastPlausible?.time;
+    if (lastPlausible == null || lastTime == null || p.time == null) {
+      lastPlausible = p;
+      continue;
+    }
+    final dtSeconds = p.time!.difference(lastTime).inMilliseconds / 1000.0;
+    if (dtSeconds <= 0) {
+      lastPlausible = p;
+      continue;
+    }
+    final meters = _distance(lastPlausible.latLng, p.latLng);
+    final impliedKmh = (meters / dtSeconds) * 3.6;
+    if (impliedKmh > maxKmh) {
+      flagged.add(i);
+      continue;
+    }
+    lastPlausible = p;
+  }
+  return flagged;
+}
+
+/// [points] with every [findImplausiblePointIndices] index removed - used to
+/// clean up a saved route's map/stats display without touching what's
+/// actually stored on disk. A rider who wants the glitch gone from the
+/// saved file itself (e.g. before sharing it) can still remove it for real
+/// through the route anomaly editor.
+List<TrackPoint> filterImplausiblePoints(
+  List<TrackPoint> points, {
+  double maxKmh = maxPlausibleTrackSpeedKmh,
+}) {
+  final flagged = findImplausiblePointIndices(points, maxKmh: maxKmh).toSet();
+  if (flagged.isEmpty) return points;
+  return [
+    for (var i = 0; i < points.length; i++)
+      if (!flagged.contains(i)) points[i],
+  ];
+}
+
 /// Cumulative distance (km) vs elevation (m) samples, for the elevation
 /// profile chart. Points without elevation data are skipped.
 List<ElevationSample> buildElevationProfile(List<TrackPoint> points) {

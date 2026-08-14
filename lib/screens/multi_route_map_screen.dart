@@ -11,6 +11,7 @@ import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart' show colorForDay;
+import '../services/gpx_parser.dart' show filterImplausiblePoints;
 import '../services/track_io.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 
@@ -102,7 +103,9 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
         lines.add(
           _RouteLine(
             route: route,
-            points: [for (final p in parsed.points) p.latLng],
+            points: [
+              for (final p in filterImplausiblePoints(parsed.points)) p.latLng,
+            ],
             color: colorForDay(i),
           ),
         );

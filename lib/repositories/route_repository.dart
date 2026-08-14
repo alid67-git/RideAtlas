@@ -103,6 +103,26 @@ class RouteRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replaces a route's stored track text and cached stats in place - used
+  /// by the route anomaly editor after removing GPS glitch points, so the
+  /// edit is actually persisted (not just filtered for display) and the
+  /// route's distance/duration/elevation/bounds reflect the cleaned track.
+  /// Keeps the same id; [metadata] should otherwise match [id] (same id,
+  /// caller's choice of name/importedAt/battery fields).
+  Future<void> updateContent({
+    required String id,
+    required String xml,
+    required GpxRoute metadata,
+  }) async {
+    final index = _routes.indexWhere((r) => r.id == id);
+    if (index == -1) return;
+    _routes[index] = metadata;
+    final box = await _openBox();
+    await box.put(_contentKey(id), xml);
+    await _persistIndex(box);
+    notifyListeners();
+  }
+
   Future<void> delete(String id) async {
     final index = _routes.indexWhere((r) => r.id == id);
     if (index == -1) return;

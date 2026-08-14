@@ -287,6 +287,19 @@ class _OverviewTab extends StatelessWidget {
         : (total - restDuration).isNegative
               ? Duration.zero
               : total - restDuration;
+    // Distance ÷ this same "Aktif sürüş süresi" figure, not
+    // speed.averageMovingKmh - that one uses a different, narrower
+    // definition of "moving" (per-segment, excluding anything under 1 km/h)
+    // that doesn't agree with the >=10min-stop definition used everywhere
+    // else on this tab, which made the two numbers next to each other look
+    // like a bug (a rider caught this by comparing against another app).
+    final movingHours = moving == null || moving == Duration.zero
+        ? null
+        : moving.inMilliseconds / Duration.millisecondsPerHour;
+    final distanceKm = totalDistanceKm(points);
+    final averageSpeedKmh = movingHours == null
+        ? null
+        : distanceKm / movingHours;
 
     return ListView(
       padding: const EdgeInsets.only(right: 8, top: 8),
@@ -301,7 +314,7 @@ class _OverviewTab extends StatelessWidget {
             Expanded(
               child: AnalysisHeroStat(
                 label: l10n.distance,
-                value: route.distanceKm.toStringAsFixed(1),
+                value: distanceKm.toStringAsFixed(1),
                 unit: 'km',
               ),
             ),
@@ -318,7 +331,7 @@ class _OverviewTab extends StatelessWidget {
             Expanded(
               child: AnalysisHeroStat(
                 label: l10n.averageSpeedLabel,
-                value: speed.averageMovingKmh?.toStringAsFixed(1) ?? '—',
+                value: averageSpeedKmh?.toStringAsFixed(1) ?? '—',
                 unit: 'km/s',
               ),
             ),
@@ -354,9 +367,9 @@ class _OverviewTab extends StatelessWidget {
             AnalysisStatCard(
               icon: Icons.speed,
               label: l10n.averageSpeedLabel,
-              value: speed.averageMovingKmh == null
+              value: averageSpeedKmh == null
                   ? '—'
-                  : '${speed.averageMovingKmh!.toStringAsFixed(1)} km/s',
+                  : '${averageSpeedKmh.toStringAsFixed(1)} km/s',
             ),
             AnalysisStatCard(
               icon: Icons.bolt,

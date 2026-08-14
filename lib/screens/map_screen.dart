@@ -23,6 +23,7 @@ import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart';
 import '../services/exif_gps.dart';
+import '../services/gpx_parser.dart' show filterImplausiblePoints;
 import '../services/route_geography.dart';
 import '../services/track_io.dart';
 import '../widgets/recording_indicator.dart';
@@ -30,6 +31,7 @@ import '../widgets/route_photo_strip.dart';
 import 'analysis_sheet.dart';
 import 'location_picker_screen.dart';
 import 'multi_route_map_screen.dart';
+import 'route_anomaly_editor_screen.dart';
 import 'settings_screen.dart';
 
 /// Videos picked from the gallery come back as a plain [XFile] alongside
@@ -106,6 +108,14 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   String? _error;
   BaseMapStyle _mapStyle = kBaseMapStyles.first;
 
+  /// The route metadata as of the last successful [_load] - compared
+  /// against the repository's current copy on every change notification so
+  /// an edit made elsewhere (e.g. removing anomalous points through the
+  /// route anomaly editor) reloads this screen's points/map automatically,
+  /// without reparsing on every unrelated repository change (a rename of a
+  /// completely different route, say).
+  GpxRoute? _loadedRouteSnapshot;
+
   /// Which day numbers to draw on the map. Null means "show every day" (the
   /// default); a non-null set is always non-empty, so the map never goes
   /// blank from the filter alone.
@@ -153,13 +163,25 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         setState(() => _rotationDeg = rotation);
       }
     });
+    context.read<RouteRepository>().addListener(_onRepoChanged);
   }
 
   @override
   void dispose() {
+    context.read<RouteRepository>().removeListener(_onRepoChanged);
     _mapEventSub.cancel();
     _tileResetController.close();
     super.dispose();
+  }
+
+  void _onRepoChanged() {
+    final route = _route;
+    final loaded = _loadedRouteSnapshot;
+    if (route == null || loaded == null) return;
+    if (route.distanceMeters != loaded.distanceMeters ||
+        route.pointCount != loaded.pointCount) {
+      _load();
+    }
   }
 
   void _resetNorth() => _mapController.rotate(0);
@@ -221,9 +243,15 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       final parsed = parseTrackXml(xml);
       if (!mounted) return;
       setState(() {
-        _points = parsed.points;
+        // Silently drops GPS jump/glitch points (see gpx_parser.dart) from
+        // the map/stats display for routes recorded or imported before that
+        // filter existed - doesn't touch the stored file itself, so sharing
+        // still exports the raw track unless it's been cleaned up for real
+        // through the route anomaly editor.
+        _points = filterImplausiblePoints(parsed.points);
         _waypoints = parsed.waypoints;
       });
+      _loadedRouteSnapshot = route;
       _fitToRoute(route);
     } catch (e) {
       if (!mounted) return;
@@ -1327,6 +1355,9 @@ class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
                                 if (value == 'rename') {
                                   _renameRoute(context, r);
                                 }
+                                if (value == 'editAnomalies') {
+                                  _editRouteAnomalies(context, r);
+                                }
                                 if (value == 'delete') {
                                   _deleteRoute(context, r, isCurrent);
                                 }
@@ -1335,6 +1366,10 @@ class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
                                 PopupMenuItem(
                                   value: 'rename',
                                   child: Text(l10n.rename),
+                                ),
+                                PopupMenuItem(
+                                  value: 'editAnomalies',
+                                  child: Text(l10n.anomalyEditorMenuItem),
                                 ),
                                 PopupMenuItem(
                                   value: 'delete',
@@ -1407,6 +1442,20 @@ Future<void> _renameRoute(BuildContext context, GpxRoute route) async {
   );
   if (newName != null && newName.isNotEmpty && context.mounted) {
     await context.read<RouteRepository>().rename(route.id, newName);
+  }
+}
+
+Future<void> _editRouteAnomalies(BuildContext context, GpxRoute route) async {
+  final l10n = AppLocalizations.of(context)!;
+  final changed = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (_) => RouteAnomalyEditorScreen(route: route),
+    ),
+  );
+  if (changed == true && context.mounted) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.anomalyEditorSaved)));
   }
 }
 
