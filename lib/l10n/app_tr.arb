@@ -32,6 +32,7 @@
   "routesDialogTitle": "Rotalar",
   "importTooltip": "GPX/KML/KMZ İçe Aktar",
   "exportFormatQuestion": "Hangi formatta dışa aktarılsın?",
+  "exportNameQuestion": "Dosya hangi isimle dışa aktarılsın?",
   "mapStyleTitle": "Harita türü",
   "mapStyleVoyager": "Sokak",
   "mapStylePositron": "Sade / Siyasi",

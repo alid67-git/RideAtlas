@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.39 beta',
+    date: '2026-08-14',
+    note:
+        'Harita ekranındaki paylaş/dışa aktar akışı artık format '
+        'sorusundan sonra dosya ismini de soruyor - varsayılan olarak '
+        'rotanın kayıtlı ismi geliyor, isterseniz değiştirebilirsiniz. '
+        'Özellikle birleştirilmiş rotalarda (otomatik "A + B" ismiyle '
+        'gelenler) faydalı.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.38 beta',
     date: '2026-08-14',
     note:

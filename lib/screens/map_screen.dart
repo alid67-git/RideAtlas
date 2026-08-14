@@ -295,8 +295,32 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
     if (format == null || !mounted) return;
 
+    // Defaults to the route's own saved name - riders only need to type
+    // something different when they actually want to (e.g. a merged
+    // route's auto-generated "A + B" name), not on every single export.
+    final nameController = TextEditingController(text: route.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(AppLocalizations.of(context)!.exportNameQuestion),
+        content: TextField(controller: nameController, autofocus: true),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(AppLocalizations.of(context)!.cancel),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, nameController.text.trim()),
+            child: Text(AppLocalizations.of(context)!.save),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty || !mounted) return;
+
     final export = buildTrackExport(
-      name: route.name,
+      name: name,
       points: points,
       waypoints: _waypoints ?? const [],
       format: format,
@@ -306,11 +330,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         files: [
           XFile.fromData(
             export.bytes,
-            name: '${route.name}.${export.extension}',
+            name: '$name.${export.extension}',
             mimeType: export.mimeType,
           ),
         ],
-        subject: route.name,
+        subject: name,
       ),
     );
   }

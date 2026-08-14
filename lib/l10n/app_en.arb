@@ -24,6 +24,7 @@
   "routesDialogTitle": "Routes",
   "importTooltip": "Import GPX/KML/KMZ",
   "exportFormatQuestion": "Which format should this export as?",
+  "exportNameQuestion": "What name should the exported file use?",
   "mapStyleTitle": "Map type",
   "mapStyleVoyager": "Street",
   "mapStylePositron": "Clean / Political",
