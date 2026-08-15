@@ -23,12 +23,13 @@ const kChangelog = <ChangelogEntry>[
     version: 'v1.4.46 beta',
     date: '2026-08-15',
     note:
-        'Uygulama ikonu yenilendi. Mevcut kırmızı zemin, harita ızgarası '
-        've pin/A çerçevesi korundu; pin içindeki kıvrılan yolun altına '
-        'net bir motosiklet silüeti eklendi. Böylece ana ekran ikonunda '
-        'yalnızca yol/atlas değil, motor + yol kurgusu da öne çıkıyor. '
-        'Android/iOS/web/masaüstü launcher ikonları yeni kaynaktan '
-        'yeniden üretildi.',
+        'Uygulama ikonu yenilendi: kırmızı pin + harita ızgarası korunarak '
+        'kıvrılan yolun altına motosiklet silüeti eklendi. Harita türü '
+        'seçicide sıra Sokak / Uydu / Topo / Koyu / Sade olacak şekilde '
+        'düzenlendi (etiket: Topo). Kayıt ekranındaki canlı haritaya da '
+        'katman düğmesi eklendi - tercih diğer harita ekranlarıyla ortak '
+        'saklanıyor. Android/iOS/web/masaüstü launcher ikonları yeni '
+        'kaynaktan yeniden üretildi.',
   ),
   ChangelogEntry(
     version: 'v1.4.45 beta',
