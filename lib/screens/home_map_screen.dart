@@ -515,7 +515,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           key: ValueKey(_mapStyle.id),
           urlTemplate: _mapStyle.urlTemplate,
           subdomains: _mapStyle.subdomains,
-          userAgentPackageName: 'com.rideatlas.app',
+          tileProvider: createRideAtlasTileProvider(),
           maxNativeZoom: _mapStyle.maxNativeZoom,
           evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),

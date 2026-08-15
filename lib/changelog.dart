@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.49 beta',
+    date: '2026-08-15',
+    note:
+        'Topo katmanındaki openmaps.fr "Limited Access" uyarısı giderildi. '
+        'Sunucu, beğenmediği User-Agent isteklerine gerçek harita yerine '
+        'politika uyarı görseli döndürüyordu. Topo yeniden resmi '
+        'OpenTopoMap (tile.opentopomap.org) kaynağına alındı; karo '
+        'istekleri RideAtlas (com.rideatlas.app) User-Agent ile gidiyor. '
+        'v1.4.48\'deki tam-katman sıfırlamama düzeltmesi duruyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.48 beta',
     date: '2026-08-15',
     note:

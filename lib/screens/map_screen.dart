@@ -746,7 +746,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           key: ValueKey(_mapStyle.id),
           urlTemplate: _mapStyle.urlTemplate,
           subdomains: _mapStyle.subdomains,
-          userAgentPackageName: 'com.rideatlas.app',
+          tileProvider: createRideAtlasTileProvider(),
           maxNativeZoom: _mapStyle.maxNativeZoom,
           // Evict failed tiles when pruned so a later pan/zoom can retry
           // just those cells - never blast-reset the whole layer (that

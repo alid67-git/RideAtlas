@@ -1,4 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+
+/// HTTP User-Agent for map tile requests. Must clearly name this app — hosts
+/// such as openmaps.fr reject library defaults (okhttp, bare Dart, empty UA)
+/// and answer with a "Limited Access" warning PNG instead of map tiles.
+const kTileUserAgent = 'RideAtlas (com.rideatlas.app)';
+
+/// Network tile provider that always sends [kTileUserAgent]. Prefer this over
+/// relying on flutter_map's `flutter_map (package)` default alone.
+NetworkTileProvider createRideAtlasTileProvider() => NetworkTileProvider(
+      headers: const {'User-Agent': kTileUserAgent},
+    );
 
 /// A selectable base map (tile layer) style. Google's own map tiles can't be
 /// hotlinked outside their SDK per their terms of service, so these are
@@ -49,14 +61,15 @@ const kBaseMapStyles = <BaseMapStyle>[
     id: 'topo',
     label: 'Topo',
     icon: Icons.terrain,
-    // Colorful OpenTopoMap-style outdoor tiles. The original
-    // tile.opentopomap.org host rate-limits under pan/zoom load; combined
-    // with a full-layer tile reset that caused visible flicker ("kare kare
-    // yanıp sönme"). openmaps.fr runs a maintained OTM-compatible renderer
-    // built for embedding at modest free-app volume (CC-BY-SA).
-    urlTemplate: 'https://tile.openmaps.fr/opentopomap/{z}/{x}/{y}.png',
+    // Colorful OpenTopoMap outdoor tiles (contour + elevation colors).
+    // openmaps.fr was tried as a mirror but serves a "Limited Access /
+    // User-Agent" warning image when it dislikes the client, which showed
+    // up as a big policy dialog on the map. Official OTM (new server since
+    // early 2026) plus our non-blast tile retry avoids the old flicker.
+    urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
     attribution:
-        'OpenStreetMap katkıda bulunanlar, SRTM | OpenTopoMap (CC-BY-SA), openmaps.fr',
+        'OpenStreetMap katkıda bulunanlar, SRTM | OpenTopoMap (CC-BY-SA)',
     maxNativeZoom: 17,
   ),
   BaseMapStyle(
