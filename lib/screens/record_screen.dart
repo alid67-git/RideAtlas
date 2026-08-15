@@ -1292,10 +1292,12 @@ class _RecordScreenState extends State<RecordScreen>
       ),
       children: [
         TileLayer(
+          key: ValueKey(style.id),
           urlTemplate: style.urlTemplate,
           subdomains: style.subdomains,
           userAgentPackageName: 'com.rideatlas.app',
-          maxNativeZoom: 20,
+          maxNativeZoom: style.maxNativeZoom,
+          evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),
         if (points.length > 1)
           PolylineLayer(

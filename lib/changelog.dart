@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.48 beta',
+    date: '2026-08-15',
+    note:
+        'Topo/harita "kare kare yanıp sönme" düzeltildi. Kök sebep: bir '
+        'karo yüklenemeyince (OpenTopoMap hız limiti) tüm TileLayer\'ın '
+        'sıfırlanması - her 2 saniyede bir bütün harita yeniden çekiliyor, '
+        'başarılı/başarısız karolar karışık görünüyordu. Bu tam-katman '
+        'retry kaldırıldı; yalnızca budanan hatalı karolar yeniden '
+        'deneniyor. Stil değişince ValueKey ile önbellek temizleniyor. '
+        'Renkli topo, OTM uyumlu openmaps.fr sunucusuna taşındı '
+        '(maxNativeZoom 17).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.47 beta',
     date: '2026-08-15',
     note:

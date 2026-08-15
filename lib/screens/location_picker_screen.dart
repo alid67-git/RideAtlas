@@ -40,7 +40,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 urlTemplate: style.urlTemplate,
                 subdomains: style.subdomains,
                 userAgentPackageName: 'com.rideatlas.app',
-                maxNativeZoom: 20,
+                maxNativeZoom: style.maxNativeZoom,
+                evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
               ),
               RichAttributionWidget(
                 attributions: [TextSourceAttribution(style.attribution)],

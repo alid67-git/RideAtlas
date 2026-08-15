@@ -12,6 +12,7 @@ class BaseMapStyle {
     required this.urlTemplate,
     required this.attribution,
     this.subdomains = const [],
+    this.maxNativeZoom = 20,
   });
 
   final String id;
@@ -20,6 +21,10 @@ class BaseMapStyle {
   final String urlTemplate;
   final String attribution;
   final List<String> subdomains;
+
+  /// Highest zoom the tile host actually serves. flutter_map upscales beyond
+  /// this instead of requesting missing z18+ tiles that 404 and leave gaps.
+  final int maxNativeZoom;
 }
 
 const kBaseMapStyles = <BaseMapStyle>[
@@ -44,14 +49,15 @@ const kBaseMapStyles = <BaseMapStyle>[
     id: 'topo',
     label: 'Topo',
     icon: Icons.terrain,
-    // Colorful hypsometric outdoor style (greens → browns by elevation +
-    // contour lines). Esri World_Topo_Map was more muted/"street-topo";
-    // riders preferred this look. OpenTopoMap can rate-limit under load -
-    // map screens already auto-retry failed tiles when that happens.
-    urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    subdomains: ['a', 'b', 'c'],
+    // Colorful OpenTopoMap-style outdoor tiles. The original
+    // tile.opentopomap.org host rate-limits under pan/zoom load; combined
+    // with a full-layer tile reset that caused visible flicker ("kare kare
+    // yanıp sönme"). openmaps.fr runs a maintained OTM-compatible renderer
+    // built for embedding at modest free-app volume (CC-BY-SA).
+    urlTemplate: 'https://tile.openmaps.fr/opentopomap/{z}/{x}/{y}.png',
     attribution:
-        'OpenStreetMap katkıda bulunanlar, SRTM | OpenTopoMap (CC-BY-SA)',
+        'OpenStreetMap katkıda bulunanlar, SRTM | OpenTopoMap (CC-BY-SA), openmaps.fr',
+    maxNativeZoom: 17,
   ),
   BaseMapStyle(
     id: 'dark',
