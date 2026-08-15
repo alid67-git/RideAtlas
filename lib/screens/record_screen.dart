@@ -1295,7 +1295,7 @@ class _RecordScreenState extends State<RecordScreen>
           key: ValueKey(style.id),
           urlTemplate: style.urlTemplate,
           subdomains: style.subdomains,
-          userAgentPackageName: 'com.rideatlas.app',
+          tileProvider: createRideAtlasTileProvider(),
           maxNativeZoom: style.maxNativeZoom,
           evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),
