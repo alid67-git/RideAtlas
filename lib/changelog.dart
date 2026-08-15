@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.50 beta',
+    date: '2026-08-15',
+    note:
+        'Android\'de v1.4.49\'un açılışta bembeyaz ekranda kalma regresyonu '
+        'düzeltildi. Kök sebep: karo isteğine User-Agent koymak için '
+        'oluşturulan const header map\'i, flutter_map TileLayer\'ın '
+        'Android\'de çağırdığı headers.putIfAbsent ile uyumsuzdu '
+        '(unmodifiable map → UnsupportedError → release\'te boş beyaz '
+        'ekran). Header map artık değiştirilebilir; Topo yine resmi '
+        'OpenTopoMap.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.49 beta',
     date: '2026-08-15',
     note:

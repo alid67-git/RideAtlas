@@ -8,8 +8,12 @@ const kTileUserAgent = 'RideAtlas (com.rideatlas.app)';
 
 /// Network tile provider that always sends [kTileUserAgent]. Prefer this over
 /// relying on flutter_map's `flutter_map (package)` default alone.
+///
+/// Headers must be a *mutable* map: [TileLayer] calls `headers.putIfAbsent`
+/// for User-Agent on non-web platforms. A `const {...}` map throws
+/// UnsupportedError there and the release APK stays on a blank white screen.
 NetworkTileProvider createRideAtlasTileProvider() => NetworkTileProvider(
-      headers: const {'User-Agent': kTileUserAgent},
+      headers: <String, String>{'User-Agent': kTileUserAgent},
     );
 
 /// A selectable base map (tile layer) style. Google's own map tiles can't be
