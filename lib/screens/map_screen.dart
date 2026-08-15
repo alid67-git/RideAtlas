@@ -137,21 +137,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   double _rotationDeg = 0;
   late final StreamSubscription<MapEvent> _mapEventSub;
 
-  /// flutter_map never retries a tile once it fails to load (a flaky
-  /// connection or a tile host's rate limit can otherwise leave permanent
-  /// gray gaps) - pushing into this forces every visible tile to reload.
-  final _tileResetController = StreamController<void>.broadcast();
-  bool _tileRetryScheduled = false;
-
-  void _onTileError(TileImage tile, Object error, StackTrace? stackTrace) {
-    if (_tileRetryScheduled) return;
-    _tileRetryScheduled = true;
-    Future.delayed(const Duration(seconds: 2), () {
-      _tileRetryScheduled = false;
-      if (mounted) _tileResetController.add(null);
-    });
-  }
-
   @override
   void initState() {
     super.initState();
@@ -170,7 +155,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   void dispose() {
     context.read<RouteRepository>().removeListener(_onRepoChanged);
     _mapEventSub.cancel();
-    _tileResetController.close();
     super.dispose();
   }
 
@@ -756,14 +740,18 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       options: MapOptions(initialCenter: start, initialZoom: 12),
       children: [
         TileLayer(
+          // Force a fresh tile cache when the rider switches base style -
+          // otherwise leftover tiles from the previous host briefly mix in
+          // ("kare kare farklı harita") while the new ones load.
+          key: ValueKey(_mapStyle.id),
           urlTemplate: _mapStyle.urlTemplate,
           subdomains: _mapStyle.subdomains,
           userAgentPackageName: 'com.rideatlas.app',
-          maxNativeZoom: 20,
-          evictErrorTileStrategy:
-              EvictErrorTileStrategy.notVisibleRespectMargin,
-          errorTileCallback: _onTileError,
-          reset: _tileResetController.stream,
+          maxNativeZoom: _mapStyle.maxNativeZoom,
+          // Evict failed tiles when pruned so a later pan/zoom can retry
+          // just those cells - never blast-reset the whole layer (that
+          // caused the topo flicker when OpenTopoMap rate-limited).
+          evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),
         PolylineLayer(polylines: polylines),
         MarkerLayer(
