@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.46 beta',
+    date: '2026-08-15',
+    note:
+        'Uygulama ikonu yenilendi: kırmızı pin + harita ızgarası korunarak '
+        'kıvrılan yolun altına motosiklet silüeti eklendi. Harita türü '
+        'seçicide sıra Sokak / Uydu / Topo / Koyu / Sade olacak şekilde '
+        'düzenlendi (etiket: Topo). Kayıt ekranındaki canlı haritaya da '
+        'katman düğmesi eklendi - tercih diğer harita ekranlarıyla ortak '
+        'saklanıyor. Android/iOS/web/masaüstü launcher ikonları yeni '
+        'kaynaktan yeniden üretildi.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.45 beta',
     date: '2026-08-14',
     note:

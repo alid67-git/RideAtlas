@@ -33,13 +33,25 @@ const kBaseMapStyles = <BaseMapStyle>[
     attribution: 'OpenStreetMap katkıda bulunanlar, CARTO',
   ),
   BaseMapStyle(
-    id: 'positron',
-    label: 'Sade / Siyasi',
-    icon: Icons.public,
+    id: 'satellite',
+    label: 'Uydu',
+    icon: Icons.satellite_alt,
     urlTemplate:
-        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    subdomains: ['a', 'b', 'c', 'd'],
-    attribution: 'OpenStreetMap katkıda bulunanlar, CARTO',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Esri, Maxar, Earthstar Geographics',
+  ),
+  BaseMapStyle(
+    id: 'topo',
+    label: 'Topo',
+    icon: Icons.terrain,
+    // OpenTopoMap's own usage policy asks that apps NOT hotlink its tile
+    // server beyond light previewing - it rate-limits/blocks anything more,
+    // which is what caused the gray/missing-tile patches some riders saw.
+    // Esri's hosted World_Topo_Map is built for exactly this kind of
+    // embedding (same family as the 'satellite' style above).
+    urlTemplate:
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Esri, HERE, Garmin, FAO, NOAA, USGS, OpenStreetMap katkıda bulunanlar',
   ),
   BaseMapStyle(
     id: 'dark',
@@ -51,25 +63,13 @@ const kBaseMapStyles = <BaseMapStyle>[
     attribution: 'OpenStreetMap katkıda bulunanlar, CARTO',
   ),
   BaseMapStyle(
-    id: 'satellite',
-    label: 'Uydu',
-    icon: Icons.satellite_alt,
+    id: 'positron',
+    label: 'Sade / Siyasi',
+    icon: Icons.public,
     urlTemplate:
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Esri, Maxar, Earthstar Geographics',
-  ),
-  BaseMapStyle(
-    id: 'topo',
-    label: 'Topografik',
-    icon: Icons.terrain,
-    // OpenTopoMap's own usage policy asks that apps NOT hotlink its tile
-    // server beyond light previewing - it rate-limits/blocks anything more,
-    // which is what caused the gray/missing-tile patches some riders saw.
-    // Esri's hosted World_Topo_Map is built for exactly this kind of
-    // embedding (same family as the 'satellite' style below).
-    urlTemplate:
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Esri, HERE, Garmin, FAO, NOAA, USGS, OpenStreetMap katkıda bulunanlar',
+        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    attribution: 'OpenStreetMap katkıda bulunanlar, CARTO',
   ),
 ];
 

@@ -47,7 +47,7 @@ const _helpSectionsTr = <HelpSection>[
     title: 'Harita görünümü',
     body:
         'Bir rotayı açtığınızda harita üzerinde güzergâh çizilir. Sağ alttaki '
-        'ikonla harita türünü (sokak, uydu, topografik, koyu, sade) '
+        'ikonla harita türünü (sokak, uydu, topo, koyu, sade) '
         'değiştirebilirsiniz. Birden çok günlük rotalarda gün filtresiyle '
         'sadece belirli günleri gösterebilir, pusula ikonuyla haritayı '
         'kuzeye çevirebilirsiniz. Mola ve geceleme noktaları başlangıçta '
@@ -178,7 +178,7 @@ const _helpSectionsEn = <HelpSection>[
     title: 'Map view',
     body:
         'Opening a route draws its path on the map. The icon in the bottom '
-        'right switches the map type (street, satellite, topographic, '
+        'right switches the map type (street, satellite, topo, '
         'dark, clean). For routes spanning several days, a day filter lets '
         'you show only certain days, and the compass icon resets the map '
         'to north-up. Stop and overnight-stay markers are hidden by '
@@ -309,7 +309,7 @@ const _helpSectionsDe = <HelpSection>[
     body:
         'Beim Öffnen einer Route wird die Strecke auf der Karte '
         'eingezeichnet. Mit dem Symbol unten rechts wechseln Sie den '
-        'Kartentyp (Straße, Satellit, topografisch, dunkel, einfach). Bei '
+        'Kartentyp (Straße, Satellit, Topo, dunkel, einfach). Bei '
         'mehrtägigen Routen können Sie mit dem Tagesfilter nur bestimmte '
         'Tage anzeigen, und das Kompasssymbol richtet die Karte wieder '
         'nach Norden aus. Pausen- und Übernachtungsmarker sind standard­mäßig '
