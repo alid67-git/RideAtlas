@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.47 beta',
+    date: '2026-08-15',
+    note:
+        'Topo katmanı Esri World_Topo_Map\'ten OpenTopoMap\'e alındı: '
+        'yükseklik renkleri (yeşil → sarı → kahverengi) ve konturlar '
+        'yeniden belirgin. Soluk "sokak-topo" görünümü yerine renkli '
+        'outdoor stil. Tile sunucusu bazen hız limiti koyarsa mevcut '
+        'otomatik yeniden deneme gri kareleri dolduruyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.46 beta',
     date: '2026-08-15',
     note:
