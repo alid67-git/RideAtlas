@@ -309,7 +309,7 @@ const _helpSectionsDe = <HelpSection>[
     body:
         'Beim Öffnen einer Route wird die Strecke auf der Karte '
         'eingezeichnet. Mit dem Symbol unten rechts wechseln Sie den '
-        'Kartentyp (Straße, Satellit, topografisch, dunkel, einfach). Bei '
+        'Kartentyp (Straße, Satellit, Topo, dunkel, einfach). Bei '
         'mehrtägigen Routen können Sie mit dem Tagesfilter nur bestimmte '
         'Tage anzeigen, und das Kompasssymbol richtet die Karte wieder '
         'nach Norden aus. Pausen- und Übernachtungsmarker sind standard­mäßig '
