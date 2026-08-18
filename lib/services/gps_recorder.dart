@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
@@ -49,6 +50,15 @@ class GpsRecorder extends ChangeNotifier {
 
   RecordingState _state = RecordingState.idle;
   final List<TrackPoint> _points = [];
+  // Kept incrementally instead of summed from _points on every read - a
+  // multi-hour ride's point list keeps growing, and the record screen reads
+  // distanceKm on every single GPS update (it watches this whole recorder
+  // via context.watch), so a fresh full-list sum each time turns into
+  // steadily worsening O(n) work per frame - the likely cause behind
+  // reports of the app "closing on its own" partway through very long
+  // recordings (thousands of Haversine calls a second by the end of an
+  // 10+ hour ride, on the same isolate as the UI).
+  double _distanceMeters = 0;
   StreamSubscription<Position>? _sub;
   StreamSubscription<Map<Object?, Object?>>? _nativeSub;
   Timer? _nativePollTimer;
@@ -79,7 +89,11 @@ class GpsRecorder extends ChangeNotifier {
   /// [stop] or [discard] resets it, so callers must read it before calling
   /// either.
   DateTime? get startedAt => _startedAt;
-  List<TrackPoint> get points => List.unmodifiable(_points);
+  // A live view, not a copy - List.unmodifiable(_points) would allocate and
+  // fill a whole new list on every single call, which is the same
+  // steadily-worsening-with-ride-length cost distanceKm used to have (see
+  // its comment above), for a getter that's read just as often.
+  List<TrackPoint> get points => UnmodifiableListView(_points);
   bool get isRecording => _state == RecordingState.recording;
   bool get isPaused => _state == RecordingState.paused;
   bool get isIdle => _state == RecordingState.idle;
@@ -96,13 +110,7 @@ class GpsRecorder extends ChangeNotifier {
   /// Most recent recorded point's position, or null before the first fix.
   LatLng? get currentLatLng => _points.isEmpty ? null : _points.last.latLng;
 
-  double get distanceKm {
-    var total = 0.0;
-    for (var i = 1; i < _points.length; i++) {
-      total += _distance(_points[i - 1].latLng, _points[i].latLng);
-    }
-    return total / 1000;
-  }
+  double get distanceKm => _distanceMeters / 1000;
 
   /// Active/moving duration - wall-clock time since [start] minus every
   /// pause of [_minMolaDuration] or longer, AND minus whatever pause is
@@ -199,6 +207,7 @@ class GpsRecorder extends ChangeNotifier {
     }
 
     _points.clear();
+    _distanceMeters = 0;
     _nativeIngestedCount = 0;
     _seenNativeTimeMs.clear();
     _startedAt = DateTime.now();
@@ -387,6 +396,9 @@ class GpsRecorder extends ChangeNotifier {
 
     final latLng = LatLng(pos.latitude, pos.longitude);
     if (_isPlausiblePoint(latLng, pos.timestamp)) {
+      if (_points.isNotEmpty) {
+        _distanceMeters += _distance(_points.last.latLng, latLng);
+      }
       _points.add(
         TrackPoint(
           latLng: latLng,
@@ -450,6 +462,7 @@ class GpsRecorder extends ChangeNotifier {
     // burst of historical points would use wall-clock delays incorrectly
     // and drop real movement that happened while the screen was off.
     _points.clear();
+    _distanceMeters = 0;
     _seenNativeTimeMs.clear();
     _isAutoPaused = false;
     _stationarySince = null;
@@ -462,9 +475,13 @@ class GpsRecorder extends ChangeNotifier {
       if (timeMs != null && !_seenNativeTimeMs.add(timeMs)) continue;
       final altitude = (raw['altitude'] as num?)?.toDouble();
       final speedMs = (raw['speed'] as num?)?.toDouble() ?? 0;
+      final latLng = LatLng(lat, lng);
+      if (_points.isNotEmpty) {
+        _distanceMeters += _distance(_points.last.latLng, latLng);
+      }
       _points.add(
         TrackPoint(
-          latLng: LatLng(lat, lng),
+          latLng: latLng,
           elevation: altitude,
           time: timeMs != null
               ? DateTime.fromMillisecondsSinceEpoch(timeMs, isUtc: true)
@@ -495,6 +512,7 @@ class GpsRecorder extends ChangeNotifier {
     _nativeIngestedCount = 0;
     _seenNativeTimeMs.clear();
     _points.clear();
+    _distanceMeters = 0;
     _startedAt = null;
     _pauseStartedAt = null;
     _completedPauses.clear();

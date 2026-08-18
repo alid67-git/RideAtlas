@@ -20,6 +20,27 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.46 beta',
+    date: '2026-08-14',
+    note:
+        'Kullanıcı "kayıt yaparken sık sık kendi kendine kapanıyor" diye '
+        'bildirdi (özellikle uzun sürüşlerde, tam da o gün üzerinde '
+        'çalıştığımız 10+ saatlik/36.628 noktalık örnek gibi). Kod '
+        'incelemesinde kök sebep bulundu: GpsRecorder.distanceKm getter\'ı '
+        'her okunduğunda TÜM nokta listesini baştan toplayarak mesafeyi '
+        'yeniden hesaplıyordu, ve kayıt ekranı bu değeri her GPS '
+        'güncellemesinde (saniyede bir) okuyordu - kayıt uzadıkça bu iş '
+        'katlanarak ağırlaşıyordu (klasik O(n²) davranış): birkaç saat '
+        'sonra saniyede binlerce mesafe hesabına çıkıp ekranı '
+        'dondurabiliyor, bu da uygulamanın "kapanması" gibi algılanan bir '
+        'duruma yol açabiliyordu. Aynı sorun points getter\'ında da vardı '
+        '(her okumada tüm liste kopyalanıyordu). İkisi de artık O(1): '
+        'mesafe her yeni nokta geldiğinde tek seferlik eklenerek '
+        'tutuluyor, points ise kopyalamak yerine canlı bir görünüm '
+        'döndürüyor. Kayıt süresi ne kadar uzarsa uzasın her güncelleme '
+        'artık sabit hızda kalıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.45 beta',
     date: '2026-08-14',
     note:
