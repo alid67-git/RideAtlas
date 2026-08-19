@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -28,8 +29,11 @@ import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
 import 'analysis_sheet.dart' show AnalysisStatCard;
 import 'location_picker_screen.dart';
-import 'map_screen.dart' show RouteMapScreen;
+import 'map_screen.dart' show MapStylePickerDialog, RouteMapScreen;
 import 'ride_photo_picker_screen.dart';
+
+const _metaBoxName = 'rideatlas_meta';
+const _mapStyleKey = 'base_map_style_id';
 
 /// True on a native Android build, where [GpsRecorder] runs a foreground
 /// service and recording survives the app being minimized. Everywhere else
@@ -80,6 +84,12 @@ class _RecordScreenState extends State<RecordScreen>
   /// the info page - the map is one tap away via the toggle button in either
   /// page's header.
   bool _showMap = false;
+
+  /// Same Hive-backed base map style as the home / route map screens, so
+  /// picking Topo (or satellite, dark, ...) on any map sticks everywhere -
+  /// including the live recording map, which previously always forced
+  /// street tiles.
+  BaseMapStyle _mapStyle = kBaseMapStyles.first;
 
   GpsRecorder get _recorder => context.read<GpsRecorder>();
 
@@ -159,6 +169,7 @@ class _RecordScreenState extends State<RecordScreen>
       duration: const Duration(seconds: 7),
     )..repeat(reverse: true);
     _startLiveLocation();
+    _loadMapStyle();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       if (_isUserMapGesture(event.source) && _followMe) {
         setState(() => _followMe = false);
@@ -168,6 +179,27 @@ class _RecordScreenState extends State<RecordScreen>
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _recorder.isRecording) setState(() {});
     });
+  }
+
+  Future<void> _loadMapStyle() async {
+    final box = await Hive.openBox<String>(_metaBoxName);
+    final savedId = box.get(_mapStyleKey);
+    if (savedId == null || !mounted) return;
+    setState(() => _mapStyle = findBaseMapStyle(savedId));
+  }
+
+  Future<void> _changeMapStyle(BaseMapStyle style) async {
+    setState(() => _mapStyle = style);
+    final box = await Hive.openBox<String>(_metaBoxName);
+    await box.put(_mapStyleKey, style.id);
+  }
+
+  void _showMapStylePicker() {
+    showDialog<void>(
+      context: context,
+      builder: (_) =>
+          MapStylePickerDialog(current: _mapStyle, onSelected: _changeMapStyle),
+    );
   }
 
   /// Switches from the info page to the map, and immediately re-syncs the
@@ -723,22 +755,34 @@ class _RecordScreenState extends State<RecordScreen>
             bottom: 100,
             child: SafeArea(
               top: false,
-              child: FloatingActionButton.small(
-                heroTag: 'recordRecenter',
-                tooltip: l10n.recenterTooltip,
-                backgroundColor: _followMe
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-                foregroundColor: _followMe
-                    ? Theme.of(context).colorScheme.onPrimary
-                    : null,
-                onPressed: _currentLocation == null ? null : _recenter,
-                // A compass-needle icon while auto-following (course-up),
-                // the plain dot otherwise - the same visual language most
-                // map/nav apps use for this.
-                child: Icon(
-                  _followMe ? Icons.navigation : Icons.my_location,
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FloatingActionButton.small(
+                    heroTag: 'recordMapStyle',
+                    tooltip: AppLocalizations.of(context)!.mapStyleTitle,
+                    onPressed: _showMapStylePicker,
+                    child: Icon(_mapStyle.icon),
+                  ),
+                  const SizedBox(height: 8),
+                  FloatingActionButton.small(
+                    heroTag: 'recordRecenter',
+                    tooltip: l10n.recenterTooltip,
+                    backgroundColor: _followMe
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                    foregroundColor: _followMe
+                        ? Theme.of(context).colorScheme.onPrimary
+                        : null,
+                    onPressed: _currentLocation == null ? null : _recenter,
+                    // A compass-needle icon while auto-following (course-up),
+                    // the plain dot otherwise - the same visual language most
+                    // map/nav apps use for this.
+                    child: Icon(
+                      _followMe ? Icons.navigation : Icons.my_location,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1237,7 +1281,7 @@ class _RecordScreenState extends State<RecordScreen>
     final recorder = context.watch<GpsRecorder>();
     final vehicleIcon = context.watch<VehicleIconController>().option;
     final points = recorder.points;
-    final style = kBaseMapStyles.first;
+    final style = _mapStyle;
     final markerSize = vehicleMarkerSize(vehicleIcon);
 
     return FlutterMap(
@@ -1248,10 +1292,12 @@ class _RecordScreenState extends State<RecordScreen>
       ),
       children: [
         TileLayer(
+          key: ValueKey(style.id),
           urlTemplate: style.urlTemplate,
           subdomains: style.subdomains,
-          userAgentPackageName: 'com.rideatlas.app',
-          maxNativeZoom: 20,
+          tileProvider: createRideAtlasTileProvider(),
+          maxNativeZoom: style.maxNativeZoom,
+          evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),
         if (points.length > 1)
           PolylineLayer(

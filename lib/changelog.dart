@@ -20,8 +20,8 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
-    version: 'v1.4.46 beta',
-    date: '2026-08-14',
+    version: 'v1.4.51 beta',
+    date: '2026-08-15',
     note:
         'Kullanıcı "kayıt yaparken sık sık kendi kendine kapanıyor" diye '
         'bildirdi (özellikle uzun sürüşlerde, tam da o gün üzerinde '
@@ -39,6 +39,64 @@ const kChangelog = <ChangelogEntry>[
         'tutuluyor, points ise kopyalamak yerine canlı bir görünüm '
         'döndürüyor. Kayıt süresi ne kadar uzarsa uzasın her güncelleme '
         'artık sabit hızda kalıyor.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.50 beta',
+    date: '2026-08-15',
+    note:
+        'Android\'de v1.4.49\'un açılışta bembeyaz ekranda kalma regresyonu '
+        'düzeltildi. Kök sebep: karo isteğine User-Agent koymak için '
+        'oluşturulan const header map\'i, flutter_map TileLayer\'ın '
+        'Android\'de çağırdığı headers.putIfAbsent ile uyumsuzdu '
+        '(unmodifiable map → UnsupportedError → release\'te boş beyaz '
+        'ekran). Header map artık değiştirilebilir; Topo yine resmi '
+        'OpenTopoMap.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.49 beta',
+    date: '2026-08-15',
+    note:
+        'Topo katmanındaki openmaps.fr "Limited Access" uyarısı giderildi. '
+        'Sunucu, beğenmediği User-Agent isteklerine gerçek harita yerine '
+        'politika uyarı görseli döndürüyordu. Topo yeniden resmi '
+        'OpenTopoMap (tile.opentopomap.org) kaynağına alındı; karo '
+        'istekleri RideAtlas (com.rideatlas.app) User-Agent ile gidiyor. '
+        'v1.4.48\'deki tam-katman sıfırlamama düzeltmesi duruyor.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.48 beta',
+    date: '2026-08-15',
+    note:
+        'Topo/harita "kare kare yanıp sönme" düzeltildi. Kök sebep: bir '
+        'karo yüklenemeyince (OpenTopoMap hız limiti) tüm TileLayer\'ın '
+        'sıfırlanması - her 2 saniyede bir bütün harita yeniden çekiliyor, '
+        'başarılı/başarısız karolar karışık görünüyordu. Bu tam-katman '
+        'retry kaldırıldı; yalnızca budanan hatalı karolar yeniden '
+        'deneniyor. Stil değişince ValueKey ile önbellek temizleniyor. '
+        'Renkli topo, OTM uyumlu openmaps.fr sunucusuna taşındı '
+        '(maxNativeZoom 17).',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.47 beta',
+    date: '2026-08-15',
+    note:
+        'Topo katmanı Esri World_Topo_Map\'ten OpenTopoMap\'e alındı: '
+        'yükseklik renkleri (yeşil → sarı → kahverengi) ve konturlar '
+        'yeniden belirgin. Soluk "sokak-topo" görünümü yerine renkli '
+        'outdoor stil. Tile sunucusu bazen hız limiti koyarsa mevcut '
+        'otomatik yeniden deneme gri kareleri dolduruyor.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.46 beta',
+    date: '2026-08-15',
+    note:
+        'Uygulama ikonu yenilendi: kırmızı pin + harita ızgarası korunarak '
+        'kıvrılan yolun altına motosiklet silüeti eklendi. Harita türü '
+        'seçicide sıra Sokak / Uydu / Topo / Koyu / Sade olacak şekilde '
+        'düzenlendi (etiket: Topo). Kayıt ekranındaki canlı haritaya da '
+        'katman düğmesi eklendi - tercih diğer harita ekranlarıyla ortak '
+        'saklanıyor. Android/iOS/web/masaüstü launcher ikonları yeni '
+        'kaynaktan yeniden üretildi.',
   ),
   ChangelogEntry(
     version: 'v1.4.45 beta',

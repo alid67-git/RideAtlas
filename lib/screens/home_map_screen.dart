@@ -512,10 +512,12 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       ),
       children: [
         TileLayer(
+          key: ValueKey(_mapStyle.id),
           urlTemplate: _mapStyle.urlTemplate,
           subdomains: _mapStyle.subdomains,
-          userAgentPackageName: 'com.rideatlas.app',
-          maxNativeZoom: 20,
+          tileProvider: createRideAtlasTileProvider(),
+          maxNativeZoom: _mapStyle.maxNativeZoom,
+          evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),
         if (_currentLocation != null)
           MarkerLayer(
