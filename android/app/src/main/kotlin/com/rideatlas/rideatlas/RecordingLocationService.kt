@@ -8,11 +8,14 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.location.LocationCompat
+import androidx.core.location.altitude.AltitudeConverterCompat
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -21,6 +24,7 @@ import com.google.android.gms.location.Priority
 import org.json.JSONObject
 import java.io.File
 import java.util.Collections
+import java.util.concurrent.Executors
 
 /**
  * Owns GPS collection for an in-progress ride on the native side so points
@@ -94,41 +98,79 @@ class RecordingLocationService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
     private val fusedClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
+
+    // AltitudeConverterCompat.addMslAltitudeToLocation is @WorkerThread (loads
+    // geoid assets / may hit Room). Location callbacks arrive on the main
+    // looper, so convert off-thread before publishing the point to Dart.
+    private val altitudeExecutor = Executors.newSingleThreadExecutor()
+
     private val locationCallback =
         object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                for (location in result.locations) {
-                    val point =
-                        mapOf(
-                            "latitude" to location.latitude,
-                            "longitude" to location.longitude,
-                            "altitude" to location.altitude,
-                            "speed" to location.speed.toDouble(),
-                            "bearing" to location.bearing.toDouble(),
-                            "timeMs" to location.time,
-                            "accuracy" to location.accuracy.toDouble(),
-                        )
-                    // The actual root cause of auto-pause never clearing by
-                    // itself: this used to `return` entirely while paused,
-                    // so NO fix ever reached Dart during a pause - the
-                    // speed check that's supposed to notice the rider
-                    // moving off again literally never ran (GpsRecorder's
-                    // _onPosition was never called at all). Manually
-                    // pausing/resuming "worked" only because that path sets
-                    // the state directly, bypassing this stream entirely.
-                    // Still keep paused fixes out of the persisted/recorded
-                    // track and the restart-recovery file - GpsRecorder
-                    // itself already excludes them from the saved route
-                    // (see the _isAutoPaused branch in _onPosition), this
-                    // just also skips writing them to disk here.
-                    if (!isPaused) {
-                        points.add(point)
-                        appendPointToFile(point)
+                // Copy before handing off - the LocationResult batch is only
+                // valid for the duration of this callback.
+                val batch = ArrayList(result.locations)
+                altitudeExecutor.execute {
+                    for (location in batch) {
+                        val point =
+                            mapOf(
+                                "latitude" to location.latitude,
+                                "longitude" to location.longitude,
+                                "altitude" to resolveMslAltitudeMeters(location),
+                                "speed" to location.speed.toDouble(),
+                                "bearing" to location.bearing.toDouble(),
+                                "timeMs" to location.time,
+                                "accuracy" to location.accuracy.toDouble(),
+                            )
+                        // The actual root cause of auto-pause never clearing by
+                        // itself: this used to `return` entirely while paused,
+                        // so NO fix ever reached Dart during a pause - the
+                        // speed check that's supposed to notice the rider
+                        // moving off again literally never ran (GpsRecorder's
+                        // _onPosition was never called at all). Manually
+                        // pausing/resuming "worked" only because that path sets
+                        // the state directly, bypassing this stream entirely.
+                        // Still keep paused fixes out of the persisted/recorded
+                        // track and the restart-recovery file - GpsRecorder
+                        // itself already excludes them from the saved route
+                        // (see the _isAutoPaused branch in _onPosition), this
+                        // just also skips writing them to disk here.
+                        if (!isPaused) {
+                            points.add(point)
+                            appendPointToFile(point)
+                        }
+                        RecordingNativeBridge.emitPoint(point)
                     }
-                    RecordingNativeBridge.emitPoint(point)
                 }
             }
         }
+
+    /**
+     * Phone GPS reports height above the WGS84 ellipsoid via
+     * [Location.getAltitude]. Riders expect Mean Sea Level (orthometric)
+     * height - the two differ by the local geoid undulation, commonly
+     * ~20–40 m, which showed up as "rakım ~25 m düşük". Prefer an
+     * already-filled MSL value when the provider/OS supplies one; otherwise
+     * convert with [AltitudeConverterCompat]. Falls back to ellipsoid height
+     * if conversion fails so recording never stalls.
+     */
+    private fun resolveMslAltitudeMeters(location: Location): Double {
+        if (!location.hasAltitude()) return location.altitude
+        if (LocationCompat.hasMslAltitude(location)) {
+            return LocationCompat.getMslAltitudeMeters(location)
+        }
+        return try {
+            AltitudeConverterCompat.addMslAltitudeToLocation(this, location)
+            if (LocationCompat.hasMslAltitude(location)) {
+                LocationCompat.getMslAltitudeMeters(location)
+            } else {
+                location.altitude
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "MSL altitude conversion failed; using ellipsoid height", e)
+            location.altitude
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -194,6 +236,7 @@ class RecordingLocationService : Service() {
 
     override fun onDestroy() {
         stopRecordingInternal()
+        altitudeExecutor.shutdownNow()
         super.onDestroy()
     }
 

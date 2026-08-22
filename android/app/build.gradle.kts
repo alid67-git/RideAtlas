@@ -68,6 +68,8 @@ dependencies {
     implementation("androidx.car.app:app:1.4.0")
     // Native recording foreground service (see RecordingLocationService.kt).
     implementation("com.google.android.gms:play-services-location:21.3.0")
+    // WGS84 ellipsoid → Mean Sea Level altitude (see RecordingLocationService).
+    implementation("androidx.core:core-location-altitude:1.0.0")
 }
 
 flutter {
