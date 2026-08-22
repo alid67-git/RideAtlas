@@ -20,6 +20,20 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.52 beta',
+    date: '2026-08-22',
+    note:
+        'Kayıt rakımı düzeltildi. Android GPS Location.altitude WGS84 '
+        'elipsoid yüksekliği verir; birçok uygulama deniz seviyesi (MSL / '
+        'ortometrik) gösterir - fark geoid undülasyonu yüzünden bölgeye '
+        'göre genelde 20–40 m. Kullanıcı başka programda ~5 m görürken '
+        'RideAtlas\'ta −29 m (yaklaşık 25 m düşük) bildirdi. '
+        'RecordingLocationService artık AltitudeConverterCompat ile her '
+        'fixi MSL\'e çeviriyor; dönüşüm başarısız olursa eski elipsoid '
+        'değerine düşülüyor. Canlı yükseklik, min/maks irtifa, tırmanış/'
+        'iniş ve kaydedilen GPX aynı düzeltilmiş rakımı kullanır.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.51 beta',
     date: '2026-08-15',
     note:
