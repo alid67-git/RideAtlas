@@ -4,6 +4,36 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/track_point.dart';
 
+/// Metadata for an in-progress (or interrupted) Android recording session.
+class NativeRecordingSession {
+  const NativeRecordingSession({
+    required this.startedAtMs,
+    required this.manualPaused,
+    required this.nativePaused,
+    required this.title,
+    required this.text,
+    this.batteryStartPercent,
+  });
+
+  final int startedAtMs;
+  final bool manualPaused;
+  final bool nativePaused;
+  final String title;
+  final String text;
+  final int? batteryStartPercent;
+
+  factory NativeRecordingSession.fromMap(Map<Object?, Object?> raw) {
+    return NativeRecordingSession(
+      startedAtMs: (raw['startedAtMs'] as num?)?.toInt() ?? 0,
+      manualPaused: raw['manualPaused'] as bool? ?? false,
+      nativePaused: raw['nativePaused'] as bool? ?? false,
+      title: raw['title'] as String? ?? 'RideAtlas',
+      text: raw['text'] as String? ?? 'Recording your ride',
+      batteryStartPercent: (raw['batteryStartPercent'] as num?)?.toInt(),
+    );
+  }
+}
+
 /// Android-only bridge to [RecordingLocationService]. No-op stubs are not
 /// provided - callers must gate on [isSupported].
 class NativeRecording {
@@ -16,10 +46,17 @@ class NativeRecording {
   static Future<void> start({
     required String title,
     required String text,
+    int? startedAtMs,
+    bool manualPaused = false,
+    int? batteryStartPercent,
   }) async {
     await _methods.invokeMethod<void>('start', {
       'title': title,
       'text': text,
+      if (startedAtMs != null) 'startedAtMs': startedAtMs,
+      'manualPaused': manualPaused,
+      if (batteryStartPercent != null)
+        'batteryStartPercent': batteryStartPercent,
     });
   }
 
@@ -34,8 +71,14 @@ class NativeRecording {
     await _methods.invokeMethod<void>('discard');
   }
 
-  static Future<void> setPaused(bool paused) async {
-    await _methods.invokeMethod<void>('setPaused', {'paused': paused});
+  static Future<void> setPaused(
+    bool paused, {
+    bool? manualPaused,
+  }) async {
+    await _methods.invokeMethod<void>('setPaused', {
+      'paused': paused,
+      if (manualPaused != null) 'manualPaused': manualPaused,
+    });
   }
 
   static Future<List<Map<Object?, Object?>>> getPoints() async {
@@ -49,6 +92,22 @@ class NativeRecording {
       {'index': index},
     );
     return _castPointList(raw);
+  }
+
+  static Future<bool> isRunning() async {
+    return await _methods.invokeMethod<bool>('isRunning') ?? false;
+  }
+
+  static Future<NativeRecordingSession?> getSession() async {
+    final raw = await _methods.invokeMethod<dynamic>('getSession');
+    if (raw is! Map) return null;
+    return NativeRecordingSession.fromMap(Map<Object?, Object?>.from(raw));
+  }
+
+  /// True when the FGS is alive, or a session/points file remains on disk
+  /// from an interrupted ride (so Dart should try to resume).
+  static Future<bool> hasInterruptedSession() async {
+    return await _methods.invokeMethod<bool>('hasInterruptedSession') ?? false;
   }
 
   static Stream<Map<Object?, Object?>> pointStream() {

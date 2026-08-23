@@ -40,6 +40,7 @@ class RecordingLocationService : Service() {
         private const val CHANNEL_ID = "rideatlas_recording"
         private const val NOTIFICATION_ID = 42001
         private const val POINTS_FILE = "active_recording_points.jsonl"
+        private const val SESSION_FILE = "active_recording_session.json"
 
         const val ACTION_START = "com.rideatlas.rideatlas.recording.START"
         const val ACTION_STOP = "com.rideatlas.rideatlas.recording.STOP"
@@ -47,6 +48,9 @@ class RecordingLocationService : Service() {
         const val EXTRA_TITLE = "title"
         const val EXTRA_TEXT = "text"
         const val EXTRA_PAUSED = "paused"
+        const val EXTRA_STARTED_AT_MS = "startedAtMs"
+        const val EXTRA_MANUAL_PAUSED = "manualPaused"
+        const val EXTRA_BATTERY_START = "batteryStartPercent"
 
         @Volatile
         var isRunning: Boolean = false
@@ -62,10 +66,87 @@ class RecordingLocationService : Service() {
         fun clearPoints(context: Context) {
             points.clear()
             pointsFile(context).delete()
+            sessionFile(context).delete()
         }
 
         fun pointsFile(context: Context): File =
             File(context.filesDir, POINTS_FILE)
+
+        fun sessionFile(context: Context): File =
+            File(context.filesDir, SESSION_FILE)
+
+        /**
+         * Persists ride session metadata so Flutter can resume after the UI
+         * process is killed (lock screen / swipe-away / OEM killer). Points
+         * live in [POINTS_FILE]; this file remembers startedAt, pause flags,
+         * and notification copy.
+         */
+        fun writeSession(
+            context: Context,
+            startedAtMs: Long,
+            manualPaused: Boolean,
+            nativePaused: Boolean,
+            title: String,
+            text: String,
+            batteryStartPercent: Int?,
+        ) {
+            try {
+                val json =
+                    JSONObject()
+                        .put("startedAtMs", startedAtMs)
+                        .put("manualPaused", manualPaused)
+                        .put("nativePaused", nativePaused)
+                        .put("title", title)
+                        .put("text", text)
+                if (batteryStartPercent != null) {
+                    json.put("batteryStartPercent", batteryStartPercent)
+                }
+                sessionFile(context).writeText(json.toString())
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to write recording session", e)
+            }
+        }
+
+        fun readSession(context: Context): Map<String, Any>? {
+            val file = sessionFile(context)
+            if (!file.exists()) return null
+            return try {
+                val obj = JSONObject(file.readText())
+                val out = mutableMapOf<String, Any>(
+                    "startedAtMs" to obj.optLong("startedAtMs"),
+                    "manualPaused" to obj.optBoolean("manualPaused", false),
+                    "nativePaused" to obj.optBoolean("nativePaused", false),
+                    "title" to obj.optString("title", "RideAtlas"),
+                    "text" to obj.optString("text", "Recording your ride"),
+                )
+                if (obj.has("batteryStartPercent")) {
+                    out["batteryStartPercent"] = obj.getInt("batteryStartPercent")
+                }
+                out
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to read recording session", e)
+                null
+            }
+        }
+
+        fun updateSessionPauseFlags(
+            context: Context,
+            nativePaused: Boolean,
+            manualPaused: Boolean? = null,
+        ) {
+            val current = readSession(context) ?: return
+            writeSession(
+                context = context,
+                startedAtMs = (current["startedAtMs"] as? Number)?.toLong()
+                    ?: System.currentTimeMillis(),
+                manualPaused = manualPaused
+                    ?: (current["manualPaused"] as? Boolean ?: false),
+                nativePaused = nativePaused,
+                title = current["title"] as? String ?: "RideAtlas",
+                text = current["text"] as? String ?: "Recording your ride",
+                batteryStartPercent = (current["batteryStartPercent"] as? Number)?.toInt(),
+            )
+        }
 
         /** Parses the append-only points file without touching [points] or
          * [isRunning] - used both by the resume-after-restart path below and
@@ -185,6 +266,17 @@ class RecordingLocationService : Service() {
                 val newPaused = intent.getBooleanExtra(EXTRA_PAUSED, false)
                 val changed = newPaused != isPaused
                 isPaused = newPaused
+                val manualPaused =
+                    if (intent.hasExtra(EXTRA_MANUAL_PAUSED)) {
+                        intent.getBooleanExtra(EXTRA_MANUAL_PAUSED, false)
+                    } else {
+                        null
+                    }
+                updateSessionPauseFlags(
+                    this,
+                    nativePaused = newPaused,
+                    manualPaused = manualPaused,
+                )
                 // Re-request updates at the paused/active cadence - the
                 // foreground service + wake lock otherwise keep the GPS
                 // chip working at full rate the whole ride regardless of
@@ -211,15 +303,44 @@ class RecordingLocationService : Service() {
                     // it instead of wiping it - losing GPS history nobody
                     // asked to discard is exactly the bug this guards
                     // against.
-                    if (pointsFile(this).exists()) {
+                    val existingSession = readSession(this)
+                    if (pointsFile(this).exists() || existingSession != null) {
                         reloadPointsFromFile()
                     } else {
                         clearPoints(this)
                     }
-                    // Set before startLocationUpdates() so a fresh start
-                    // always begins at the active/fast cadence, even if a
-                    // previous run crashed mid-pause and left the flag true.
-                    isPaused = false
+                    // Restore pause flag from the session file when the OS
+                    // restarted us mid-ride; a genuine fresh start has no
+                    // session and begins active.
+                    isPaused = existingSession?.get("nativePaused") as? Boolean ?: false
+                    val startedAtMs =
+                        if (intent?.hasExtra(EXTRA_STARTED_AT_MS) == true) {
+                            intent.getLongExtra(EXTRA_STARTED_AT_MS, System.currentTimeMillis())
+                        } else {
+                            (existingSession?.get("startedAtMs") as? Number)?.toLong()
+                                ?: System.currentTimeMillis()
+                        }
+                    val manualPaused =
+                        if (intent?.hasExtra(EXTRA_MANUAL_PAUSED) == true) {
+                            intent.getBooleanExtra(EXTRA_MANUAL_PAUSED, false)
+                        } else {
+                            existingSession?.get("manualPaused") as? Boolean ?: false
+                        }
+                    val batteryStart =
+                        if (intent?.hasExtra(EXTRA_BATTERY_START) == true) {
+                            intent.getIntExtra(EXTRA_BATTERY_START, -1).takeIf { it >= 0 }
+                        } else {
+                            (existingSession?.get("batteryStartPercent") as? Number)?.toInt()
+                        }
+                    writeSession(
+                        context = this,
+                        startedAtMs = startedAtMs,
+                        manualPaused = manualPaused,
+                        nativePaused = isPaused,
+                        title = title,
+                        text = text,
+                        batteryStartPercent = batteryStart,
+                    )
                     startAsForeground(title, text)
                     acquireWakeLock()
                     startLocationUpdates()
@@ -315,11 +436,10 @@ class RecordingLocationService : Service() {
     }
 
     /**
-     * Active: was 5s/2s - riders reported the displayed speed feeling very
-     * delayed, which traces straight back to this interval: the
-     * current-speed figure on screen can only refresh as often as a new fix
-     * arrives. 1s (matching a typical navigation app) makes it track real
-     * acceleration/deceleration promptly.
+     * Active: was 1s - riders reported the phone getting hot / the UI
+     * feeling heavy under continuous high-rate GPS + map work. 2s still
+     * tracks a motorcycle ride well while cutting location callbacks,
+     * MSL conversion, disk appends, and Flutter rebuilds roughly in half.
      *
      * Paused (manual or auto): nothing is being recorded, so there's no
      * reason to keep pulling high-accuracy fixes every second - this was
@@ -333,7 +453,7 @@ class RecordingLocationService : Service() {
      * actually moved off again - too laggy to ride with. 3s (matching
      * GpsRecorder's own stationary-detection delay before entering pause in
      * the first place) keeps that resume latency tolerable while still
-     * cutting fix frequency to a third of the active rate.
+     * cutting fix frequency relative to the active rate.
      *
      * Priority was also PRIORITY_BALANCED_POWER_ACCURACY while paused, which
      * lets Play Services substitute WiFi/cell-tower positioning for the GPS
@@ -352,8 +472,8 @@ class RecordingLocationService : Service() {
                 .setWaitForAccurateLocation(false)
                 .build()
         } else {
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000L)
-                .setMinUpdateIntervalMillis(500L)
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2_000L)
+                .setMinUpdateIntervalMillis(2_000L)
                 .setMinUpdateDistanceMeters(0f)
                 .setWaitForAccurateLocation(false)
                 .build()

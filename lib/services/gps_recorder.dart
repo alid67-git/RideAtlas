@@ -229,13 +229,11 @@ class GpsRecorder extends ChangeNotifier {
       await NativeRecording.start(
         title: androidNotificationTitle,
         text: androidNotificationText,
+        startedAtMs: _startedAt!.millisecondsSinceEpoch,
+        manualPaused: false,
+        batteryStartPercent: _batteryStartPercent,
       );
-      _nativeSub = NativeRecording.pointStream().listen(_applyNativePoint);
-      // EventChannel drops while the UI isolate is frozen; the native
-      // buffer still has every fix — poll as a safety net.
-      _nativePollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-        unawaited(_drainNativePoints());
-      });
+      _attachNativeListeners();
     } else {
       _sub = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
@@ -245,6 +243,101 @@ class GpsRecorder extends ChangeNotifier {
       ).listen(_onPosition);
     }
     return null;
+  }
+
+  void _attachNativeListeners() {
+    _nativeSub?.cancel();
+    _nativePollTimer?.cancel();
+    _nativeSub = NativeRecording.pointStream().listen(_applyNativePoint);
+    // EventChannel drops while the UI isolate is frozen; the native
+    // buffer still has every fix — poll as a safety net. Matches the
+    // native 2s GPS cadence so we don't wake the isolate more often.
+    _nativePollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      unawaited(_drainNativePoints());
+    });
+  }
+
+  /// Re-attaches to an Android recording that survived process death (OEM
+  /// kill, swipe-away, lock-screen) — Motion GPX-style: if we were
+  /// recording/paused, open continues that session; if idle, stays idle.
+  /// Returns true when a session was restored.
+  Future<bool> tryRestoreInterruptedSession({
+    String androidNotificationTitle = 'RideAtlas',
+    String androidNotificationText = 'Recording your ride',
+  }) async {
+    if (!NativeRecording.isSupported || !isIdle) return false;
+
+    try {
+      final has = await NativeRecording.hasInterruptedSession();
+      if (!has) return false;
+
+      final session = await NativeRecording.getSession();
+      final running = await NativeRecording.isRunning();
+      final rawPoints = running
+          ? await NativeRecording.getPoints()
+          : await NativeRecording.getOrphanedPoints();
+
+      // Session file missing but leftover points from an older build —
+      // still treat as an interrupted ride rather than deleting silently.
+      if (session == null && rawPoints.isEmpty && !running) {
+        await NativeRecording.clearOrphanedPoints();
+        return false;
+      }
+
+      final title = session?.title ?? androidNotificationTitle;
+      final text = session?.text ?? androidNotificationText;
+      final manualPaused = session?.manualPaused ?? false;
+      final nativePaused = session?.nativePaused ?? manualPaused;
+      final startedAtMs = session?.startedAtMs ??
+          (rawPoints.isNotEmpty
+              ? (rawPoints.first['timeMs'] as num?)?.toInt()
+              : null) ??
+          DateTime.now().millisecondsSinceEpoch;
+      final battery = session?.batteryStartPercent;
+
+      if (!running) {
+        await NativeRecording.start(
+          title: title,
+          text: text,
+          startedAtMs: startedAtMs,
+          manualPaused: manualPaused,
+          batteryStartPercent: battery,
+        );
+        if (nativePaused) {
+          await NativeRecording.setPaused(
+            true,
+            manualPaused: manualPaused,
+          );
+        }
+      }
+
+      // Prefer the snapshot taken before startForegroundService - the
+      // service loads the JSONL file asynchronously, so an immediate
+      // getPoints() right after start can still be empty.
+      var batch = rawPoints;
+      if (batch.isEmpty) {
+        batch = await NativeRecording.getPoints();
+      }
+      _rebuildPointsFromNative(batch);
+      _nativeIngestedCount = batch.length;
+      _startedAt = DateTime.fromMillisecondsSinceEpoch(startedAtMs);
+      _batteryStartPercent = battery;
+      _completedPauses.clear();
+      _pauseStartedAt = null;
+      _isAutoPaused = false;
+      _stationarySince = null;
+      if (manualPaused) {
+        _state = RecordingState.paused;
+        _pauseStartedAt = DateTime.now();
+      } else {
+        _state = RecordingState.recording;
+      }
+      _attachNativeListeners();
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _drainNativePoints() async {
@@ -368,7 +461,7 @@ class GpsRecorder extends ChangeNotifier {
         // Back to the fast/high-accuracy GPS cadence now that the ride
         // has actually resumed - see the matching setPaused(true) below.
         if (NativeRecording.isSupported) {
-          unawaited(NativeRecording.setPaused(false));
+          unawaited(NativeRecording.setPaused(false, manualPaused: false));
         }
       } else {
         notifyListeners();
@@ -385,7 +478,7 @@ class GpsRecorder extends ChangeNotifier {
         // polling at full rate the whole time, burning battery identically
         // whether the rider was moving or sitting at a light.
         if (NativeRecording.isSupported) {
-          unawaited(NativeRecording.setPaused(true));
+          unawaited(NativeRecording.setPaused(true, manualPaused: false));
         }
         notifyListeners();
         return;
@@ -415,7 +508,7 @@ class GpsRecorder extends ChangeNotifier {
     _state = RecordingState.paused;
     _pauseStartedAt ??= DateTime.now();
     if (NativeRecording.isSupported) {
-      unawaited(NativeRecording.setPaused(true));
+      unawaited(NativeRecording.setPaused(true, manualPaused: true));
     }
     notifyListeners();
   }
@@ -432,7 +525,7 @@ class GpsRecorder extends ChangeNotifier {
     _stationarySince = null;
     _state = RecordingState.recording;
     if (NativeRecording.isSupported) {
-      unawaited(NativeRecording.setPaused(false));
+      unawaited(NativeRecording.setPaused(false, manualPaused: false));
     }
     notifyListeners();
   }

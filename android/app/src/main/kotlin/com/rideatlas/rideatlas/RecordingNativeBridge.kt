@@ -81,12 +81,21 @@ object RecordingNativeBridge {
             "start" -> {
                 val title = call.argument<String>("title") ?: "RideAtlas"
                 val text = call.argument<String>("text") ?: "Recording your ride"
+                val startedAtMs = call.argument<Number>("startedAtMs")?.toLong()
+                    ?: System.currentTimeMillis()
+                val manualPaused = call.argument<Boolean>("manualPaused") ?: false
+                val batteryStart = call.argument<Number>("batteryStartPercent")?.toInt()
                 ensureNotificationPermission()
                 val intent =
                     Intent(ctx, RecordingLocationService::class.java).apply {
                         action = RecordingLocationService.ACTION_START
                         putExtra(RecordingLocationService.EXTRA_TITLE, title)
                         putExtra(RecordingLocationService.EXTRA_TEXT, text)
+                        putExtra(RecordingLocationService.EXTRA_STARTED_AT_MS, startedAtMs)
+                        putExtra(RecordingLocationService.EXTRA_MANUAL_PAUSED, manualPaused)
+                        if (batteryStart != null) {
+                            putExtra(RecordingLocationService.EXTRA_BATTERY_START, batteryStart)
+                        }
                     }
                 ContextCompat.startForegroundService(ctx, intent)
                 result.success(true)
@@ -103,14 +112,27 @@ object RecordingNativeBridge {
             }
             "setPaused" -> {
                 val paused = call.argument<Boolean>("paused") ?: false
+                val manualPaused = call.argument<Boolean>("manualPaused")
                 RecordingLocationService.isPaused = paused
                 if (RecordingLocationService.isRunning) {
                     val intent =
                         Intent(ctx, RecordingLocationService::class.java).apply {
                             action = RecordingLocationService.ACTION_SET_PAUSED
                             putExtra(RecordingLocationService.EXTRA_PAUSED, paused)
+                            if (manualPaused != null) {
+                                putExtra(
+                                    RecordingLocationService.EXTRA_MANUAL_PAUSED,
+                                    manualPaused,
+                                )
+                            }
                         }
                     ctx.startService(intent)
+                } else {
+                    RecordingLocationService.updateSessionPauseFlags(
+                        ctx,
+                        nativePaused = paused,
+                        manualPaused = manualPaused,
+                    )
                 }
                 result.success(null)
             }
@@ -121,6 +143,14 @@ object RecordingNativeBridge {
                 result.success(if (index <= 0) all else all.drop(index))
             }
             "isRunning" -> result.success(RecordingLocationService.isRunning)
+            "getSession" -> result.success(RecordingLocationService.readSession(ctx))
+            "hasInterruptedSession" -> {
+                val hasSession = RecordingLocationService.sessionFile(ctx).exists()
+                val hasPoints = RecordingLocationService.pointsFile(ctx).exists()
+                result.success(
+                    RecordingLocationService.isRunning || hasSession || hasPoints,
+                )
+            }
             "getOrphanedPoints" -> {
                 // Points left on disk from a recording the app never got to
                 // stop/discard itself - both of those paths clean up their

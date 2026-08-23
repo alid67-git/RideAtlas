@@ -70,33 +70,39 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _maybeShowWhatsNew();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _maybeShowWhatsNew();
       // If a fix hasn't arrived yet, tell the user recording would start offline.
       if (!_hadGpsFix && mounted) _showOfflineGpsHint();
+      if (NativeRecording.isSupported) await _restoreInterruptedRecording();
     });
     _loadMapStyle();
     _startLocationUpdates();
     if (_supportsUpdateCheck) _checkForUpdate();
-    if (NativeRecording.isSupported) _recoverOrphanedRecording();
   }
 
-  /// Clears GPS points left over from a recording the app never got to
-  /// stop/discard itself - the process was killed mid-ride (OEM background
-  /// app management, very low battery, ...) before that could happen. Used
-  /// to auto-import these as a new route on next launch, but a momentary
-  /// GPS/process hiccup could leave behind a tiny, bogus leftover file that
-  /// then silently appeared as a phantom route mixed in with real ones -
-  /// confusing, and hard to tell apart from an intentional ride. Simplest
-  /// fix: just drop it. Leaving it on disk instead would risk it bleeding
-  /// into the *next* real recording (RecordingLocationService.
-  /// onStartCommand reloads any leftover file it finds when a new recording
-  /// starts), which would be worse.
-  Future<void> _recoverOrphanedRecording() async {
+  /// Like Motion GPX: if a recording was in progress when the app was
+  /// killed/locked, reopen continues that session and jumps back into
+  /// [RecordScreen]. Idle stays idle. Replaces the old "always delete
+  /// orphaned points on launch" behaviour, which threw away recoverable
+  /// rides.
+  Future<void> _restoreInterruptedRecording() async {
     try {
-      await NativeRecording.clearOrphanedPoints();
+      final recorder = context.read<GpsRecorder>();
+      final l10n = AppLocalizations.of(context)!;
+      final restored = await recorder.tryRestoreInterruptedSession(
+        androidNotificationTitle: l10n.recordingNotificationTitle,
+        androidNotificationText: l10n.recordingNotificationText,
+      );
+      if (!restored || !mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.recordingSessionResumed)),
+      );
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const RecordScreen()),
+      );
     } catch (_) {
-      // No native handler registered (e.g. widget tests) - nothing to do.
+      // Bridge missing in tests / non-Android - nothing to do.
     }
   }
 
