@@ -153,7 +153,8 @@ object RecordingNativeBridge {
                 val text = call.argument<String>("text") ?: "Recording your ride"
                 val batteryStart = call.argument<Number>("batteryStartPercent")?.toInt()
                 val pauseStartedAtMs = call.argument<Number>("pauseStartedAtMs")?.toLong()
-                val rawPauses = call.argument<List<*>>("completedPauses") ?: emptyList()
+                val rawPauses =
+                    call.argument<List<*>>("completedPauses") ?: emptyList<Any?>()
                 val pauses =
                     rawPauses.mapNotNull { item ->
                         val p = item as? Map<*, *> ?: return@mapNotNull null
