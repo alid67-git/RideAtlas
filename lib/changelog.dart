@@ -20,6 +20,21 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.53 beta',
+    date: '2026-08-23',
+    note:
+        'Kayıt stabilitesi: (1) Uygulama kilitlenince / yanlışlıkla '
+        'kapanınca / OEM öldürünce kayıt oturumu diskte saklanıyor; tekrar '
+        'açılışta Motion GPX gibi kaldığı yerden devam ediyor (kayıttaysa '
+        'kayıt, duraklatılmışsa duraklatılmış; idle ise idle). Eski '
+        '"açılışta yetim noktaları sil" davranışı kaldırıldı. (2) Aktif '
+        'GPS aralığı 1 sn → 2 sn; harita konum akışı ve native poll de '
+        'uyumlandı - saniyelik çift GPS yükü telefonu yoruyordu. (3) '
+        'Kayıt bilgi sayfasındayken harita Offstage ile bağlı kalıyor; '
+        'haritaya geçince course-up (yön yukarı) yeniden etkin - önceki '
+        'MapController kopması giderildi.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.52 beta',
     date: '2026-08-22',
     note:

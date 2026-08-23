@@ -226,6 +226,7 @@
   "@gpsOnlineStatus": {"placeholders": {"accuracy": {"type": "String"}}},
   "orphanedRecordingRecovered": "Kesintiye uğrayan bir kayıt kurtarıldı: {routeName}",
   "@orphanedRecordingRecovered": {"placeholders": {"routeName": {"type": "String"}}},
+  "recordingSessionResumed": "Kayıt kaldığı yerden devam ediyor",
   "showPhotoPinsTooltip": "Fotoğraf/video konumlarını göster",
   "hidePhotoPinsTooltip": "Fotoğraf/video konumlarını gizle",
   "ridePhotoPickerTitle": "Sürüşte çekilen fotoğraflar",

@@ -156,13 +156,10 @@ class _RecordScreenState extends State<RecordScreen>
     recordScreenVisible.value = true;
     _rotationController = AnimationController(
       vsync: this,
-      // Close to the ~1s cadence real GPS fixes arrive at (a phone's GPS
-      // chip realistically can't produce fixes much faster than that) -
-      // long enough that one camera animation is still finishing when the
-      // next fix retargets it, so the map is continuously gliding/turning
-      // instead of snapping into place and sitting still for most of each
-      // second.
-      duration: const Duration(milliseconds: 950),
+      // Match the ~2s native GPS cadence so one camera glide is still
+      // finishing when the next fix retargets it (continuous motion
+      // instead of snap-and-sit).
+      duration: const Duration(milliseconds: 1800),
     );
     _bgController = AnimationController(
       vsync: this,
@@ -202,21 +199,24 @@ class _RecordScreenState extends State<RecordScreen>
     );
   }
 
-  /// Switches from the info page to the map, and immediately re-syncs the
-  /// map to the current position/heading rather than waiting for the next
-  /// GPS fix (which can be several seconds away) - the map widget is torn
-  /// down while the info page is showing, so it would otherwise briefly
-  /// reappear wherever it last was instead of already being correct.
+  /// Switches from the info page to the map and re-enables course-up follow.
+  /// The map stays mounted under an [Offstage] while the info page is
+  /// showing (see [build]), so [MapController] stays attached - we only
+  /// need to snap to the latest position/heading.
   void _switchToMap() {
-    setState(() => _showMap = true);
+    setState(() {
+      _showMap = true;
+      _followMe = true;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || !_showMap) return;
       final location = _currentLocation;
-      if (location != null && _followMe) {
-        _mapController.move(location, _mapController.camera.zoom);
-      }
       final heading = _currentHeading;
-      if (heading != null && _followMe) _mapController.rotate(heading);
+      if (location != null) {
+        _animateCameraTo(location: location, heading: heading);
+      } else if (heading != null) {
+        _animateCameraTo(heading: heading);
+      }
     });
   }
 
@@ -280,6 +280,9 @@ class _RecordScreenState extends State<RecordScreen>
   /// current center/rotation each call rather than tracking separate
   /// copies of them, so this can't drift out of sync with the map itself.
   void _animateCameraTo({LatLng? location, double? heading}) {
+    // Info page keeps the map Offstage but still mounted; skip camera work
+    // while it's hidden so we don't fight a zero-size map viewport.
+    if (!_showMap) return;
     final camera = _mapController.camera;
     final startLat = camera.center.latitude;
     final startLng = camera.center.longitude;
@@ -349,11 +352,10 @@ class _RecordScreenState extends State<RecordScreen>
               ? AndroidSettings(
                   accuracy: LocationAccuracy.high,
                   distanceFilter: 0,
-                  // Was 5s - far too slow for a course-up map to track real
-                  // turns/heading changes without visibly lagging behind
-                  // the actual road. 1s matches what a normal navigation
-                  // app polls at.
-                  intervalDuration: const Duration(seconds: 1),
+                  // Match native recording's 2s cadence - a second GPS
+                  // stream at 1Hz on top of the FGS was doubling radio/
+                  // CPU work and heating phones during long rides.
+                  intervalDuration: const Duration(seconds: 2),
                 )
               : const LocationSettings(
                   accuracy: LocationAccuracy.high,
@@ -377,8 +379,8 @@ class _RecordScreenState extends State<RecordScreen>
           });
           if (!_centeredOnce) {
             _centeredOnce = true;
-            _mapController.move(location, 16);
-          } else if (_followMe) {
+            if (_showMap) _mapController.move(location, 16);
+          } else if (_followMe && _showMap) {
             // Position and rotation animate together over the same
             // duration - see _animateCameraTo - rather than the map
             // snapping to the new spot and then separately swinging to
@@ -432,18 +434,14 @@ class _RecordScreenState extends State<RecordScreen>
       ).showSnackBar(SnackBar(content: Text(message)));
       return;
     }
-    // Recording always starts with the vehicle centered on screen, even if
-    // the map had been panned away from it beforehand.
-    final location = _currentLocation;
     setState(() {
       _followMe = true;
       // Opens on the info page - the map is one tap away via its toggle
       // button - rather than whatever page the rider happened to be
-      // looking at before tapping start.
+      // looking at before tapping start. Map stays Offstage-mounted so
+      // course-up still works the moment they switch back.
       _showMap = false;
     });
-    if (location != null) _mapController.move(location, 16);
-    _applyRotation();
   }
 
   /// Returns true when Android has granted "Allow all the time", or when
@@ -671,10 +669,25 @@ class _RecordScreenState extends State<RecordScreen>
     // Idle (not recording yet) always shows the map with the start button -
     // the info/map split only matters once there's a ride actually in
     // progress to show stats for.
-    if (!recorder.isIdle && !_showMap) {
-      return _buildInfoPage(context, recorder);
+    if (recorder.isIdle) {
+      return _buildMapPage(context, recorder);
     }
-    return _buildMapPage(context, recorder);
+    // Keep FlutterMap mounted while the info page is visible so
+    // MapController stays attached - tearing it down broke course-up
+    // (rotate/move threw or no-oped until the next full remap).
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        TickerMode(
+          enabled: _showMap,
+          child: Offstage(
+            offstage: !_showMap,
+            child: _buildMapPage(context, recorder),
+          ),
+        ),
+        if (!_showMap) _buildInfoPage(context, recorder),
+      ],
+    );
   }
 
   Widget _buildMapPage(BuildContext context, GpsRecorder recorder) {

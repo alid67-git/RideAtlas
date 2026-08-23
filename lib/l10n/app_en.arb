@@ -199,6 +199,7 @@
   "gpsOfflineRecordingHint": "No GPS — recording will start offline",
   "gpsOnlineStatus": "GPS ready (±{accuracy} m)",
   "orphanedRecordingRecovered": "Recovered an interrupted recording: {routeName}",
+  "recordingSessionResumed": "Recording continued from where it left off",
   "@gpsOnlineStatus": {"placeholders": {"accuracy": {"type": "String"}}},
   "showPhotoPinsTooltip": "Show photo/video locations",
   "hidePhotoPinsTooltip": "Hide photo/video locations",
