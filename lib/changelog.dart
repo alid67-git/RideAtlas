@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.54 beta',
+    date: '2026-08-23',
+    note:
+        'Kayıt devamı tamamlandı: sadece "kayıt/pause" bayrağı değil, '
+        'başlangıç saati, tamamlanmış molalar ve süren duraklatma anı da '
+        'diskte saklanıyor. Yeniden açılışta mesafe (tüm GPS noktalarından), '
+        'son konum, aktif/duraklatılmış mod ve süreler kaldığı yerden '
+        'geliyor. Kayıt yokken (idle) dosya yazılmaz - açılışta kayıt '
+        'başlamaz. v1.4.53\'teki 2 sn GPS ve course-up düzeltmeleri duruyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.53 beta',
     date: '2026-08-23',
     note:
