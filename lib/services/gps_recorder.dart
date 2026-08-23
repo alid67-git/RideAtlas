@@ -78,6 +78,8 @@ class GpsRecorder extends ChangeNotifier {
   DateTime? _stationarySince;
   int? _batteryStartPercent;
   final List<double> _recentSpeedsKmh = [];
+  String _notificationTitle = 'RideAtlas';
+  String _notificationText = 'Recording your ride';
 
   RecordingState get state => _state;
   int? get batteryStartPercent => _batteryStartPercent;
@@ -222,6 +224,8 @@ class GpsRecorder extends ChangeNotifier {
     _lastAcceptedSpeedKmh = null;
     _lastAcceptedSpeedTime = null;
     _batteryStartPercent = await currentBatteryPercent();
+    _notificationTitle = androidNotificationTitle;
+    _notificationText = androidNotificationText;
     _state = RecordingState.recording;
     notifyListeners();
 
@@ -234,6 +238,7 @@ class GpsRecorder extends ChangeNotifier {
         batteryStartPercent: _batteryStartPercent,
       );
       _attachNativeListeners();
+      unawaited(_persistSession());
     } else {
       _sub = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
@@ -243,6 +248,33 @@ class GpsRecorder extends ChangeNotifier {
       ).listen(_onPosition);
     }
     return null;
+  }
+
+  /// Snapshot of timers / pause history / flags for Android process death.
+  /// Track points are already on disk (JSONL); this keeps km (via points),
+  /// wall-clock start, and recording-vs-paused mode consistent on reopen.
+  Future<void> _persistSession() async {
+    if (!NativeRecording.isSupported || isIdle) return;
+    final started = _startedAt;
+    if (started == null) return;
+    try {
+      await NativeRecording.saveSession(
+        startedAtMs: started.millisecondsSinceEpoch,
+        manualPaused: _state == RecordingState.paused,
+        nativePaused: _state == RecordingState.paused || _isAutoPaused,
+        title: _notificationTitle,
+        text: _notificationText,
+        batteryStartPercent: _batteryStartPercent,
+        pauseStartedAtMs: _pauseStartedAt?.millisecondsSinceEpoch,
+        completedPauses: [
+          for (final p in _completedPauses)
+            {
+              'durationMs': p.duration.inMilliseconds,
+              'endMs': p.end.millisecondsSinceEpoch,
+            },
+        ],
+      );
+    } catch (_) {}
   }
 
   void _attachNativeListeners() {
@@ -322,15 +354,38 @@ class GpsRecorder extends ChangeNotifier {
       _nativeIngestedCount = batch.length;
       _startedAt = DateTime.fromMillisecondsSinceEpoch(startedAtMs);
       _batteryStartPercent = battery;
-      _completedPauses.clear();
-      _pauseStartedAt = null;
+      _notificationTitle = title;
+      _notificationText = text;
+      _completedPauses
+        ..clear()
+        ..addAll([
+          for (final p in session?.completedPauses ?? const <NativeCompletedPause>[])
+            (
+              duration: Duration(milliseconds: p.durationMs),
+              end: DateTime.fromMillisecondsSinceEpoch(p.endMs),
+            ),
+        ]);
       _isAutoPaused = false;
       _stationarySince = null;
       if (manualPaused) {
         _state = RecordingState.paused;
-        _pauseStartedAt = DateTime.now();
+        final pauseStartMs = session?.pauseStartedAtMs;
+        _pauseStartedAt = pauseStartMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(pauseStartMs)
+            : DateTime.now();
       } else {
         _state = RecordingState.recording;
+        // Auto-pause may have left nativePaused true without manual pause —
+        // keep GPS slow until motion resumes, but Dart stays "recording".
+        if (nativePaused && !manualPaused) {
+          _isAutoPaused = true;
+          final pauseStartMs = session?.pauseStartedAtMs;
+          _pauseStartedAt = pauseStartMs != null
+              ? DateTime.fromMillisecondsSinceEpoch(pauseStartMs)
+              : DateTime.now();
+        } else {
+          _pauseStartedAt = null;
+        }
       }
       _attachNativeListeners();
       notifyListeners();
@@ -462,6 +517,7 @@ class GpsRecorder extends ChangeNotifier {
         // has actually resumed - see the matching setPaused(true) below.
         if (NativeRecording.isSupported) {
           unawaited(NativeRecording.setPaused(false, manualPaused: false));
+          unawaited(_persistSession());
         }
       } else {
         notifyListeners();
@@ -479,6 +535,7 @@ class GpsRecorder extends ChangeNotifier {
         // whether the rider was moving or sitting at a light.
         if (NativeRecording.isSupported) {
           unawaited(NativeRecording.setPaused(true, manualPaused: false));
+          unawaited(_persistSession());
         }
         notifyListeners();
         return;
@@ -509,6 +566,7 @@ class GpsRecorder extends ChangeNotifier {
     _pauseStartedAt ??= DateTime.now();
     if (NativeRecording.isSupported) {
       unawaited(NativeRecording.setPaused(true, manualPaused: true));
+      unawaited(_persistSession());
     }
     notifyListeners();
   }
@@ -526,6 +584,7 @@ class GpsRecorder extends ChangeNotifier {
     _state = RecordingState.recording;
     if (NativeRecording.isSupported) {
       unawaited(NativeRecording.setPaused(false, manualPaused: false));
+      unawaited(_persistSession());
     }
     notifyListeners();
   }
@@ -618,6 +677,8 @@ class GpsRecorder extends ChangeNotifier {
     _lastAcceptedSpeedKmh = null;
     _lastAcceptedSpeedTime = null;
     _batteryStartPercent = null;
+    _notificationTitle = 'RideAtlas';
+    _notificationText = 'Recording your ride';
     _state = RecordingState.idle;
     notifyListeners();
   }

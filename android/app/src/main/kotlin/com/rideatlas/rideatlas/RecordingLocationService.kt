@@ -21,6 +21,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.Collections
@@ -78,8 +79,9 @@ class RecordingLocationService : Service() {
         /**
          * Persists ride session metadata so Flutter can resume after the UI
          * process is killed (lock screen / swipe-away / OEM killer). Points
-         * live in [POINTS_FILE]; this file remembers startedAt, pause flags,
-         * and notification copy.
+         * live in [POINTS_FILE]; this file remembers startedAt, pause state,
+         * completed rests, and notification copy — enough to reopen at the
+         * same km, position, and recording/paused mode.
          */
         fun writeSession(
             context: Context,
@@ -89,8 +91,18 @@ class RecordingLocationService : Service() {
             title: String,
             text: String,
             batteryStartPercent: Int?,
+            pauseStartedAtMs: Long? = null,
+            completedPauses: List<Map<String, Long>> = emptyList(),
         ) {
             try {
+                val pausesJson = JSONArray()
+                for (pause in completedPauses) {
+                    pausesJson.put(
+                        JSONObject()
+                            .put("durationMs", pause["durationMs"] ?: 0L)
+                            .put("endMs", pause["endMs"] ?: 0L),
+                    )
+                }
                 val json =
                     JSONObject()
                         .put("startedAtMs", startedAtMs)
@@ -98,8 +110,12 @@ class RecordingLocationService : Service() {
                         .put("nativePaused", nativePaused)
                         .put("title", title)
                         .put("text", text)
+                        .put("completedPauses", pausesJson)
                 if (batteryStartPercent != null) {
                     json.put("batteryStartPercent", batteryStartPercent)
+                }
+                if (pauseStartedAtMs != null) {
+                    json.put("pauseStartedAtMs", pauseStartedAtMs)
                 }
                 sessionFile(context).writeText(json.toString())
             } catch (e: Exception) {
@@ -112,15 +128,32 @@ class RecordingLocationService : Service() {
             if (!file.exists()) return null
             return try {
                 val obj = JSONObject(file.readText())
+                val pauses = mutableListOf<Map<String, Long>>()
+                val pausesArr = obj.optJSONArray("completedPauses")
+                if (pausesArr != null) {
+                    for (i in 0 until pausesArr.length()) {
+                        val p = pausesArr.optJSONObject(i) ?: continue
+                        pauses.add(
+                            mapOf(
+                                "durationMs" to p.optLong("durationMs"),
+                                "endMs" to p.optLong("endMs"),
+                            ),
+                        )
+                    }
+                }
                 val out = mutableMapOf<String, Any>(
                     "startedAtMs" to obj.optLong("startedAtMs"),
                     "manualPaused" to obj.optBoolean("manualPaused", false),
                     "nativePaused" to obj.optBoolean("nativePaused", false),
                     "title" to obj.optString("title", "RideAtlas"),
                     "text" to obj.optString("text", "Recording your ride"),
+                    "completedPauses" to pauses,
                 )
                 if (obj.has("batteryStartPercent")) {
                     out["batteryStartPercent"] = obj.getInt("batteryStartPercent")
+                }
+                if (obj.has("pauseStartedAtMs")) {
+                    out["pauseStartedAtMs"] = obj.getLong("pauseStartedAtMs")
                 }
                 out
             } catch (e: Exception) {
@@ -129,12 +162,29 @@ class RecordingLocationService : Service() {
             }
         }
 
+        @Suppress("UNCHECKED_CAST")
         fun updateSessionPauseFlags(
             context: Context,
             nativePaused: Boolean,
             manualPaused: Boolean? = null,
+            pauseStartedAtMs: Long? = null,
+            clearPauseStartedAt: Boolean = false,
         ) {
             val current = readSession(context) ?: return
+            val existingPauses =
+                (current["completedPauses"] as? List<*>)?.mapNotNull { item ->
+                    val m = item as? Map<*, *> ?: return@mapNotNull null
+                    mapOf(
+                        "durationMs" to ((m["durationMs"] as? Number)?.toLong() ?: 0L),
+                        "endMs" to ((m["endMs"] as? Number)?.toLong() ?: 0L),
+                    )
+                } ?: emptyList()
+            val pauseStart =
+                when {
+                    clearPauseStartedAt -> null
+                    pauseStartedAtMs != null -> pauseStartedAtMs
+                    else -> (current["pauseStartedAtMs"] as? Number)?.toLong()
+                }
             writeSession(
                 context = context,
                 startedAtMs = (current["startedAtMs"] as? Number)?.toLong()
@@ -145,6 +195,8 @@ class RecordingLocationService : Service() {
                 title = current["title"] as? String ?: "RideAtlas",
                 text = current["text"] as? String ?: "Recording your ride",
                 batteryStartPercent = (current["batteryStartPercent"] as? Number)?.toInt(),
+                pauseStartedAtMs = pauseStart,
+                completedPauses = existingPauses,
             )
         }
 
