@@ -4,6 +4,14 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/track_point.dart';
 
+/// One completed pause bucket restored from the native session file.
+class NativeCompletedPause {
+  const NativeCompletedPause({required this.durationMs, required this.endMs});
+
+  final int durationMs;
+  final int endMs;
+}
+
 /// Metadata for an in-progress (or interrupted) Android recording session.
 class NativeRecordingSession {
   const NativeRecordingSession({
@@ -13,6 +21,8 @@ class NativeRecordingSession {
     required this.title,
     required this.text,
     this.batteryStartPercent,
+    this.pauseStartedAtMs,
+    this.completedPauses = const [],
   });
 
   final int startedAtMs;
@@ -21,8 +31,24 @@ class NativeRecordingSession {
   final String title;
   final String text;
   final int? batteryStartPercent;
+  final int? pauseStartedAtMs;
+  final List<NativeCompletedPause> completedPauses;
 
   factory NativeRecordingSession.fromMap(Map<Object?, Object?> raw) {
+    final pausesRaw = raw['completedPauses'];
+    final pauses = <NativeCompletedPause>[];
+    if (pausesRaw is List) {
+      for (final item in pausesRaw) {
+        if (item is! Map) continue;
+        final m = Map<Object?, Object?>.from(item);
+        pauses.add(
+          NativeCompletedPause(
+            durationMs: (m['durationMs'] as num?)?.toInt() ?? 0,
+            endMs: (m['endMs'] as num?)?.toInt() ?? 0,
+          ),
+        );
+      }
+    }
     return NativeRecordingSession(
       startedAtMs: (raw['startedAtMs'] as num?)?.toInt() ?? 0,
       manualPaused: raw['manualPaused'] as bool? ?? false,
@@ -30,6 +56,8 @@ class NativeRecordingSession {
       title: raw['title'] as String? ?? 'RideAtlas',
       text: raw['text'] as String? ?? 'Recording your ride',
       batteryStartPercent: (raw['batteryStartPercent'] as num?)?.toInt(),
+      pauseStartedAtMs: (raw['pauseStartedAtMs'] as num?)?.toInt(),
+      completedPauses: pauses,
     );
   }
 }
@@ -57,6 +85,32 @@ class NativeRecording {
       'manualPaused': manualPaused,
       if (batteryStartPercent != null)
         'batteryStartPercent': batteryStartPercent,
+    });
+  }
+
+  /// Writes the full session snapshot (pause history, timers, flags) so a
+  /// cold start can reopen at the same km / position / recording-or-paused
+  /// mode. Points themselves live in the JSONL file; this is the metadata.
+  static Future<void> saveSession({
+    required int startedAtMs,
+    required bool manualPaused,
+    required bool nativePaused,
+    required String title,
+    required String text,
+    int? batteryStartPercent,
+    int? pauseStartedAtMs,
+    List<Map<String, int>> completedPauses = const [],
+  }) async {
+    await _methods.invokeMethod<void>('saveSession', {
+      'startedAtMs': startedAtMs,
+      'manualPaused': manualPaused,
+      'nativePaused': nativePaused,
+      'title': title,
+      'text': text,
+      if (batteryStartPercent != null)
+        'batteryStartPercent': batteryStartPercent,
+      if (pauseStartedAtMs != null) 'pauseStartedAtMs': pauseStartedAtMs,
+      'completedPauses': completedPauses,
     });
   }
 

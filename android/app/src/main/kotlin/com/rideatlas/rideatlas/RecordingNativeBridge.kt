@@ -144,6 +144,37 @@ object RecordingNativeBridge {
             }
             "isRunning" -> result.success(RecordingLocationService.isRunning)
             "getSession" -> result.success(RecordingLocationService.readSession(ctx))
+            "saveSession" -> {
+                val startedAtMs = call.argument<Number>("startedAtMs")?.toLong()
+                    ?: System.currentTimeMillis()
+                val manualPaused = call.argument<Boolean>("manualPaused") ?: false
+                val nativePaused = call.argument<Boolean>("nativePaused") ?: false
+                val title = call.argument<String>("title") ?: "RideAtlas"
+                val text = call.argument<String>("text") ?: "Recording your ride"
+                val batteryStart = call.argument<Number>("batteryStartPercent")?.toInt()
+                val pauseStartedAtMs = call.argument<Number>("pauseStartedAtMs")?.toLong()
+                val rawPauses = call.argument<List<*>>("completedPauses") ?: emptyList()
+                val pauses =
+                    rawPauses.mapNotNull { item ->
+                        val p = item as? Map<*, *> ?: return@mapNotNull null
+                        mapOf(
+                            "durationMs" to ((p["durationMs"] as? Number)?.toLong() ?: 0L),
+                            "endMs" to ((p["endMs"] as? Number)?.toLong() ?: 0L),
+                        )
+                    }
+                RecordingLocationService.writeSession(
+                    context = ctx,
+                    startedAtMs = startedAtMs,
+                    manualPaused = manualPaused,
+                    nativePaused = nativePaused,
+                    title = title,
+                    text = text,
+                    batteryStartPercent = batteryStart,
+                    pauseStartedAtMs = pauseStartedAtMs,
+                    completedPauses = pauses,
+                )
+                result.success(null)
+            }
             "hasInterruptedSession" -> {
                 val hasSession = RecordingLocationService.sessionFile(ctx).exists()
                 val hasPoints = RecordingLocationService.pointsFile(ctx).exists()
