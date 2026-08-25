@@ -29,7 +29,7 @@ import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
 import 'analysis_sheet.dart' show AnalysisStatCard;
 import 'location_picker_screen.dart';
-import 'map_screen.dart' show MapStylePickerDialog, RouteMapScreen;
+import 'map_screen.dart' show MapStylePickerDialog;
 import 'ride_photo_picker_screen.dart';
 
 const _metaBoxName = 'rideatlas_meta';
@@ -93,6 +93,13 @@ class _RecordScreenState extends State<RecordScreen>
 
   GpsRecorder get _recorder => context.read<GpsRecorder>();
 
+  /// Whether the FlutterMap is currently the visible page. Idle always
+  /// shows the map (see [build]); once recording, [_showMap] tracks the
+  /// rider's info/map toggle. Camera work (centering, course-up follow)
+  /// only makes sense while this is true - [_showMap] alone misses the
+  /// idle case, which left the idle map stuck wherever it opened.
+  bool get _mapVisible => _showMap || _recorder.isIdle;
+
   /// The device's live position, tracked independently of [GpsRecorder] and
   /// kept running for the entire lifetime of this screen (idle and
   /// recording alike) - this is the map's one and only source of truth for
@@ -107,6 +114,34 @@ class _RecordScreenState extends State<RecordScreen>
   StreamSubscription<Position>? _liveLocationSub;
   LatLng? _currentLocation;
   bool _centeredOnce = false;
+
+  /// Where the vehicle marker is actually drawn. While course-up follow is
+  /// active this is driven by the *same* tween as the camera (see
+  /// [_animateCameraTo]) so the marker stays glued to the screen center
+  /// instead of jumping ahead of the gliding camera on every GPS fix -
+  /// that desync was the long-standing "creeps up the screen, then flows
+  /// back down" pumping motion: the marker snapped to the new fix
+  /// instantly (up-screen, since travel direction points up) while the
+  /// camera took ~2s to catch up (dragging it back down). A ValueNotifier
+  /// rather than setState keeps the per-frame updates scoped to the
+  /// MarkerLayer alone.
+  final _markerLocation = ValueNotifier<LatLng?>(null);
+
+  /// The in-flight camera animation, tracked so a new GPS fix can detach
+  /// the previous one before starting its own. Previously cleanup relied
+  /// on `forward().whenComplete(...)`, which never fires for an animation
+  /// that gets stopped mid-flight - and with a fix every ~2s retargeting a
+  /// ~2s glide, essentially *every* animation was stopped mid-flight, so
+  /// stale listeners piled up on the shared controller for the entire
+  /// ride (thousands per hour), each still writing its outdated camera
+  /// position every frame: wasted CPU/heat and visible fighting/stutter.
+  CurvedAnimation? _cameraAnimation;
+  VoidCallback? _cameraAnimationListener;
+
+  /// How many track points had been recorded at the moment of the last
+  /// mid-ride save, or -1 if this session hasn't been saved yet. Reset asks
+  /// for confirmation only when there's data newer than the last save.
+  int _savedPointCount = -1;
 
   /// GPS course-over-ground in degrees (0-360, clockwise from north), from
   /// the same position stream - null until the device reports one (it
@@ -225,13 +260,35 @@ class _RecordScreenState extends State<RecordScreen>
   /// switch to.
   void _recenter() {
     if (_followMe) return;
+    _cancelCameraAnimation();
     final location = _currentLocation;
     setState(() => _followMe = true);
     if (location != null) {
       final zoom = _mapController.camera.zoom;
       _mapController.move(location, zoom < 15 ? 16 : zoom);
+      _markerLocation.value = location;
     }
     _applyRotation();
+  }
+
+  /// Zooms out to fit the entire recorded track on screen, north-up, and
+  /// stops auto-follow so the overview stays put. Tapping the recenter
+  /// button ([_recenter]) returns to the live position, course-up.
+  void _showWholeTrack() {
+    final points = _recorder.points;
+    if (points.length < 2) return;
+    _cancelCameraAnimation();
+    setState(() => _followMe = false);
+    final bounds = LatLngBounds.fromPoints([for (final p in points) p.latLng]);
+    _mapController.rotate(0);
+    _mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        // Keeps the track clear of the stats overlay on top and the
+        // controls at the bottom.
+        padding: const EdgeInsets.fromLTRB(48, 240, 48, 170),
+      ),
+    );
   }
 
   /// Rotates the map to the live heading (course-up), if known yet.
@@ -282,7 +339,11 @@ class _RecordScreenState extends State<RecordScreen>
   void _animateCameraTo({LatLng? location, double? heading}) {
     // Info page keeps the map Offstage but still mounted; skip camera work
     // while it's hidden so we don't fight a zero-size map viewport.
-    if (!_showMap) return;
+    if (!_mapVisible) return;
+    // Detach the previous fix's animation *before* starting this one -
+    // see [_cameraAnimation] for why relying on whenComplete leaked a
+    // listener on nearly every fix.
+    _cancelCameraAnimation();
     final camera = _mapController.camera;
     final startLat = camera.center.latitude;
     final startLng = camera.center.longitude;
@@ -311,20 +372,41 @@ class _RecordScreenState extends State<RecordScreen>
       curve: Curves.linear,
     );
     void listener() {
+      final target = LatLng(
+        latTween.evaluate(animation),
+        lngTween.evaluate(animation),
+      );
       _mapController.moveAndRotate(
-        LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
+        target,
         zoom,
         rotationTween.evaluate(animation),
       );
+      // The marker rides the exact same tween as the camera center, so it
+      // stays pinned to the screen center throughout the glide instead of
+      // jumping ahead and drifting back (see [_markerLocation]).
+      if (location != null) _markerLocation.value = target;
     }
 
     animation.addListener(listener);
+    _cameraAnimation = animation;
+    _cameraAnimationListener = listener;
     _rotationController
       ..stop()
-      ..reset();
-    _rotationController.forward().whenComplete(() {
+      ..reset()
+      ..forward();
+  }
+
+  /// Stops the current camera glide and detaches its listener from the
+  /// shared controller. Safe to call when nothing is animating.
+  void _cancelCameraAnimation() {
+    _rotationController.stop();
+    final animation = _cameraAnimation;
+    final listener = _cameraAnimationListener;
+    if (animation != null && listener != null) {
       animation.removeListener(listener);
-    });
+    }
+    _cameraAnimation = null;
+    _cameraAnimationListener = null;
   }
 
   Future<void> _startLiveLocation() async {
@@ -379,13 +461,19 @@ class _RecordScreenState extends State<RecordScreen>
           });
           if (!_centeredOnce) {
             _centeredOnce = true;
-            if (_showMap) _mapController.move(location, 16);
-          } else if (_followMe && _showMap) {
+            _markerLocation.value = location;
+            if (_mapVisible) _mapController.move(location, 16);
+          } else if (_followMe && _mapVisible) {
             // Position and rotation animate together over the same
             // duration - see _animateCameraTo - rather than the map
             // snapping to the new spot and then separately swinging to
-            // the new heading.
+            // the new heading. The vehicle marker is driven by that same
+            // animation, so it never jumps ahead of the camera.
             _animateCameraTo(location: location, heading: heading);
+          } else {
+            // Not following (rider panned away, or map hidden behind the
+            // info page) - the marker just tracks the raw fix directly.
+            _markerLocation.value = location;
           }
         });
   }
@@ -396,8 +484,10 @@ class _RecordScreenState extends State<RecordScreen>
     _tickTimer?.cancel();
     _liveLocationSub?.cancel();
     _mapEventSub.cancel();
+    _cancelCameraAnimation();
     _rotationController.dispose();
     _bgController.dispose();
+    _markerLocation.dispose();
     super.dispose();
   }
 
@@ -410,6 +500,7 @@ class _RecordScreenState extends State<RecordScreen>
       }
       if (!mounted) return;
       if (!await _ensureBackgroundLocationPermission()) return;
+      if (!mounted) return;
     }
 
     setState(() => _starting = true);
@@ -436,6 +527,7 @@ class _RecordScreenState extends State<RecordScreen>
     }
     setState(() {
       _followMe = true;
+      _savedPointCount = -1;
       // Opens on the info page - the map is one tap away via its toggle
       // button - rather than whatever page the rider happened to be
       // looking at before tapping start. Map stays Offstage-mounted so
@@ -487,36 +579,52 @@ class _RecordScreenState extends State<RecordScreen>
     );
   }
 
-  Future<bool> _confirmDiscard() async {
-    final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.discardRecordingConfirmTitle),
-        content: Text(l10n.discardRecordingConfirmMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton.tonal(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.discardRecordingButton),
-          ),
-        ],
-      ),
-    );
-    return confirmed ?? false;
+  /// True when there are recorded points newer than the last mid-ride save
+  /// (or any points at all if this session was never saved) - the data a
+  /// reset would actually lose.
+  bool get _hasUnsavedData {
+    final points = _recorder.points;
+    return points.isNotEmpty && points.length != _savedPointCount;
   }
 
-  Future<void> _discard() async {
-    if (await _confirmDiscard() && mounted) {
-      await _recorder.discard();
-      if (mounted) Navigator.pop(context);
+  /// Resets the session back to idle, zeroing every stat. Asks for
+  /// confirmation only when there's unsaved data to lose - right after a
+  /// save there's nothing at risk, so it resets silently. Stays on this
+  /// screen (idle map with the start button) rather than popping, so
+  /// starting the next ride is one tap away.
+  Future<void> _resetRecording() async {
+    if (_hasUnsavedData) {
+      final l10n = AppLocalizations.of(context)!;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.resetRecordingConfirmTitle),
+          content: Text(l10n.resetRecordingConfirmMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton.tonal(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l10n.resetRecordingButton),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
     }
+    _savedPointCount = -1;
+    await _recorder.discard();
   }
 
-  Future<void> _finish() async {
+  /// Saves the ride recorded so far without ending the session - only
+  /// reachable while paused (see [_buildControls]). The recorder keeps its
+  /// full state (km, timers, pauses), so afterwards the rider chooses:
+  /// resume recording (the ride continues cumulatively) or reset to zero
+  /// (silently - the data was just saved, nothing is lost). Dismissing the
+  /// dialog stays paused.
+  Future<void> _saveRecording() async {
     final l10n = AppLocalizations.of(context)!;
     final defaultName = l10n.recordingDefaultName(
       DateFormat(
@@ -548,10 +656,10 @@ class _RecordScreenState extends State<RecordScreen>
     final repo = context.read<RouteRepository>();
     final batteryStart = _recorder.batteryStartPercent;
     final batteryEnd = await currentBatteryPercent();
-    // Read before stop() - it resets GpsRecorder back to idle, taking
-    // startedAt with it.
     final recordingStart = _recorder.startedAt;
-    final points = await _recorder.stop();
+    // Snapshot - the recorder stays alive (still paused) rather than being
+    // stopped, so the session can continue after the save.
+    final points = _recorder.points;
     final gpx = exportTrack(
       name: name,
       points: points,
@@ -565,14 +673,40 @@ class _RecordScreenState extends State<RecordScreen>
       batteryStartPercent: batteryStart,
       batteryEndPercent: batteryEnd,
     );
+    _savedPointCount = points.length;
     if (!mounted) return;
+    setState(() => _saving = false);
     if (recordingStart != null) {
       await _offerGalleryMedia(route, recordingStart);
       if (!mounted) return;
     }
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)),
+
+    final resume = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.recordingSavedTitle),
+        content: Text(l10n.recordingSavedMessage),
+        actions: [
+          TextButton(
+            // Just saved, so this resets without asking (see
+            // _resetRecording - it only confirms for unsaved data).
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.resetRecordingButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.resumeRecordingButton),
+          ),
+        ],
+      ),
     );
+    if (!mounted) return;
+    if (resume == true) {
+      _recorder.resume();
+    } else if (resume == false) {
+      await _resetRecording();
+    }
+    // Dismissed (tap outside / back): stay paused, decide later.
   }
 
   /// Looks for photos/videos the gallery gained during this ride and, if
@@ -777,6 +911,17 @@ class _RecordScreenState extends State<RecordScreen>
                     onPressed: _showMapStylePicker,
                     child: Icon(_mapStyle.icon),
                   ),
+                  // Overview of everything recorded so far; the recenter
+                  // button below returns to the live position, course-up.
+                  if (recorder.points.length > 1) ...[
+                    const SizedBox(height: 8),
+                    FloatingActionButton.small(
+                      heroTag: 'recordShowWholeTrack',
+                      tooltip: l10n.showWholeTrackTooltip,
+                      onPressed: _showWholeTrack,
+                      child: const Icon(Icons.zoom_out_map),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   FloatingActionButton.small(
                     heroTag: 'recordRecenter',
@@ -1256,33 +1401,50 @@ class _RecordScreenState extends State<RecordScreen>
       );
     }
 
+    // While actively recording, pausing is the single control - saving and
+    // resetting deliberately require pausing first, so neither can be fat-
+    // fingered mid-ride.
+    if (!recorder.isPaused) {
+      return FloatingActionButton.extended(
+        heroTag: 'recordPauseResume',
+        onPressed: recorder.pause,
+        icon: const Icon(Icons.pause),
+        label: Text(l10n.pauseRecordingButton),
+      );
+    }
+
+    // Paused: resume, save the ride so far (session keeps going - see
+    // _saveRecording), or reset to zero (confirmation only if unsaved -
+    // see _resetRecording).
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         FloatingActionButton(
           heroTag: 'recordPauseResume',
-          onPressed: recorder.isPaused ? recorder.resume : recorder.pause,
-          child: Icon(recorder.isPaused ? Icons.play_arrow : Icons.pause),
+          tooltip: l10n.resumeRecordingButton,
+          onPressed: recorder.resume,
+          child: const Icon(Icons.play_arrow),
         ),
         const SizedBox(width: 16),
         FilledButton.icon(
-          onPressed: _saving ? null : _finish,
+          onPressed: _saving ? null : _saveRecording,
           icon: _saving
               ? const SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Icon(Icons.check),
-          label: Text(l10n.finishRecordingButton),
+              : const Icon(Icons.save_outlined),
+          label: Text(l10n.save),
         ),
         const SizedBox(width: 16),
         FloatingActionButton(
-          heroTag: 'recordDiscard',
+          heroTag: 'recordReset',
+          tooltip: l10n.resetRecordingButton,
           backgroundColor: Theme.of(context).colorScheme.errorContainer,
-          onPressed: _saving ? null : _discard,
+          onPressed: _saving ? null : _resetRecording,
           child: Icon(
-            Icons.delete_outline,
+            Icons.restart_alt,
             color: Theme.of(context).colorScheme.onErrorContainer,
           ),
         ),
@@ -1322,49 +1484,59 @@ class _RecordScreenState extends State<RecordScreen>
               ),
             ],
           ),
-        if (_currentLocation != null)
-          MarkerLayer(
-            markers: [
-              Marker(
-                point: _currentLocation!,
-                width: markerSize * _coneMarkerScale,
-                height: markerSize * _coneMarkerScale,
-                alignment: Alignment.center,
-                // The actual root cause of the vehicle icon appearing to
-                // point sideways instead of up: flutter_map's Marker
-                // defaults to rotate:false, which means it rotates *with*
-                // the map's own content (tiles, roads) instead of staying
-                // screen-fixed. Since the map is deliberately rotated to
-                // keep the direction of travel pointing up (course-up), an
-                // embedded marker was being dragged along by that same
-                // rotation instead of staying upright - counter-rotating it
-                // is what actually keeps it pointing up regardless of the
-                // map's current rotation.
-                rotate: true,
-                child: Stack(
+        // The marker position updates every animation frame while
+        // course-up follow glides the camera (see _markerLocation) - a
+        // ValueListenableBuilder keeps those per-frame rebuilds scoped to
+        // this one layer instead of re-running the whole screen's build.
+        ValueListenableBuilder<LatLng?>(
+          valueListenable: _markerLocation,
+          builder: (context, markerLocation, _) {
+            if (markerLocation == null) return const SizedBox.shrink();
+            return MarkerLayer(
+              markers: [
+                Marker(
+                  point: markerLocation,
+                  width: markerSize * _coneMarkerScale,
+                  height: markerSize * _coneMarkerScale,
                   alignment: Alignment.center,
-                  children: [
-                    // MotionX-GPS-style translucent "cone of light" showing
-                    // the GPS heading. The map itself already turns to keep
-                    // the direction of travel pointing up (course-up), so
-                    // the cone always points straight up too.
-                    if (_currentHeading != null)
-                      HeadingCone(
-                        size: markerSize * _coneMarkerScale,
-                        color: const Color(0xFFFFA726),
+                  // The actual root cause of the vehicle icon appearing to
+                  // point sideways instead of up: flutter_map's Marker
+                  // defaults to rotate:false, which means it rotates *with*
+                  // the map's own content (tiles, roads) instead of staying
+                  // screen-fixed. Since the map is deliberately rotated to
+                  // keep the direction of travel pointing up (course-up), an
+                  // embedded marker was being dragged along by that same
+                  // rotation instead of staying upright - counter-rotating
+                  // it is what actually keeps it pointing up regardless of
+                  // the map's current rotation.
+                  rotate: true,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // MotionX-GPS-style translucent "cone of light"
+                      // showing the GPS heading. The map itself already
+                      // turns to keep the direction of travel pointing up
+                      // (course-up), so the cone always points straight up
+                      // too.
+                      if (_currentHeading != null)
+                        HeadingCone(
+                          size: markerSize * _coneMarkerScale,
+                          color: const Color(0xFFFFA726),
+                        ),
+                      // Always points straight up: the map itself rotates
+                      // to keep the direction of travel pointing up.
+                      SizedBox(
+                        width: markerSize,
+                        height: markerSize,
+                        child: buildVehicleMarker(vehicleIcon),
                       ),
-                    // Always points straight up: the map itself rotates to
-                    // keep the direction of travel pointing up.
-                    SizedBox(
-                      width: markerSize,
-                      height: markerSize,
-                      child: buildVehicleMarker(vehicleIcon),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            );
+          },
+        ),
         RichAttributionWidget(
           attributions: [TextSourceAttribution(style.attribution)],
         ),

@@ -20,6 +20,22 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.55 beta',
+    date: '2026-08-25',
+    note:
+        'Kayıt kontrolleri yeniden düzenlendi: kayıt sırasında tek tuş '
+        '(Duraklat); duraklatınca Devam / Kaydet / Sıfırla. Kaydet oturumu '
+        'bitirmez - kayıt sonrası "devam et veya sıfırla" seçilir; '
+        'kaydedilmişse sıfırlama uyarısız, kaydedilmemiş veri varsa onay '
+        'sorulur. Harita sayfasına "tüm kaydı göster" tuşu eklendi (kuzey '
+        'yukarı, tüm rota ekrana sığar); konum tuşu o anki pozisyona ve '
+        'course-up takibe döndürür. Haritanın "yukarı gidip aşağı akma" '
+        'titremesi çözüldü: araç işareti artık kamerayla aynı animasyonda '
+        'ilerliyor (fix gelince öne zıplayıp geri akmıyor) ve her fixte '
+        'birikip CPU yakan eski animasyon dinleyicileri temizleniyor. '
+        'Ayrıca idle haritada konuma ortalama/takip onarıldı.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.54 beta',
     date: '2026-08-23',
     note:
