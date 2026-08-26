@@ -9,7 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:photo_manager/photo_manager.dart';
+import 'package:photo_manager/photo_manager.dart' hide LatLng;
 import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
