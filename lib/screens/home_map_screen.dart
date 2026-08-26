@@ -72,13 +72,15 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _maybeShowWhatsNew();
+      // After what's-new: offer update with a single "Güncelle" button; the
+      // rest (download + install) is automatic with a progress dialog.
+      if (_supportsUpdateCheck) await _checkForUpdateAndOffer();
       // If a fix hasn't arrived yet, tell the user recording would start offline.
       if (!_hadGpsFix && mounted) _showOfflineGpsHint();
       if (NativeRecording.isSupported) await _restoreInterruptedRecording();
     });
     _loadMapStyle();
     _startLocationUpdates();
-    if (_supportsUpdateCheck) _checkForUpdate();
   }
 
   /// Like Motion GPX: if a recording was in progress when the app was
@@ -129,9 +131,30 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     _showGpsFlash(AppLocalizations.of(context)!.gpsOnlineStatus(accuracy));
   }
 
-  Future<void> _checkForUpdate() async {
+  /// Finds a newer android-latest build and offers a one-button dialog
+  /// ("Güncelle"). Declining (back / outside tap) keeps the home banner so
+  /// the rider can still update later with the same single button.
+  Future<void> _checkForUpdateAndOffer() async {
     final info = await checkForAndroidUpdate(kAppBuildLabel);
-    if (info != null && mounted) setState(() => _updateInfo = info);
+    if (info == null || !mounted) return;
+    setState(() => _updateInfo = info);
+
+    final l10n = AppLocalizations.of(context)!;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.updateAvailableTitle),
+        content: Text(l10n.updateAvailableMessage(info.version)),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.updateButtonLabel),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (accepted == true) await _installUpdate(info);
   }
 
   Future<void> _maybeShowWhatsNew() async {
@@ -272,15 +295,62 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     );
   }
 
+  /// One tap: stream the APK with a MedyaAtlas-style progress dialog, then
+  /// hand off to the system installer. No further confirmation steps.
   Future<void> _installUpdate(UpdateInfo info) async {
+    if (!mounted || _installingUpdate) return;
     setState(() => _installingUpdate = true);
+
+    final l10n = AppLocalizations.of(context)!;
+    final progress = ValueNotifier<(int received, int? total)>((0, null));
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: Text(l10n.updateDownloadingTitle),
+          content: ValueListenableBuilder<(int, int?)>(
+            valueListenable: progress,
+            builder: (context, value, _) {
+              final received = value.$1;
+              final total = value.$2;
+              final fraction = (total != null && total > 0)
+                  ? (received / total).clamp(0.0, 1.0)
+                  : null;
+              final percent = fraction == null
+                  ? '…'
+                  : '%${(fraction * 100).round()}';
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  LinearProgressIndicator(value: fraction),
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.updateDownloadProgress(percent),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
     try {
-      await downloadAndInstallUpdate(info);
+      await downloadAndInstallUpdate(
+        info,
+        onProgress: (received, total) {
+          progress.value = (received, total);
+        },
+      );
+      if (mounted) setState(() => _updateDismissed = true);
     } catch (_) {
-      // The in-app download+install flow didn't work on this device (no
-      // handler for the installer intent, "install unknown apps" not
-      // granted yet, etc.) - fall back to a plain browser download, which
-      // always works, just with an extra manual step.
+      // In-app install failed (unknown-apps permission, no handler, …) -
+      // fall back to a plain browser download.
       if (mounted) {
         await launchUrl(
           Uri.parse(info.downloadUrl),
@@ -288,13 +358,17 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _installingUpdate = false);
+      progress.dispose();
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        setState(() => _installingUpdate = false);
+      }
     }
   }
 
   Widget? _buildUpdateBanner(AppLocalizations l10n) {
     final info = _updateInfo;
-    if (info == null || _updateDismissed) return null;
+    if (info == null || _updateDismissed || _installingUpdate) return null;
     final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -310,22 +384,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
             ),
           ),
-          TextButton(
-            onPressed: _installingUpdate ? null : () => _installUpdate(info),
-            child: _installingUpdate
-                ? SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
-                  )
-                : Text(l10n.updateButtonLabel),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18),
-            onPressed: () => setState(() => _updateDismissed = true),
+          // Single action - download + install run automatically after this.
+          FilledButton(
+            onPressed: () => _installUpdate(info),
+            child: Text(l10n.updateButtonLabel),
           ),
         ],
       ),

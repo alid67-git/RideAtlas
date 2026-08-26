@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.60 beta',
+    date: '2026-08-26',
+    note:
+        'Android güncelleme akışı sadeleştirildi (MedyaAtlas tarzı): tek '
+        '"Güncelle" düğmesi; sonrasında indirme yüzdesi ("٪26 — RideAtlas.apk") '
+        'gösterilip kurulum otomatik açılıyor. Açılışta da aynı tek-düğmeli '
+        'teklif var; banner\'da kapat/iptal karmaşası kaldırıldı.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.59 beta',
     date: '2026-08-26',
     note:

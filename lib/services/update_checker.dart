@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
@@ -12,6 +13,10 @@ class UpdateInfo {
   final String version;
   final String downloadUrl;
 }
+
+/// Progress while streaming the APK: [received] bytes so far and optional
+/// Content-Length [total] (null when the server omits it).
+typedef UpdateDownloadProgress = void Function(int received, int? total);
 
 const _releaseApiUrl =
     'https://api.github.com/repos/alid67-git/RideAtlas/releases/tags/android-latest';
@@ -52,25 +57,43 @@ Future<UpdateInfo?> checkForAndroidUpdate(String currentVersion) async {
   }
 }
 
-/// Downloads [info]'s APK to a temp file and hands it to the system
-/// installer (via a content:// URI, as required on Android 7+). Throws on
-/// any failure - a failed HTTP request, a write error, or the installer
-/// rejecting the file (e.g. "install unknown apps" not yet granted for this
-/// app) - so the caller can fall back to a plain browser download.
-Future<void> downloadAndInstallUpdate(UpdateInfo info) async {
-  final response = await http
-      .get(Uri.parse(info.downloadUrl))
-      .timeout(const Duration(minutes: 2));
-  if (response.statusCode != 200) {
-    throw HttpException('HTTP ${response.statusCode}');
-  }
+/// Streams [info]'s APK to a temp file (reporting [onProgress]), then hands
+/// it to the system installer. Throws on HTTP/write/installer failure so the
+/// caller can fall back to a browser download.
+Future<void> downloadAndInstallUpdate(
+  UpdateInfo info, {
+  UpdateDownloadProgress? onProgress,
+}) async {
+  final client = http.Client();
+  try {
+    final request = http.Request('GET', Uri.parse(info.downloadUrl));
+    final response = await client
+        .send(request)
+        .timeout(const Duration(minutes: 2));
+    if (response.statusCode != 200) {
+      throw HttpException('HTTP ${response.statusCode}');
+    }
 
-  final dir = await getTemporaryDirectory();
-  final file = File('${dir.path}/RideAtlas-update.apk');
-  await file.writeAsBytes(response.bodyBytes);
+    final total = response.contentLength;
+    final bytes = BytesBuilder(copy: false);
+    var received = 0;
+    onProgress?.call(0, total);
 
-  final result = await OpenFilex.open(file.path);
-  if (result.type != ResultType.done) {
-    throw Exception(result.message);
+    await for (final chunk in response.stream) {
+      bytes.add(chunk);
+      received += chunk.length;
+      onProgress?.call(received, total);
+    }
+
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/RideAtlas-update.apk');
+    await file.writeAsBytes(bytes.takeBytes(), flush: true);
+
+    final result = await OpenFilex.open(file.path);
+    if (result.type != ResultType.done) {
+      throw Exception(result.message);
+    }
+  } finally {
+    client.close();
   }
 }
