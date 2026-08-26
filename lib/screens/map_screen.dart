@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' show pi;
+import 'dart:math' show max, min, pi;
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show compute, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hive/hive.dart';
@@ -24,7 +24,6 @@ import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart';
 import '../services/exif_gps.dart';
-import '../services/gpx_parser.dart' show filterImplausiblePoints;
 import '../services/route_geography.dart';
 import '../services/track_io.dart';
 import '../widgets/recording_indicator.dart';
@@ -109,6 +108,15 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   String? _error;
   BaseMapStyle _mapStyle = kBaseMapStyles.first;
 
+  /// Whether the map chrome (tiles + camera) is up - shown immediately from
+  /// route bounds, before the GPX body has finished parsing.
+  bool _mapBootstrapped = false;
+
+  /// True while the track line is still being revealed (or parsed).
+  bool _trackDrawing = false;
+
+  Timer? _revealTimer;
+
   /// Cached from [_points] once on load (and after a route edit reload).
   /// Recomputing [splitIntoDays] / [RouteGeographyAnalyzer.detectStops] on
   /// every [setState] - including map-gesture rotation ticks - was freezing
@@ -166,6 +174,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   @override
   void dispose() {
     context.read<RouteRepository>().removeListener(_onRepoChanged);
+    _revealTimer?.cancel();
     _mapEventSub.cancel();
     _rotationDeg.dispose();
     super.dispose();
@@ -294,32 +303,126 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     ];
   }
 
+  /// Shows tiles + camera fitted to the route's cached bounds immediately,
+  /// before any GPX parsing - so tapping a long track never sits on a
+  /// blank spinner while the isolate works.
+  void _bootstrapMap(GpxRoute route) {
+    final center = LatLng(
+      (route.north + route.south) / 2,
+      (route.east + route.west) / 2,
+    );
+    setState(() {
+      _error = null;
+      _mapBootstrapped = true;
+      _trackDrawing = true;
+      _points = null;
+      _waypoints = null;
+      _days = const [];
+      _stops = const [];
+      _overnights = const [];
+      _polylines = const [];
+      _trackStart = center;
+      _trackEnd = center;
+    });
+    _fitToRoute(route);
+  }
+
+  /// Grows the drawn polyline in batches so a long GPX appears to be "read"
+  /// onto the map instead of popping in all at once after a long wait.
+  Future<void> _revealTrack(List<TrackPoint> points) async {
+    if (points.isEmpty) {
+      setState(() {
+        _polylines = const [];
+        _trackStart = null;
+        _trackEnd = null;
+      });
+      return;
+    }
+
+    // Short tracks: one frame is enough - animation would just flicker.
+    if (points.length < 150) {
+      setState(() {
+        _trackStart = points.first.latLng;
+        _trackEnd = points.last.latLng;
+        _polylines = [
+          Polyline(
+            points: [for (final p in points) p.latLng],
+            strokeWidth: 4,
+            color: const Color(0xFFE53935),
+          ),
+        ];
+      });
+      return;
+    }
+
+    final total = points.length;
+    final batch = max(30, min(800, (total / 60).ceil()));
+    final start = points.first.latLng;
+    final done = Completer<void>();
+    var shown = 0;
+
+    _revealTimer?.cancel();
+    _revealTimer = Timer.periodic(const Duration(milliseconds: 16), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        if (!done.isCompleted) done.complete();
+        return;
+      }
+      shown = min(total, shown + batch);
+      final line = <LatLng>[
+        for (var i = 0; i < shown; i++) points[i].latLng,
+      ];
+      setState(() {
+        _trackStart = start;
+        _trackEnd = line.last;
+        _polylines = [
+          Polyline(
+            points: line,
+            strokeWidth: 4,
+            color: const Color(0xFFE53935),
+          ),
+        ];
+      });
+      if (shown >= total) {
+        timer.cancel();
+        if (!done.isCompleted) done.complete();
+      }
+    });
+    await done.future;
+  }
+
   Future<void> _load() async {
     final route = _route;
     if (route == null) return;
+    _revealTimer?.cancel();
+    _bootstrapMap(route);
+
     try {
       final repo = context.read<RouteRepository>();
       final xml = await repo.readTrackContent(route);
-      final parsed = parseTrackXml(xml);
       if (!mounted) return;
+
+      // Parse + GPS-glitch filter off the UI isolate so the map keeps
+      // painting tiles while a multi-hour GPX is being read.
+      final parsed = await compute(parseAndFilterTrackXml, xml);
+      if (!mounted) return;
+
+      await _revealTrack(parsed.points);
+      if (!mounted) return;
+
       setState(() {
-        // Silently drops GPS jump/glitch points (see gpx_parser.dart) from
-        // the map/stats display for routes recorded or imported before that
-        // filter existed - doesn't touch the stored file itself, so sharing
-        // still exports the raw track unless it's been cleaned up for real
-        // through the route anomaly editor.
-        _applyLoadedPoints(
-          filterImplausiblePoints(parsed.points),
-          parsed.waypoints,
-        );
+        // Days/stops derived once the full line is on screen - not before
+        // the first paint (that was what made large files look "stuck").
+        _applyLoadedPoints(parsed.points, parsed.waypoints);
+        _trackDrawing = false;
       });
       _loadedRouteSnapshot = route;
-      _fitToRoute(route);
     } catch (e) {
       if (!mounted) return;
-      setState(
-        () => _error = AppLocalizations.of(context)!.routeFileReadError('$e'),
-      );
+      setState(() {
+        _trackDrawing = false;
+        _error = AppLocalizations.of(context)!.routeFileReadError('$e');
+      });
     }
   }
 
@@ -643,6 +746,16 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           body: Stack(
             children: [
               Positioned.fill(child: _buildMap(route, stops, overnights)),
+              if (_trackDrawing)
+                const Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(
+                    bottom: false,
+                    child: LinearProgressIndicator(minHeight: 3),
+                  ),
+                ),
               Positioned(
                 top: 0,
                 left: 0,
@@ -774,18 +887,23 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)),
       );
     }
-    final points = _points;
-    final start = _trackStart;
-    final end = _trackEnd;
-    if (points == null || start == null || end == null) {
+    if (!_mapBootstrapped) {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final start = _trackStart;
+    final end = _trackEnd;
+    final center = start ??
+        LatLng(
+          (route.north + route.south) / 2,
+          (route.east + route.west) / 2,
+        );
     final l10n = AppLocalizations.of(context)!;
+    final trackReady = _points != null && !_trackDrawing;
 
     return FlutterMap(
       mapController: _mapController,
-      options: MapOptions(initialCenter: start, initialZoom: 12),
+      options: MapOptions(initialCenter: center, initialZoom: 12),
       children: [
         TileLayer(
           // Force a fresh tile cache when the rider switches base style -
@@ -804,17 +922,18 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         PolylineLayer(polylines: _polylines),
         MarkerLayer(
           markers: [
-            for (final w in _waypoints ?? const <Waypoint>[])
-              Marker(
-                point: w.latLng,
-                width: 32,
-                height: 32,
-                child: Tooltip(
-                  message: w.name ?? '',
-                  child: const Icon(Icons.park, color: Colors.green, size: 28),
+            if (trackReady)
+              for (final w in _waypoints ?? const <Waypoint>[])
+                Marker(
+                  point: w.latLng,
+                  width: 32,
+                  height: 32,
+                  child: Tooltip(
+                    message: w.name ?? '',
+                    child: const Icon(Icons.park, color: Colors.green, size: 28),
+                  ),
                 ),
-              ),
-            if (_showStops) ...[
+            if (trackReady && _showStops) ...[
               for (final stop in stops)
                 Marker(
                   point: stop.location,
@@ -853,27 +972,29 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                   ),
                 ),
             ],
-            Marker(
-              point: start,
-              width: 36,
-              height: 36,
-              child: const Icon(
-                Icons.trip_origin,
-                color: Color(0xFF2E7D32),
-                size: 32,
+            if (start != null && _polylines.isNotEmpty)
+              Marker(
+                point: start,
+                width: 36,
+                height: 36,
+                child: const Icon(
+                  Icons.trip_origin,
+                  color: Color(0xFF2E7D32),
+                  size: 32,
+                ),
               ),
-            ),
-            Marker(
-              point: end,
-              width: 36,
-              height: 36,
-              child: const Icon(
-                Icons.location_on,
-                color: Color(0xFFD32F2F),
-                size: 36,
+            if (end != null && _polylines.isNotEmpty)
+              Marker(
+                point: end,
+                width: 36,
+                height: 36,
+                child: Icon(
+                  _trackDrawing ? Icons.navigation : Icons.location_on,
+                  color: const Color(0xFFD32F2F),
+                  size: _trackDrawing ? 28 : 36,
+                ),
               ),
-            ),
-            if (_showPhotoPins)
+            if (trackReady && _showPhotoPins)
               for (final photo
                   in context
                       .watch<PhotoRepository>()
