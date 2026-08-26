@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.59 beta',
+    date: '2026-08-26',
+    note:
+        'GPX/KML açılınca (özellikle çok noktalı dosyalarda) harita artık '
+        'hemen geliyor: önce rota sınırlarına sığdırılmış boş harita, sonra '
+        'konumlar okundukça iz adım adım animasyonla çiziliyor. Parse ve '
+        'GPS-glitch filtresi arka planda (UI kilitlemeden) çalışıyor; içe '
+        'aktarma da aynı şekilde donmuyordu. Önceden uzun dosyada tüm noktalar '
+        'işlenene kadar spinner\'da kalınıyor, "açılmıyor" gibi görünüyordu.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.58 beta',
     date: '2026-08-26',
     note:

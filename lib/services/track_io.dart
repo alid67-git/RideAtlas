@@ -100,6 +100,17 @@ ParsedTrack parseTrackXml(String xmlText) {
   return rootLocal == 'kml' ? parseKmlXml(xmlText) : parseGpxXml(xmlText);
 }
 
+/// Isolate-friendly: parse + drop GPS jump/glitch points in one shot so the
+/// UI thread can show the map immediately and only animate the cleaned line.
+ParsedTrack parseAndFilterTrackXml(String xmlText) {
+  final parsed = parseTrackXml(xmlText);
+  return ParsedTrack(
+    points: filterImplausiblePoints(parsed.points),
+    waypoints: parsed.waypoints,
+    suggestedName: parsed.suggestedName,
+  );
+}
+
 /// Serializes a track's points/waypoints/name into GPX or KML text, for
 /// export/sharing. Regenerated fresh each time from the in-memory track
 /// rather than round-tripping the original file, so either format is always

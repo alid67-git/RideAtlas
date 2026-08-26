@@ -60,7 +60,9 @@ class RouteRepository extends ChangeNotifier {
     int? batteryEndPercent,
   }) async {
     final xml = decodeTrackBytes(bytes, fileName: suggestedFileName);
-    final parsed = parseTrackXml(xml);
+    // Off the UI isolate - large GPX/KML imports used to freeze the app
+    // before the map screen even opened.
+    final parsed = await compute(parseTrackXml, xml);
     if (parsed.points.isEmpty) {
       throw const FormatException('Dosyada rota/track noktası bulunamadı.');
     }
