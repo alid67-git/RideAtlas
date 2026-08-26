@@ -27,7 +27,9 @@ import '../services/exif_gps.dart';
 import '../services/gallery_scan.dart';
 import '../services/gps_recorder.dart';
 import '../services/gpx_parser.dart';
+import '../services/app_update_controller.dart';
 import '../services/track_io.dart';
+import '../widgets/app_update_ui.dart';
 import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/satellite_count_badge.dart';
@@ -222,6 +224,13 @@ class _RecordScreenState extends State<RecordScreen>
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _recorder.isRecording) setState(() {});
     });
+    // Same shared update check as the home screen - so the banner also
+    // appears here if the rider jumped straight into recording.
+    if (AppUpdateController.isSupported) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<AppUpdateController>().check();
+      });
+    }
   }
 
   Future<void> _loadMapStyle() async {
@@ -1068,6 +1077,10 @@ class _RecordScreenState extends State<RecordScreen>
                       const SizedBox(height: 8),
                       _buildMiniStatsRow(context, l10n, recorder),
                     ],
+                    if (context.watch<AppUpdateController>().showBanner) ...[
+                      const SizedBox(height: 8),
+                      const AppUpdateBanner(),
+                    ],
                     if (recorder.isAutoPaused) ...[
                       const SizedBox(height: 8),
                       _buildAutoPausedBanner(context, l10n),
@@ -1349,6 +1362,11 @@ class _RecordScreenState extends State<RecordScreen>
                     ],
                   ),
                 ),
+                if (context.watch<AppUpdateController>().showBanner)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    child: AppUpdateBanner(),
+                  ),
                 // Total duration lives here, above the auto-paused banner,
                 // rather than paired with "Aktif sürüş süresi" below the
                 // hero speed number - that slot now holds "Mola süresi"

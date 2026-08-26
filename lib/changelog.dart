@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.62 beta',
+    date: '2026-08-26',
+    note:
+        'Android güncelleme banner\'ı artık sadece ana haritada değil; '
+        'kayıt haritası ve veri/istatistik ekranında da "Güncelle" ile '
+        'görünüyor. İndirme yüzdesi düzeltildi: GitHub CDN çoğu zaman '
+        'Content-Length göndermiyordu (yüzde "…" kalıyordu); artık Releases '
+        'API\'deki APK boyutu kullanılıyor ("%26 — RideAtlas.apk").',
+  ),
+  ChangelogEntry(
     version: 'v1.4.61 beta',
     date: '2026-08-26',
     note:
