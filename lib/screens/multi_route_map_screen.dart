@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show pi;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -47,9 +48,9 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   String? _error;
   BaseMapStyle _mapStyle = kBaseMapStyles.first;
 
-  /// Current map bearing in degrees, tracked so the compass button can show
-  /// which way is north and only appear once the map's been rotated off it.
-  double _rotationDeg = 0;
+  /// Compass bearing only - avoid [setState] on every rotate tick so long
+  /// overlays are not rebuilt while the rider pinches/pans.
+  final _rotationDeg = ValueNotifier<double>(0);
   late final StreamSubscription<MapEvent> _mapEventSub;
 
   @override
@@ -59,8 +60,8 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     _loadMapStyle();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       final rotation = event.camera.rotation;
-      if (rotation != _rotationDeg && mounted) {
-        setState(() => _rotationDeg = rotation);
+      if (rotation != _rotationDeg.value) {
+        _rotationDeg.value = rotation;
       }
     });
   }
@@ -68,6 +69,7 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   @override
   void dispose() {
     _mapEventSub.cancel();
+    _rotationDeg.dispose();
     super.dispose();
   }
 
@@ -246,18 +248,26 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
                   onPressed: _zoomOut,
                   child: const Icon(Icons.remove),
                 ),
-                if (_rotationDeg.abs() > 0.5) ...[
-                  const SizedBox(height: 8),
-                  FloatingActionButton.small(
-                    heroTag: 'multiNorthUp',
-                    tooltip: l10n.northUpTooltip,
-                    onPressed: _resetNorth,
-                    child: Transform.rotate(
-                      angle: -_rotationDeg * pi / 180,
-                      child: const Icon(Icons.navigation),
-                    ),
-                  ),
-                ],
+                ValueListenableBuilder<double>(
+                  valueListenable: _rotationDeg,
+                  builder: (context, rotationDeg, _) {
+                    if (rotationDeg.abs() <= 0.5) {
+                      return const SizedBox.shrink();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: FloatingActionButton.small(
+                        heroTag: 'multiNorthUp',
+                        tooltip: l10n.northUpTooltip,
+                        onPressed: _resetNorth,
+                        child: Transform.rotate(
+                          angle: -rotationDeg * pi / 180,
+                          child: const Icon(Icons.navigation),
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 12),
                 FloatingActionButton(
                   heroTag: 'multiFit',

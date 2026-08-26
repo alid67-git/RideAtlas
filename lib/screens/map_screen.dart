@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' show pi;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -108,6 +109,17 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   String? _error;
   BaseMapStyle _mapStyle = kBaseMapStyles.first;
 
+  /// Cached from [_points] once on load (and after a route edit reload).
+  /// Recomputing [splitIntoDays] / [RouteGeographyAnalyzer.detectStops] on
+  /// every [setState] - including map-gesture rotation ticks - was freezing
+  /// the UI when panning/zooming a long imported track.
+  List<DayStats> _days = const [];
+  List<DetectedStop> _stops = const [];
+  List<OvernightStay> _overnights = const [];
+  List<Polyline> _polylines = const [];
+  LatLng? _trackStart;
+  LatLng? _trackEnd;
+
   /// The route metadata as of the last successful [_load] - compared
   /// against the repository's current copy on every change notification so
   /// an edit made elsewhere (e.g. removing anomalous points through the
@@ -132,9 +144,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   /// them hide the clutter on a busy route.
   bool _showPhotoPins = true;
 
-  /// Current map bearing in degrees, tracked so the compass button can show
-  /// which way is north and only appear once the map's been rotated off it.
-  double _rotationDeg = 0;
+  /// Map bearing for the north-up compass only. A [ValueNotifier] (not
+  /// [setState]) so pinch/rotate gestures do not rebuild the track polyline.
+  final _rotationDeg = ValueNotifier<double>(0);
   late final StreamSubscription<MapEvent> _mapEventSub;
 
   @override
@@ -144,8 +156,8 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     _loadMapStyle();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       final rotation = event.camera.rotation;
-      if (rotation != _rotationDeg && mounted) {
-        setState(() => _rotationDeg = rotation);
+      if (rotation != _rotationDeg.value) {
+        _rotationDeg.value = rotation;
       }
     });
     context.read<RouteRepository>().addListener(_onRepoChanged);
@@ -155,6 +167,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   void dispose() {
     context.read<RouteRepository>().removeListener(_onRepoChanged);
     _mapEventSub.cancel();
+    _rotationDeg.dispose();
     super.dispose();
   }
 
@@ -204,7 +217,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       builder: (_) => _DayFilterDialog(
         days: days,
         selected: _visibleDayNumbers,
-        onChanged: (selected) => setState(() => _visibleDayNumbers = selected),
+        onChanged: (selected) => setState(() {
+          _visibleDayNumbers = selected;
+          _rebuildPolylines();
+        }),
       ),
     );
   }
@@ -216,6 +232,66 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Derives day splits, stop pins and the drawn polyline once from [points].
+  /// Call only when the underlying track changes (or the day filter does,
+  /// via [_rebuildPolylines] alone).
+  void _applyLoadedPoints(List<TrackPoint> points, List<Waypoint> waypoints) {
+    final days = splitIntoDays(points);
+    final stops = RouteGeographyAnalyzer()
+        .detectStops(points)
+        .where((s) => s.duration < const Duration(hours: 4))
+        .toList();
+    _points = points;
+    _waypoints = waypoints;
+    _days = days;
+    _stops = stops;
+    _overnights = overnightStays(days);
+    _trackStart = points.isEmpty ? null : points.first.latLng;
+    _trackEnd = points.isEmpty ? null : points.last.latLng;
+    _rebuildPolylines();
+  }
+
+  void _rebuildPolylines() {
+    final points = _points;
+    if (points == null || points.isEmpty) {
+      _polylines = const [];
+      return;
+    }
+
+    final days = _days;
+    final visible = _visibleDayNumbers;
+    bool isShown(int index) =>
+        visible == null || visible.contains(days[index].dayNumber);
+
+    if (days.isEmpty) {
+      _polylines = [
+        Polyline(
+          points: [for (final p in points) p.latLng],
+          strokeWidth: 4,
+          color: const Color(0xFFE53935),
+        ),
+      ];
+      return;
+    }
+
+    _polylines = [
+      for (var i = 0; i < days.length; i++)
+        if (isShown(i))
+          Polyline(
+            points: [
+              // Only bridge into the previous day's last point when that
+              // day is consecutive AND also visible - otherwise a gap
+              // (e.g. day 1 + day 7 selected) would draw a stray line
+              // straight across the skipped days.
+              if (i > 0 && isShown(i - 1)) days[i - 1].points.last.latLng,
+              for (final p in days[i].points) p.latLng,
+            ],
+            strokeWidth: 4,
+            color: days[i].color,
+          ),
+    ];
   }
 
   Future<void> _load() async {
@@ -232,8 +308,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         // filter existed - doesn't touch the stored file itself, so sharing
         // still exports the raw track unless it's been cleaned up for real
         // through the route anomaly editor.
-        _points = filterImplausiblePoints(parsed.points);
-        _waypoints = parsed.waypoints;
+        _applyLoadedPoints(
+          filterImplausiblePoints(parsed.points),
+          parsed.waypoints,
+        );
       });
       _loadedRouteSnapshot = route;
       _fitToRoute(route);
@@ -552,22 +630,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           );
         }
 
-        final points = _points;
-        final days = points == null
-            ? const <DayStats>[]
-            : splitIntoDays(points);
-        // Cheap, local-only clustering (no reverse geocoding) - just enough
-        // to drop a pin at each dwell stop; the full geography analysis with
-        // city/country still only runs lazily from the analysis sheet.
-        // Overnight stays are excluded here (day boundaries below cover them
-        // more reliably) so a long stop doesn't get double-marked.
-        final stops = points == null
-            ? const <DetectedStop>[]
-            : RouteGeographyAnalyzer()
-                  .detectStops(points)
-                  .where((s) => s.duration < const Duration(hours: 4))
-                  .toList();
-        final overnights = overnightStays(days);
+        final days = _days;
+        final stops = _stops;
+        final overnights = _overnights;
         final geotaggedPhotoCount = context
             .watch<PhotoRepository>()
             .photosFor(route.id)
@@ -577,7 +642,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         return Scaffold(
           body: Stack(
             children: [
-              Positioned.fill(child: _buildMap(route, days, stops, overnights)),
+              Positioned.fill(child: _buildMap(route, stops, overnights)),
               Positioned(
                 top: 0,
                 left: 0,
@@ -662,18 +727,28 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                       onPressed: _zoomOut,
                       child: const Icon(Icons.remove),
                     ),
-                    if (_rotationDeg.abs() > 0.5) ...[
-                      FloatingActionButton.small(
-                        heroTag: 'northUp',
-                        tooltip: AppLocalizations.of(context)!.northUpTooltip,
-                        onPressed: _resetNorth,
-                        child: Transform.rotate(
-                          angle: -_rotationDeg * pi / 180,
-                          child: const Icon(Icons.navigation),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
+                    ValueListenableBuilder<double>(
+                      valueListenable: _rotationDeg,
+                      builder: (context, rotationDeg, _) {
+                        if (rotationDeg.abs() <= 0.5) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: FloatingActionButton.small(
+                            heroTag: 'northUp',
+                            tooltip:
+                                AppLocalizations.of(context)!.northUpTooltip,
+                            onPressed: _resetNorth,
+                            child: Transform.rotate(
+                              angle: -rotationDeg * pi / 180,
+                              child: const Icon(Icons.navigation),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
                     FloatingActionButton(
                       heroTag: 'locate',
                       onPressed: () => _fitToRoute(route),
@@ -691,7 +766,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
 
   Widget _buildMap(
     GpxRoute route,
-    List<DayStats> days,
     List<DetectedStop> stops,
     List<OvernightStay> overnights,
   ) {
@@ -701,37 +775,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       );
     }
     final points = _points;
-    if (points == null) {
+    final start = _trackStart;
+    final end = _trackEnd;
+    if (points == null || start == null || end == null) {
       return const Center(child: CircularProgressIndicator());
     }
-
-    final line = points.map((p) => p.latLng).toList();
-    final start = line.first;
-    final end = line.last;
-
-    final visible = _visibleDayNumbers;
-    bool isShown(int index) =>
-        visible == null || visible.contains(days[index].dayNumber);
-
-    final polylines = <Polyline>[
-      if (days.isEmpty)
-        Polyline(points: line, strokeWidth: 4, color: const Color(0xFFE53935))
-      else
-        for (var i = 0; i < days.length; i++)
-          if (isShown(i))
-            Polyline(
-              points: [
-                // Only bridge into the previous day's last point when that
-                // day is consecutive AND also visible - otherwise a gap
-                // (e.g. day 1 + day 7 selected) would draw a stray line
-                // straight across the skipped days.
-                if (i > 0 && isShown(i - 1)) days[i - 1].points.last.latLng,
-                ...days[i].points.map((p) => p.latLng),
-              ],
-              strokeWidth: 4,
-              color: days[i].color,
-            ),
-    ];
 
     final l10n = AppLocalizations.of(context)!;
 
@@ -753,7 +801,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           // caused the topo flicker when OpenTopoMap rate-limited).
           evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),
-        PolylineLayer(polylines: polylines),
+        PolylineLayer(polylines: _polylines),
         MarkerLayer(
           markers: [
             for (final w in _waypoints ?? const <Waypoint>[])
