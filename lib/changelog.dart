@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.56 beta',
+    date: '2026-08-26',
+    note:
+        'Yüklenen / açılan bir rotada haritayı sağa-sola kaydırırken veya '
+        'küçültüp büyütürken uygulamanın kilitlenmesi düzeltildi. Sebep: '
+        'parmak hareketlerindeki minik harita dönüşü her karede tüm ekranı '
+        'yeniden kuruyor, uzun izlerde mola tespiti ve gün bölme hesabı '
+        'tekrar tekrar çalışıyordu. Artık bu hesaplar rota yüklenince bir '
+        'kez yapılıyor; pusula dönüşü de haritayı yeniden çizmeden '
+        'güncelleniyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.55 beta',
     date: '2026-08-25',
     note:
