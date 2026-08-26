@@ -12,6 +12,7 @@ import 'repositories/satellite_visibility_controller.dart';
 import 'repositories/stat_icon_settings_controller.dart';
 import 'repositories/vehicle_icon_controller.dart';
 import 'screens/home_map_screen.dart';
+import 'services/app_update_controller.dart';
 import 'services/car_bridge.dart';
 import 'services/gps_recorder.dart';
 
@@ -49,6 +50,8 @@ class RideAtlasApp extends StatelessWidget {
         // navigating away from RecordScreen - only an explicit "discard"
         // or "finish" call ever stops it.
         ChangeNotifierProvider(create: (_) => GpsRecorder()),
+        // Shared so home + recording/info screens all see the same update.
+        ChangeNotifierProvider(create: (_) => AppUpdateController()),
       ],
       child: _CarBridgeGate(
         child: Consumer<LocaleController>(

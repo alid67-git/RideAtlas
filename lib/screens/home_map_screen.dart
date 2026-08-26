@@ -1,21 +1,20 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../build_info.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import '../repositories/vehicle_icon_controller.dart';
+import '../services/app_update_controller.dart';
 import '../services/gps_recorder.dart';
 import '../services/native_recording.dart';
-import '../services/update_checker.dart';
+import '../widgets/app_update_ui.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
@@ -27,11 +26,6 @@ import 'settings_screen.dart';
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
 const _lastSeenBuildKey = 'last_seen_build';
-
-/// Update checks are Android-only: the web build redeploys itself on every
-/// visit (no APK to fall behind), and there's no iOS/desktop release yet.
-final _supportsUpdateCheck =
-    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
 /// A wide, regional view (several countries visible) - the landing map
 /// starts here and stays here even once the device's location is found;
@@ -55,9 +49,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   String? _locationError;
   BaseMapStyle _mapStyle = kBaseMapStyles.first;
   bool _centeredOnce = false;
-  UpdateInfo? _updateInfo;
-  bool _updateDismissed = false;
-  bool _installingUpdate = false;
 
   /// Brief non-interactive status under the record button (offline / online).
   String? _gpsFlashMessage;
@@ -72,9 +63,17 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _maybeShowWhatsNew();
-      // After what's-new: offer update with a single "Güncelle" button; the
-      // rest (download + install) is automatic with a progress dialog.
-      if (_supportsUpdateCheck) await _checkForUpdateAndOffer();
+      // After what's-new: check once; offer a single "Güncelle" dialog. The
+      // same banner also appears on the recording/info screens via
+      // [AppUpdateController].
+      if (AppUpdateController.isSupported) {
+        final updates = context.read<AppUpdateController>();
+        await updates.check();
+        if (!mounted) return;
+        if (await offerAppUpdateDialog(context)) {
+          await installAppUpdate(context);
+        }
+      }
       // If a fix hasn't arrived yet, tell the user recording would start offline.
       if (!_hadGpsFix && mounted) _showOfflineGpsHint();
       if (NativeRecording.isSupported) await _restoreInterruptedRecording();
@@ -129,32 +128,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         ? accuracyMeters.round().toString()
         : '—';
     _showGpsFlash(AppLocalizations.of(context)!.gpsOnlineStatus(accuracy));
-  }
-
-  /// Finds a newer android-latest build and offers a one-button dialog
-  /// ("Güncelle"). Declining (back / outside tap) keeps the home banner so
-  /// the rider can still update later with the same single button.
-  Future<void> _checkForUpdateAndOffer() async {
-    final info = await checkForAndroidUpdate(kAppBuildLabel);
-    if (info == null || !mounted) return;
-    setState(() => _updateInfo = info);
-
-    final l10n = AppLocalizations.of(context)!;
-    final accepted = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.updateAvailableTitle),
-        content: Text(l10n.updateAvailableMessage(info.version)),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.updateButtonLabel),
-          ),
-        ],
-      ),
-    );
-    if (!mounted) return;
-    if (accepted == true) await _installUpdate(info);
   }
 
   Future<void> _maybeShowWhatsNew() async {
@@ -295,109 +268,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     );
   }
 
-  /// One tap: stream the APK with a MedyaAtlas-style progress dialog, then
-  /// hand off to the system installer. No further confirmation steps.
-  Future<void> _installUpdate(UpdateInfo info) async {
-    if (!mounted || _installingUpdate) return;
-    setState(() => _installingUpdate = true);
-
-    final l10n = AppLocalizations.of(context)!;
-    final progress = ValueNotifier<(int received, int? total)>((0, null));
-
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          title: Text(l10n.updateDownloadingTitle),
-          content: ValueListenableBuilder<(int, int?)>(
-            valueListenable: progress,
-            builder: (context, value, _) {
-              final received = value.$1;
-              final total = value.$2;
-              final fraction = (total != null && total > 0)
-                  ? (received / total).clamp(0.0, 1.0)
-                  : null;
-              final percent = fraction == null
-                  ? '…'
-                  : '%${(fraction * 100).round()}';
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  LinearProgressIndicator(value: fraction),
-                  const SizedBox(height: 12),
-                  Text(
-                    l10n.updateDownloadProgress(percent),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-
-    try {
-      await downloadAndInstallUpdate(
-        info,
-        onProgress: (received, total) {
-          progress.value = (received, total);
-        },
-      );
-      if (mounted) setState(() => _updateDismissed = true);
-    } catch (_) {
-      // In-app install failed (unknown-apps permission, no handler, …) -
-      // fall back to a plain browser download.
-      if (mounted) {
-        await launchUrl(
-          Uri.parse(info.downloadUrl),
-          mode: LaunchMode.externalApplication,
-        );
-      }
-    } finally {
-      progress.dispose();
-      if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
-        setState(() => _installingUpdate = false);
-      }
-    }
-  }
-
-  Widget? _buildUpdateBanner(AppLocalizations l10n) {
-    final info = _updateInfo;
-    if (info == null || _updateDismissed || _installingUpdate) return null;
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              l10n.updateAvailableMessage(info.version),
-              style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
-            ),
-          ),
-          // Single action - download + install run automatically after this.
-          FilledButton(
-            onPressed: () => _installUpdate(info),
-            child: Text(l10n.updateButtonLabel),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final updateBanner = _buildUpdateBanner(l10n);
+    final showUpdateBanner = context.watch<AppUpdateController>().showBanner;
     final recordingInProgress = !context.watch<GpsRecorder>().isIdle;
     return Scaffold(
       body: Stack(
@@ -443,7 +317,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
             ),
           ),
-          if (_locationError != null || updateBanner != null)
+          if (_locationError != null || showUpdateBanner)
             Positioned(
               top: 0,
               left: 0,
@@ -454,8 +328,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (updateBanner != null) ...[
-                        updateBanner,
+                      if (showUpdateBanner) ...[
+                        const AppUpdateBanner(),
                         const SizedBox(height: 8),
                       ],
                       if (_locationError != null)

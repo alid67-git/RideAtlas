@@ -8,10 +8,19 @@ import 'package:path_provider/path_provider.dart';
 
 /// A newer Android build found on GitHub than the one currently running.
 class UpdateInfo {
-  const UpdateInfo({required this.version, required this.downloadUrl});
+  const UpdateInfo({
+    required this.version,
+    required this.downloadUrl,
+    required this.sizeBytes,
+  });
 
   final String version;
   final String downloadUrl;
+
+  /// Asset size from the GitHub Releases API - used for percent progress
+  /// when the download response itself has no Content-Length (common on
+  /// GitHub's CDN with chunked transfer).
+  final int sizeBytes;
 }
 
 /// Progress while streaming the APK: [received] bytes so far and optional
@@ -48,10 +57,21 @@ Future<UpdateInfo?> checkForAndroidUpdate(String currentVersion) async {
         .cast<Map<String, dynamic>>();
     final apkAsset = assets.where((a) => a['name'] == 'RideAtlas.apk');
     if (apkAsset.isEmpty) return null;
-    final downloadUrl = apkAsset.first['browser_download_url'] as String?;
+    final asset = apkAsset.first;
+    final downloadUrl = asset['browser_download_url'] as String?;
     if (downloadUrl == null) return null;
+    final size = asset['size'];
+    final sizeBytes = size is int
+        ? size
+        : size is num
+        ? size.toInt()
+        : 0;
 
-    return UpdateInfo(version: releaseVersion, downloadUrl: downloadUrl);
+    return UpdateInfo(
+      version: releaseVersion,
+      downloadUrl: downloadUrl,
+      sizeBytes: sizeBytes,
+    );
   } catch (_) {
     return null;
   }
@@ -74,7 +94,8 @@ Future<void> downloadAndInstallUpdate(
       throw HttpException('HTTP ${response.statusCode}');
     }
 
-    final total = response.contentLength;
+    final total = response.contentLength ??
+        (info.sizeBytes > 0 ? info.sizeBytes : null);
     final bytes = BytesBuilder(copy: false);
     var received = 0;
     onProgress?.call(0, total);
