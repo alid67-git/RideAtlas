@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.58 beta',
+    date: '2026-08-26',
+    note:
+        'Ana haritada Ayarlar düğmesi artık liste düğmesiyle aynı yuvarlak '
+        'görünümde (uydu haritasında kaybolmuyordu). Kayıt ekranına da '
+        'Ayarlar eklendi. Kayıt haritasında isteğe bağlı "kayıtlı rota '
+        'göster" tuşu: bir veya birden fazla GPX/kayıtlı rota seçilince '
+        'canlı iz altında çiziliyor; istemezseniz hiç seçilmez. Ayrıca '
+        'kayıt sırasında çekilen foto/videoların konumu Android\'de artık '
+        'otomatik bulunuyor: galeri GPS → EXIF → kayıt anındaki GPS izi '
+        '(önceden MediaStore konumu boş gelince hep elle işaretletiyordu).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.56 beta',
     date: '2026-08-26',
     note:

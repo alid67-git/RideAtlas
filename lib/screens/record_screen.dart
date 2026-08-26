@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,17 +9,21 @@ import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
+import '../models/track_point.dart';
 import '../repositories/live_stats_layout_controller.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/battery_info.dart';
 import '../services/battery_optimization.dart';
+import '../services/daily_analysis.dart' show colorForDay;
+import '../services/exif_gps.dart';
 import '../services/gallery_scan.dart';
 import '../services/gps_recorder.dart';
 import '../services/gpx_parser.dart';
@@ -31,6 +36,7 @@ import 'analysis_sheet.dart' show AnalysisStatCard;
 import 'location_picker_screen.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 import 'ride_photo_picker_screen.dart';
+import 'settings_screen.dart';
 
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
@@ -90,6 +96,11 @@ class _RecordScreenState extends State<RecordScreen>
   /// including the live recording map, which previously always forced
   /// street tiles.
   BaseMapStyle _mapStyle = kBaseMapStyles.first;
+
+  /// Optional saved GPX routes drawn under the live track so the rider can
+  /// follow / compare against a previous ride. Empty until they pick some.
+  List<Polyline> _referencePolylines = const [];
+  Set<String> _referenceRouteIds = {};
 
   GpsRecorder get _recorder => context.read<GpsRecorder>();
 
@@ -232,6 +243,117 @@ class _RecordScreenState extends State<RecordScreen>
       builder: (_) =>
           MapStylePickerDialog(current: _mapStyle, onSelected: _changeMapStyle),
     );
+  }
+
+  /// Lets the rider optionally overlay one or more saved GPX tracks under
+  /// the live recording line (e.g. to retrace yesterday's ride). Clearing
+  /// the selection removes the overlays.
+  Future<void> _pickReferenceRoutes() async {
+    final l10n = AppLocalizations.of(context)!;
+    final routes = context.read<RouteRepository>().routes;
+    if (routes.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.recordOverlayNoRoutes)),
+      );
+      return;
+    }
+
+    final selected = Set<String>.from(_referenceRouteIds);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setLocal) {
+            return AlertDialog(
+              title: Text(l10n.recordOverlayTitle),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: routes.length,
+                  itemBuilder: (context, i) {
+                    final route = routes[i];
+                    return CheckboxListTile(
+                      value: selected.contains(route.id),
+                      title: Text(route.name),
+                      subtitle: Text(
+                        '${route.distanceKm.toStringAsFixed(1)} km',
+                      ),
+                      onChanged: (v) => setLocal(() {
+                        if (v == true) {
+                          selected.add(route.id);
+                        } else {
+                          selected.remove(route.id);
+                        }
+                      }),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => setLocal(() => selected.clear()),
+                  child: Text(l10n.recordOverlayClear),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text(l10n.cancel),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: Text(l10n.save),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+    await _applyReferenceRoutes(selected);
+  }
+
+  Future<void> _applyReferenceRoutes(Set<String> ids) async {
+    if (ids.isEmpty) {
+      setState(() {
+        _referenceRouteIds = {};
+        _referencePolylines = const [];
+      });
+      return;
+    }
+
+    final repo = context.read<RouteRepository>();
+    final byId = {for (final r in repo.routes) r.id: r};
+    final polylines = <Polyline>[];
+    var colorIndex = 1; // skip red - reserved for the live track
+    for (final id in ids) {
+      final route = byId[id];
+      if (route == null) continue;
+      try {
+        final xml = await repo.readTrackContent(route);
+        final parsed = parseTrackXml(xml);
+        final points = [
+          for (final p in filterImplausiblePoints(parsed.points)) p.latLng,
+        ];
+        if (points.length < 2) continue;
+        polylines.add(
+          Polyline(
+            points: points,
+            strokeWidth: 4,
+            color: colorForDay(colorIndex),
+          ),
+        );
+        colorIndex++;
+      } catch (_) {
+        // Skip unreadable routes; keep whatever else loaded.
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _referenceRouteIds = ids;
+      _referencePolylines = polylines;
+    });
   }
 
   /// Switches from the info page to the map and re-enables course-up follow.
@@ -677,7 +799,7 @@ class _RecordScreenState extends State<RecordScreen>
     if (!mounted) return;
     setState(() => _saving = false);
     if (recordingStart != null) {
-      await _offerGalleryMedia(route, recordingStart);
+      await _offerGalleryMedia(route, recordingStart, points);
       if (!mounted) return;
     }
 
@@ -710,13 +832,16 @@ class _RecordScreenState extends State<RecordScreen>
   }
 
   /// Looks for photos/videos the gallery gained during this ride and, if
-  /// any turn up, lets the rider pick which to attach - added with their
-  /// own EXIF/gallery GPS tag if they have one, or by asking where to place
-  /// them on the map otherwise (same fallback as adding media by hand from
-  /// the route screen). Never blocks saving the ride: any failure here
-  /// (permission refused, nothing found, plugin error) is swallowed and the
-  /// recording is still saved either way.
-  Future<void> _offerGalleryMedia(GpxRoute route, DateTime recordingStart) async {
+  /// any turn up, lets the rider pick which to attach. Location is resolved
+  /// in order: gallery GPS tag → photo EXIF → nearest recorded track point
+  /// at the shot's timestamp (Android often strips MediaStore location, so
+  /// the track fallback is what actually places mid-ride shots). Manual
+  /// placement is only asked when all three fail. Never blocks saving.
+  Future<void> _offerGalleryMedia(
+    GpxRoute route,
+    DateTime recordingStart,
+    List<TrackPoint> trackPoints,
+  ) async {
     List<GalleryCandidate> candidates;
     try {
       candidates = await findGalleryMediaBetween(recordingStart, DateTime.now());
@@ -736,21 +861,23 @@ class _RecordScreenState extends State<RecordScreen>
     for (final candidate in selected) {
       if (!mounted) return;
       final asset = candidate.asset;
-      // AssetEntity's own LatLng type isn't the one the rest of the app
-      // uses (latlong2) - pull the raw doubles out immediately rather than
-      // holding onto it, so there's no ambiguity between the two.
-      final assetLocation = await asset.latlngAsync();
-      var lat = assetLocation?.latitude;
-      var lng = assetLocation?.longitude;
-      if (lat == null || lng == null || (lat == 0 && lng == 0)) {
+      final file = await asset.originFile ?? await asset.file;
+      if (file == null) continue;
+      final fileBytes = await file.readAsBytes();
+
+      final resolved = await _resolveGalleryMediaLocation(
+        asset: asset,
+        bytes: fileBytes,
+        trackPoints: trackPoints,
+      );
+      var lat = resolved?.latitude;
+      var lng = resolved?.longitude;
+      if (lat == null || lng == null) {
         final picked = await _pickLocationManually(route);
         if (!mounted) return;
         lat = picked?.latitude;
         lng = picked?.longitude;
       }
-      final file = await asset.originFile ?? await asset.file;
-      if (file == null) continue;
-      final fileBytes = await file.readAsBytes();
       await photoRepo.add(
         routeId: route.id,
         bytes: fileBytes,
@@ -759,6 +886,49 @@ class _RecordScreenState extends State<RecordScreen>
         type: candidate.mediaType,
       );
     }
+  }
+
+  /// Android 10+ often withholds MediaStore lat/lng even when the camera
+  /// wrote GPS into the file. Try gallery metadata, then EXIF bytes, then
+  /// the live track at the asset's create time (works for videos too).
+  Future<LatLng?> _resolveGalleryMediaLocation({
+    required AssetEntity asset,
+    required Uint8List bytes,
+    required List<TrackPoint> trackPoints,
+  }) async {
+    try {
+      final assetLocation = await asset.latlngAsync();
+      final lat = assetLocation?.latitude;
+      final lng = assetLocation?.longitude;
+      if (lat != null && lng != null && !(lat == 0 && lng == 0)) {
+        return LatLng(lat, lng);
+      }
+    } catch (_) {}
+
+    try {
+      final fromExif = await extractExifGps(bytes);
+      if (fromExif != null) return fromExif;
+    } catch (_) {}
+
+    return _locationFromTrackAt(trackPoints, asset.createDateTime);
+  }
+
+  /// Picks the track point closest in time to [when], accepting only if
+  /// within a few minutes - otherwise the shot is treated as unlocated.
+  LatLng? _locationFromTrackAt(List<TrackPoint> points, DateTime when) {
+    TrackPoint? best;
+    var bestDelta = const Duration(days: 365);
+    for (final p in points) {
+      final t = p.time;
+      if (t == null) continue;
+      final d = t.difference(when).abs();
+      if (d < bestDelta) {
+        bestDelta = d;
+        best = p;
+      }
+    }
+    if (best == null || bestDelta > const Duration(minutes: 5)) return null;
+    return best.latLng;
   }
 
   /// Asks whether the user wants to place a pin for a photo/video with no
@@ -870,6 +1040,16 @@ class _RecordScreenState extends State<RecordScreen>
                           padding: EdgeInsets.only(top: 4),
                           child: SatelliteCountBadge(),
                         ),
+                        const SizedBox(width: 8),
+                        _RoundIconButton(
+                          icon: Icons.settings,
+                          tooltip: l10n.settingsTitle,
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const SettingsScreen(),
+                            ),
+                          ),
+                        ),
                         if (!recorder.isIdle) ...[
                           const SizedBox(width: 8),
                           _RoundIconButton(
@@ -910,6 +1090,19 @@ class _RecordScreenState extends State<RecordScreen>
                     tooltip: AppLocalizations.of(context)!.mapStyleTitle,
                     onPressed: _showMapStylePicker,
                     child: Icon(_mapStyle.icon),
+                  ),
+                  const SizedBox(height: 8),
+                  FloatingActionButton.small(
+                    heroTag: 'recordOverlayRoutes',
+                    tooltip: l10n.recordOverlayTooltip,
+                    backgroundColor: _referencePolylines.isNotEmpty
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                    foregroundColor: _referencePolylines.isNotEmpty
+                        ? Theme.of(context).colorScheme.onPrimary
+                        : null,
+                    onPressed: _pickReferenceRoutes,
+                    child: const Icon(Icons.route),
                   ),
                   // Overview of everything recorded so far; the recenter
                   // button below returns to the live position, course-up.
@@ -1137,6 +1330,16 @@ class _RecordScreenState extends State<RecordScreen>
                       ),
                       const Spacer(),
                       const SatelliteCountBadge(),
+                      const SizedBox(width: 8),
+                      _RoundIconButton(
+                        icon: Icons.settings,
+                        tooltip: l10n.settingsTitle,
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SettingsScreen(),
+                          ),
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       _RoundIconButton(
                         icon: Icons.map_outlined,
@@ -1474,6 +1677,8 @@ class _RecordScreenState extends State<RecordScreen>
           maxNativeZoom: style.maxNativeZoom,
           evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),
+        if (_referencePolylines.isNotEmpty)
+          PolylineLayer(polylines: _referencePolylines),
         if (points.length > 1)
           PolylineLayer(
             polylines: [

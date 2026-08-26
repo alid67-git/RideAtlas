@@ -355,6 +355,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   children: [
                     _RoundIconButton(
                       icon: Icons.list,
+                      tooltip: l10n.routesDialogTitle,
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const RouteListScreen(),
@@ -362,7 +363,17 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                       ),
                     ),
                     const Spacer(),
-                    const SettingsButton(),
+                    // Same round glass style as the list button - the plain
+                    // AppBar IconButton used to vanish on satellite tiles.
+                    _RoundIconButton(
+                      icon: Icons.settings,
+                      tooltip: l10n.settingsTitle,
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      ),
+                    ),
                     const SizedBox(width: 8),
                     const RecordingRowIcon(),
                   ],
@@ -545,10 +556,15 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 }
 
 class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, required this.onPressed});
+  const _RoundIconButton({
+    required this.icon,
+    required this.onPressed,
+    this.tooltip,
+  });
 
   final IconData icon;
   final VoidCallback? onPressed;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -556,7 +572,11 @@ class _RoundIconButton extends StatelessWidget {
       color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
       shape: const CircleBorder(),
       elevation: 2,
-      child: IconButton(icon: Icon(icon), onPressed: onPressed),
+      child: IconButton(
+        icon: Icon(icon),
+        tooltip: tooltip,
+        onPressed: onPressed,
+      ),
     );
   }
 }
