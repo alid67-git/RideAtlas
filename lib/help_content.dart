@@ -135,11 +135,12 @@ const _helpSectionsTr = <HelpSection>[
   HelpSection(
     title: 'Uygulama güncellemeleri',
     body:
-        'Android sürümünde yeni bir güncelleme yayınlandığında ana ekranın '
-        'üstünde bir bildirim çıkar; "Güncelle" düğmesine basmanız yeterli, '
-        'uygulama yeni sürümü indirip doğrudan kurulum ekranını açar. Web '
-        'sürümü zaten her ziyarette otomatik olarak güncel haliyle yüklenir, '
-        'ayrıca bir işlem gerekmez.',
+        'Android sürümünde yeni bir güncelleme yayınlandığında uygulama '
+        'açılışta sorar; onaylarsanız en son sürümü indirip kurulum '
+        'ekranını açar. "Daha sonra" derseniz ana ekranın üstünde bir '
+        'banner kalır, istediğiniz zaman "Güncelle"ye basabilirsiniz. '
+        'Web sürümü zaten her ziyarette otomatik olarak güncel haliyle '
+        'yüklenir, ayrıca bir işlem gerekmez.',
   ),
   HelpSection(
     title: 'Dil değiştirme',
@@ -263,11 +264,12 @@ const _helpSectionsEn = <HelpSection>[
   HelpSection(
     title: 'App updates',
     body:
-        'On Android, a banner appears at the top of the home screen when '
-        'a new version is out - just tap "Update" and the app downloads '
-        'it and opens the installer directly. The web version always '
-        'loads the latest build automatically on every visit, so there\'s '
-        'nothing to do there.',
+        'On Android, the app asks at launch when a new version is out - '
+        'confirm and it downloads the latest build and opens the installer. '
+        'If you choose "Later", a banner stays at the top of the home '
+        'screen so you can still tap "Update" whenever you like. The web '
+        'version always loads the latest build automatically on every '
+        'visit, so there\'s nothing to do there.',
   ),
   HelpSection(
     title: 'Changing the language',
@@ -402,11 +404,13 @@ const _helpSectionsDe = <HelpSection>[
   HelpSection(
     title: 'App-Updates',
     body:
-        'Unter Android erscheint ein Banner oben auf dem Startbildschirm, '
-        'sobald eine neue Version verfügbar ist - tippen Sie einfach auf '
-        '"Aktualisieren", und die App lädt sie herunter und öffnet direkt '
-        'das Installationsprogramm. Die Web-Version lädt bei jedem Besuch '
-        'automatisch die neueste Version, hier ist nichts weiter zu tun.',
+        'Unter Android fragt die App beim Start, sobald eine neue Version '
+        'verfügbar ist - bestätigen Sie, und sie lädt die neueste Version '
+        'herunter und öffnet das Installationsprogramm. Wenn Sie '
+        '"Später" wählen, bleibt oben auf dem Startbildschirm ein Banner, '
+        'damit Sie jederzeit auf "Aktualisieren" tippen können. Die '
+        'Web-Version lädt bei jedem Besuch automatisch die neueste '
+        'Version, hier ist nichts weiter zu tun.',
   ),
   HelpSection(
     title: 'Sprache ändern',

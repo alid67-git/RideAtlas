@@ -72,13 +72,14 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _maybeShowWhatsNew();
+      // Ask about updates after the what's-new dialog so the two never stack.
+      if (_supportsUpdateCheck) await _checkForUpdateAndPrompt();
       // If a fix hasn't arrived yet, tell the user recording would start offline.
       if (!_hadGpsFix && mounted) _showOfflineGpsHint();
       if (NativeRecording.isSupported) await _restoreInterruptedRecording();
     });
     _loadMapStyle();
     _startLocationUpdates();
-    if (_supportsUpdateCheck) _checkForUpdate();
   }
 
   /// Like Motion GPX: if a recording was in progress when the app was
@@ -129,9 +130,36 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     _showGpsFlash(AppLocalizations.of(context)!.gpsOnlineStatus(accuracy));
   }
 
-  Future<void> _checkForUpdate() async {
+  /// Fetches the rolling "android-latest" release. When a newer build exists,
+  /// asks once whether to download and install it; declining keeps the small
+  /// home-screen banner so the rider can still update later in the session.
+  Future<void> _checkForUpdateAndPrompt() async {
     final info = await checkForAndroidUpdate(kAppBuildLabel);
-    if (info != null && mounted) setState(() => _updateInfo = info);
+    if (info == null || !mounted) return;
+    setState(() => _updateInfo = info);
+
+    final l10n = AppLocalizations.of(context)!;
+    final accept = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.updateAvailableTitle),
+        content: Text(l10n.updateAvailablePrompt(info.version)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.updateLaterButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.updateButtonLabel),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (accept == true) {
+      await _installUpdate(info);
+    }
   }
 
   Future<void> _maybeShowWhatsNew() async {
@@ -273,7 +301,27 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   Future<void> _installUpdate(UpdateInfo info) async {
+    if (!mounted) return;
     setState(() => _installingUpdate = true);
+    final l10n = AppLocalizations.of(context)!;
+    // Non-dismissible progress while the APK downloads - the system
+    // installer UI takes over once [downloadAndInstallUpdate] returns.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 24),
+              Expanded(child: Text(l10n.updateDownloadingMessage)),
+            ],
+          ),
+        ),
+      ),
+    );
     try {
       await downloadAndInstallUpdate(info);
     } catch (_) {
@@ -288,7 +336,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _installingUpdate = false);
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        setState(() => _installingUpdate = false);
+      }
     }
   }
 

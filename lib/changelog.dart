@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.57 beta',
+    date: '2026-08-26',
+    note:
+        'Android\'de yeni sürüm çıkınca uygulama açılışta soruyor; '
+        'onaylarsanız en son APK indirilip kurulum ekranı açılıyor '
+        '(indirme sırasında ilerleme diyaloğu gösterilir). "Daha sonra" '
+        'derseniz ana ekrandaki güncelleme banner\'ı kalır. Yardım '
+        'metni de buna göre güncellendi.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.56 beta',
     date: '2026-08-26',
     note:
