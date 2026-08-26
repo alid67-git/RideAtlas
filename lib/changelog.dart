@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.61 beta',
+    date: '2026-08-26',
+    note:
+        'Android APK derlemesi düzeltildi: v1.4.58\'deki foto konum '
+        'düzeltmesi photo_manager ile latlong2 LatLng isim çakışması '
+        'yüzünden CI\'da kırılıyordu; android-latest sürümü 1.4.56\'da '
+        'kalmıştı. Bu yüzden telefonda 60 görünmüyordu. Derleme onarıldı; '
+        'önceki sürümlerin (ayarlar, GPX animasyonu, tek Güncelle + yüzde '
+        'indirme) özellikleri bu APK\'da.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.60 beta',
     date: '2026-08-26',
     note:
