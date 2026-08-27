@@ -93,10 +93,12 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     final savedId = box.get(_mapStyleKey);
     if (savedId == null || !mounted) return;
     setState(() => _mapStyle = findBaseMapStyle(savedId));
+    kickMapTileLayer(_mapController);
   }
 
   Future<void> _changeMapStyle(BaseMapStyle style) async {
     setState(() => _mapStyle = style);
+    kickMapTileLayer(_mapController);
     final box = await Hive.openBox<String>(_metaBoxName);
     await box.put(_mapStyleKey, style.id);
   }
@@ -310,6 +312,7 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
       _mapController.fitCamera(
         CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(48)),
       );
+      kickMapTileLayer(_mapController);
     });
   }
 

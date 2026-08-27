@@ -494,14 +494,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       _mapController.fitCamera(
         CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(48)),
       );
-      // On Flutter Web, TileLayer sometimes doesn't request tiles for the
-      // very first programmatic camera move - a second, distinct move right
-      // after reliably kicks it, without visibly changing the view.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final camera = _mapController.camera;
-        _mapController.move(camera.center, camera.zoom + 0.001);
-        _mapController.move(camera.center, camera.zoom);
-      });
+      // TileLayer sometimes skips the first programmatic camera move —
+      // a tiny distinct nudge forces the first tile fetch.
+      kickMapTileLayer(_mapController);
     });
   }
 
