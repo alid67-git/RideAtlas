@@ -140,10 +140,13 @@ GpxRoute buildRouteMetadata({
     west = 0;
   }
 
+  final recordedAt = trackTimeRange(points).start ?? importedAt;
+
   return GpxRoute(
     id: id,
     name: name,
     importedAt: importedAt,
+    recordedAt: recordedAt,
     distanceMeters: distanceMeters,
     elevationGainMeters: elevationGain,
     elevationLossMeters: elevationLoss,

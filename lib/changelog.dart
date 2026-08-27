@@ -20,6 +20,12 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.71 beta',
+    date: '2026-08-27',
+    note:
+        'Kayıtlı ride listesi kayıt tarihine göre (en yeni üstte) sıralanır.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.70 beta',
     date: '2026-08-27',
     note:

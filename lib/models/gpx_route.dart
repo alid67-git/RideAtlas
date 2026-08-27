@@ -7,6 +7,7 @@ class GpxRoute {
     required this.id,
     required this.name,
     required this.importedAt,
+    required this.recordedAt,
     required this.distanceMeters,
     required this.elevationGainMeters,
     required this.elevationLossMeters,
@@ -24,7 +25,15 @@ class GpxRoute {
 
   final String id;
   final String name;
+
+  /// When the file was imported / saved into RideAtlas.
   final DateTime importedAt;
+
+  /// When the ride itself happened (first GPS timestamp on the track).
+  /// Falls back to [importedAt] when the file has no point times.
+  /// Route lists sort by this, newest first.
+  final DateTime recordedAt;
+
   final double distanceMeters;
   final double elevationGainMeters;
   final double elevationLossMeters;
@@ -60,11 +69,12 @@ class GpxRoute {
     return distanceKm / (d.inSeconds / 3600);
   }
 
-  GpxRoute copyWith({String? name}) {
+  GpxRoute copyWith({String? name, DateTime? recordedAt}) {
     return GpxRoute(
       id: id,
       name: name ?? this.name,
       importedAt: importedAt,
+      recordedAt: recordedAt ?? this.recordedAt,
       distanceMeters: distanceMeters,
       elevationGainMeters: elevationGainMeters,
       elevationLossMeters: elevationLossMeters,
@@ -85,6 +95,7 @@ class GpxRoute {
     'id': id,
     'name': name,
     'importedAt': importedAt.toIso8601String(),
+    'recordedAt': recordedAt.toIso8601String(),
     'distanceMeters': distanceMeters,
     'elevationGainMeters': elevationGainMeters,
     'elevationLossMeters': elevationLossMeters,
@@ -101,10 +112,16 @@ class GpxRoute {
   };
 
   factory GpxRoute.fromJson(Map<String, dynamic> json) {
+    final importedAt = DateTime.parse(json['importedAt'] as String);
+    final recordedRaw = json['recordedAt'] as String?;
     return GpxRoute(
       id: json['id'] as String,
       name: json['name'] as String,
-      importedAt: DateTime.parse(json['importedAt'] as String),
+      importedAt: importedAt,
+      // Pre-recordedAt builds: fall back to import time.
+      recordedAt: recordedRaw != null
+          ? DateTime.parse(recordedRaw)
+          : importedAt,
       distanceMeters: (json['distanceMeters'] as num).toDouble(),
       elevationGainMeters: (json['elevationGainMeters'] as num).toDouble(),
       elevationLossMeters: (json['elevationLossMeters'] as num).toDouble(),
