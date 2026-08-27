@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.67 beta',
+    date: '2026-08-27',
+    note:
+        'Yüklenen / açılan bir rotada kırmızı iz adım adım çizildikten sonra '
+        'kaybolma sorunu düzeltildi. Sebep: geçici kırmızı çizgi, gün '
+        'renklerine geçerken zaman damgası olmayan noktaları (veya eşleşmeyen '
+        'gün filtresini) düşürebiliyordu; artık tam iz korunuyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.66 beta',
     date: '2026-08-27',
     note:

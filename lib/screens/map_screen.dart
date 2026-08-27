@@ -88,6 +88,61 @@ List<OvernightStay> overnightStays(List<DayStats> days) {
   return out;
 }
 
+const _trackRevealColor = Color(0xFFE53935);
+
+/// Final map polylines after progressive reveal.
+///
+/// Day-colored segments are used only when they cover every track point.
+/// [splitIntoDays] skips points with a null timestamp - if any points *do*
+/// have times, a naïve rebuild would drop the untimed majority and the red
+/// reveal line would appear to vanish. An empty day-filter match falls back
+/// to the full track for the same reason.
+List<Polyline> buildTrackPolylines({
+  required List<TrackPoint> points,
+  required List<DayStats> days,
+  Set<int>? visibleDayNumbers,
+}) {
+  if (points.isEmpty) return const [];
+
+  Polyline fullTrack({Color? color}) => Polyline(
+        points: [for (final p in points) p.latLng],
+        strokeWidth: 4,
+        color: color ?? _trackRevealColor,
+      );
+
+  if (days.isEmpty) return [fullTrack()];
+
+  final covered = days.fold<int>(0, (n, d) => n + d.points.length);
+  if (covered < points.length) {
+    // Partial timestamps: keep the full line the reveal already drew.
+    return [fullTrack()];
+  }
+
+  bool isShown(int index) =>
+      visibleDayNumbers == null ||
+      visibleDayNumbers.contains(days[index].dayNumber);
+
+  final built = <Polyline>[
+    for (var i = 0; i < days.length; i++)
+      if (isShown(i))
+        Polyline(
+          points: [
+            // Only bridge into the previous day's last point when that
+            // day is consecutive AND also visible - otherwise a gap
+            // (e.g. day 1 + day 7 selected) would draw a stray line
+            // straight across the skipped days.
+            if (i > 0 && isShown(i - 1)) days[i - 1].points.last.latLng,
+            for (final p in days[i].points) p.latLng,
+          ],
+          strokeWidth: 4,
+          color: days[i].color,
+        ),
+  ];
+
+  // Stale day filter (e.g. after reload) must never blank the map.
+  return built.isNotEmpty ? built : [fullTrack()];
+}
+
 /// Shows a single imported GPX route on a map: the track as a red line,
 /// green/red start & end pins, any named waypoints, and quick access to the
 /// route list and detailed analysis - mirroring the reference screenshot's
@@ -116,6 +171,12 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   bool _trackDrawing = false;
 
   Timer? _revealTimer;
+  Completer<void>? _revealDone;
+
+  /// Bumped on every [_load] so an overlapping reload (repo edit, rapid
+  /// reopen) cannot finish a stale reveal/apply after [_bootstrapMap] has
+  /// already cleared the polylines for a newer generation.
+  int _loadGeneration = 0;
 
   /// Cached from [_points] once on load (and after a route edit reload).
   /// Recomputing [splitIntoDays] / [RouteGeographyAnalyzer.detectStops] on
@@ -174,10 +235,20 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   @override
   void dispose() {
     context.read<RouteRepository>().removeListener(_onRepoChanged);
-    _revealTimer?.cancel();
+    _cancelReveal();
     _mapEventSub.cancel();
     _rotationDeg.dispose();
     super.dispose();
+  }
+
+  void _cancelReveal() {
+    _revealTimer?.cancel();
+    _revealTimer = null;
+    final done = _revealDone;
+    if (done != null && !done.isCompleted) {
+      done.complete();
+    }
+    _revealDone = null;
   }
 
   void _onRepoChanged() {
@@ -243,19 +314,14 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     }
   }
 
-  /// Derives day splits, stop pins and the drawn polyline once from [points].
-  /// Call only when the underlying track changes (or the day filter does,
-  /// via [_rebuildPolylines] alone).
+  /// Commits track geometry + day-colored polylines. Stop pins are filled in
+  /// afterwards by [_loadStops] so a heavy [detectStops] pass cannot blank
+  /// the line (or throw) during the reveal→final handoff.
   void _applyLoadedPoints(List<TrackPoint> points, List<Waypoint> waypoints) {
     final days = splitIntoDays(points);
-    final stops = RouteGeographyAnalyzer()
-        .detectStops(points)
-        .where((s) => s.duration < const Duration(hours: 4))
-        .toList();
     _points = points;
     _waypoints = waypoints;
     _days = days;
-    _stops = stops;
     _overnights = overnightStays(days);
     _trackStart = points.isEmpty ? null : points.first.latLng;
     _trackEnd = points.isEmpty ? null : points.last.latLng;
@@ -268,39 +334,24 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       _polylines = const [];
       return;
     }
+    _polylines = buildTrackPolylines(
+      points: points,
+      days: _days,
+      visibleDayNumbers: _visibleDayNumbers,
+    );
+  }
 
-    final days = _days;
-    final visible = _visibleDayNumbers;
-    bool isShown(int index) =>
-        visible == null || visible.contains(days[index].dayNumber);
-
-    if (days.isEmpty) {
-      _polylines = [
-        Polyline(
-          points: [for (final p in points) p.latLng],
-          strokeWidth: 4,
-          color: const Color(0xFFE53935),
-        ),
-      ];
-      return;
-    }
-
-    _polylines = [
-      for (var i = 0; i < days.length; i++)
-        if (isShown(i))
-          Polyline(
-            points: [
-              // Only bridge into the previous day's last point when that
-              // day is consecutive AND also visible - otherwise a gap
-              // (e.g. day 1 + day 7 selected) would draw a stray line
-              // straight across the skipped days.
-              if (i > 0 && isShown(i - 1)) days[i - 1].points.last.latLng,
-              for (final p in days[i].points) p.latLng,
-            ],
-            strokeWidth: 4,
-            color: days[i].color,
-          ),
-    ];
+  Future<void> _loadStops(List<TrackPoint> points, int gen) async {
+    // Yield so the reveal→final polyline frame can paint before stop
+    // clustering runs on the UI isolate.
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted || gen != _loadGeneration) return;
+    final stops = RouteGeographyAnalyzer()
+        .detectStops(points)
+        .where((s) => s.duration < const Duration(hours: 4))
+        .toList();
+    if (!mounted || gen != _loadGeneration) return;
+    setState(() => _stops = stops);
   }
 
   /// Shows tiles + camera fitted to the route's cached bounds immediately,
@@ -321,6 +372,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       _stops = const [];
       _overnights = const [];
       _polylines = const [];
+      // Fresh load must not keep a prior day filter that can match nothing
+      // after day renumbering and blank the final polylines.
+      _visibleDayNumbers = null;
       _trackStart = center;
       _trackEnd = center;
     });
@@ -329,8 +383,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
 
   /// Grows the drawn polyline in batches so a long GPX appears to be "read"
   /// onto the map instead of popping in all at once after a long wait.
-  Future<void> _revealTrack(List<TrackPoint> points) async {
+  Future<void> _revealTrack(List<TrackPoint> points, int gen) async {
     if (points.isEmpty) {
+      if (!mounted || gen != _loadGeneration) return;
       setState(() {
         _polylines = const [];
         _trackStart = null;
@@ -341,6 +396,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
 
     // Short tracks: one frame is enough - animation would just flicker.
     if (points.length < 150) {
+      if (!mounted || gen != _loadGeneration) return;
       setState(() {
         _trackStart = points.first.latLng;
         _trackEnd = points.last.latLng;
@@ -348,7 +404,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           Polyline(
             points: [for (final p in points) p.latLng],
             strokeWidth: 4,
-            color: const Color(0xFFE53935),
+            color: _trackRevealColor,
           ),
         ];
       });
@@ -361,9 +417,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     final done = Completer<void>();
     var shown = 0;
 
-    _revealTimer?.cancel();
+    _cancelReveal();
+    _revealDone = done;
     _revealTimer = Timer.periodic(const Duration(milliseconds: 16), (timer) {
-      if (!mounted) {
+      if (!mounted || gen != _loadGeneration) {
         timer.cancel();
         if (!done.isCompleted) done.complete();
         return;
@@ -379,7 +436,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           Polyline(
             points: line,
             strokeWidth: 4,
-            color: const Color(0xFFE53935),
+            color: _trackRevealColor,
           ),
         ];
       });
@@ -394,31 +451,33 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   Future<void> _load() async {
     final route = _route;
     if (route == null) return;
-    _revealTimer?.cancel();
+    final gen = ++_loadGeneration;
+    _cancelReveal();
     _bootstrapMap(route);
 
     try {
       final repo = context.read<RouteRepository>();
       final xml = await repo.readTrackContent(route);
-      if (!mounted) return;
+      if (!mounted || gen != _loadGeneration) return;
 
       // Parse + GPS-glitch filter off the UI isolate so the map keeps
       // painting tiles while a multi-hour GPX is being read.
       final parsed = await compute(parseAndFilterTrackXml, xml);
-      if (!mounted) return;
+      if (!mounted || gen != _loadGeneration) return;
 
-      await _revealTrack(parsed.points);
-      if (!mounted) return;
+      await _revealTrack(parsed.points, gen);
+      if (!mounted || gen != _loadGeneration) return;
 
       setState(() {
-        // Days/stops derived once the full line is on screen - not before
-        // the first paint (that was what made large files look "stuck").
+        // Days derived once the full line is on screen - not before the
+        // first paint (that was what made large files look "stuck").
         _applyLoadedPoints(parsed.points, parsed.waypoints);
         _trackDrawing = false;
       });
       _loadedRouteSnapshot = route;
+      unawaited(_loadStops(parsed.points, gen));
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || gen != _loadGeneration) return;
       setState(() {
         _trackDrawing = false;
         _error = AppLocalizations.of(context)!.routeFileReadError('$e');
