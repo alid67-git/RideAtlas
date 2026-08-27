@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' show max, min;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -26,7 +27,6 @@ import '../services/daily_analysis.dart' show colorForDay;
 import '../services/exif_gps.dart';
 import '../services/gallery_scan.dart';
 import '../services/gps_recorder.dart';
-import '../services/gpx_parser.dart';
 import '../services/app_update_controller.dart';
 import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';
@@ -103,6 +103,7 @@ class _RecordScreenState extends State<RecordScreen>
   /// follow / compare against a previous ride. Empty until they pick some.
   List<Polyline> _referencePolylines = const [];
   Set<String> _referenceRouteIds = {};
+  Timer? _overlayRevealTimer;
 
   GpsRecorder get _recorder => context.read<GpsRecorder>();
 
@@ -255,8 +256,8 @@ class _RecordScreenState extends State<RecordScreen>
   }
 
   /// Lets the rider optionally overlay one or more saved GPX tracks under
-  /// the live recording line (e.g. to retrace yesterday's ride). Clearing
-  /// the selection removes the overlays.
+  /// the live recording line (e.g. to retrace yesterday's ride). Empty
+  /// selection removes the overlays.
   Future<void> _pickReferenceRoutes() async {
     final l10n = AppLocalizations.of(context)!;
     final routes = context.read<RouteRepository>().routes;
@@ -274,15 +275,32 @@ class _RecordScreenState extends State<RecordScreen>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setLocal) {
+            final allSelected =
+                routes.isNotEmpty && selected.length == routes.length;
             return AlertDialog(
               title: Text(l10n.recordOverlayTitle),
               content: SizedBox(
                 width: double.maxFinite,
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemCount: routes.length,
+                  itemCount: routes.length + 1,
                   itemBuilder: (context, i) {
-                    final route = routes[i];
+                    if (i == 0) {
+                      return CheckboxListTile(
+                        value: allSelected,
+                        title: Text(l10n.recordOverlaySelectAll),
+                        onChanged: (_) => setLocal(() {
+                          if (allSelected) {
+                            selected.clear();
+                          } else {
+                            selected
+                              ..clear()
+                              ..addAll(routes.map((r) => r.id));
+                          }
+                        }),
+                      );
+                    }
+                    final route = routes[i - 1];
                     return CheckboxListTile(
                       value: selected.contains(route.id),
                       title: Text(route.name),
@@ -302,16 +320,12 @@ class _RecordScreenState extends State<RecordScreen>
               ),
               actions: [
                 TextButton(
-                  onPressed: () => setLocal(() => selected.clear()),
-                  child: Text(l10n.recordOverlayClear),
-                ),
-                TextButton(
                   onPressed: () => Navigator.pop(context, false),
                   child: Text(l10n.cancel),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(context, true),
-                  child: Text(l10n.save),
+                  child: Text(l10n.recordOverlayShow),
                 ),
               ],
             );
@@ -323,7 +337,11 @@ class _RecordScreenState extends State<RecordScreen>
     await _applyReferenceRoutes(selected);
   }
 
+  /// Clears overlays immediately, then parses each selected GPX off the UI
+  /// isolate and grows the polyline in batches so selecting many long
+  /// tracks never freezes the recording screen.
   Future<void> _applyReferenceRoutes(Set<String> ids) async {
+    _overlayRevealTimer?.cancel();
     if (ids.isEmpty) {
       setState(() {
         _referenceRouteIds = {};
@@ -332,37 +350,77 @@ class _RecordScreenState extends State<RecordScreen>
       return;
     }
 
+    setState(() {
+      _referenceRouteIds = ids;
+      _referencePolylines = const [];
+    });
+
     final repo = context.read<RouteRepository>();
     final byId = {for (final r in repo.routes) r.id: r};
-    final polylines = <Polyline>[];
     var colorIndex = 1; // skip red - reserved for the live track
+    final built = <Polyline>[];
+
     for (final id in ids) {
+      if (!mounted) return;
       final route = byId[id];
       if (route == null) continue;
       try {
         final xml = await repo.readTrackContent(route);
-        final parsed = parseTrackXml(xml);
-        final points = [
-          for (final p in filterImplausiblePoints(parsed.points)) p.latLng,
-        ];
+        if (!mounted) return;
+        final parsed = await compute(parseAndFilterTrackXml, xml);
+        if (!mounted) return;
+        final points = [for (final p in parsed.points) p.latLng];
         if (points.length < 2) continue;
-        polylines.add(
-          Polyline(
-            points: points,
-            strokeWidth: 4,
-            color: colorForDay(colorIndex),
-          ),
-        );
+        final color = colorForDay(colorIndex);
         colorIndex++;
+        await _revealOverlayPolyline(built, points, color);
       } catch (_) {
         // Skip unreadable routes; keep whatever else loaded.
       }
     }
-    if (!mounted) return;
-    setState(() {
-      _referenceRouteIds = ids;
-      _referencePolylines = polylines;
+  }
+
+  Future<void> _revealOverlayPolyline(
+    List<Polyline> built,
+    List<LatLng> points,
+    Color color,
+  ) async {
+    if (points.length < 150) {
+      built.add(Polyline(points: points, strokeWidth: 4, color: color));
+      if (!mounted) return;
+      setState(() => _referencePolylines = List<Polyline>.from(built));
+      return;
+    }
+
+    final total = points.length;
+    final batch = max(30, min(800, (total / 60).ceil()));
+    final done = Completer<void>();
+    var shown = 0;
+    final slot = built.length;
+    built.add(Polyline(points: [points.first], strokeWidth: 4, color: color));
+
+    _overlayRevealTimer?.cancel();
+    _overlayRevealTimer = Timer.periodic(const Duration(milliseconds: 16), (
+      timer,
+    ) {
+      if (!mounted) {
+        timer.cancel();
+        if (!done.isCompleted) done.complete();
+        return;
+      }
+      shown = min(total, shown + batch);
+      built[slot] = Polyline(
+        points: points.sublist(0, shown),
+        strokeWidth: 4,
+        color: color,
+      );
+      setState(() => _referencePolylines = List<Polyline>.from(built));
+      if (shown >= total) {
+        timer.cancel();
+        if (!done.isCompleted) done.complete();
+      }
     });
+    await done.future;
   }
 
   /// Switches from the info page to the map and re-enables course-up follow.
@@ -613,6 +671,7 @@ class _RecordScreenState extends State<RecordScreen>
   void dispose() {
     recordScreenVisible.value = false;
     _tickTimer?.cancel();
+    _overlayRevealTimer?.cancel();
     _liveLocationSub?.cancel();
     _mapEventSub.cancel();
     _cancelCameraAnimation();
