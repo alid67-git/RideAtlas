@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.70 beta',
+    date: '2026-08-27',
+    note:
+        'Kayıt sürerken ana haritadaki konum tuşu kayıt haritasını canlı '
+        'izle açar; kırmızı kayıt ikonu metin/istatistik sayfasına gider. '
+        'Ana haritada da aynı kırmızı kayıt izi görünür — dışarıdaki ve '
+        'kayıt haritası aynı yerde kalır.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.69 beta',
     date: '2026-08-27',
     note:
