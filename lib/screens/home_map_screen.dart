@@ -103,7 +103,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         SnackBar(content: Text(l10n.recordingSessionResumed)),
       );
       await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const RecordScreen()),
+        MaterialPageRoute(
+          builder: (_) => const RecordScreen(initialShowMap: true),
+        ),
       );
     } catch (_) {
       // Bridge missing in tests / non-Android - nothing to do.
