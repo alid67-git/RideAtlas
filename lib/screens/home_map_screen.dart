@@ -253,7 +253,19 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     super.dispose();
   }
 
+  /// Recenters on the live GPS fix. While a recording is in progress this
+  /// opens [RecordScreen] on the map page (with the live track) instead of
+  /// only moving the home camera — home and record map stay one place.
   void _recenter() {
+    final recorder = context.read<GpsRecorder>();
+    if (!recorder.isIdle) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const RecordScreen(initialShowMap: true),
+        ),
+      );
+      return;
+    }
     final location = _currentLocation;
     if (location != null) {
       _mapController.move(location, 15);
@@ -466,7 +478,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   Widget _buildMap() {
     final vehicleIcon = context.watch<VehicleIconController>().option;
+    final recorder = context.watch<GpsRecorder>();
     final markerSize = vehicleMarkerSize(vehicleIcon);
+    final trackPoints = recorder.points;
 
     return FlutterMap(
       mapController: _mapController,
@@ -483,6 +497,18 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           maxNativeZoom: _mapStyle.maxNativeZoom,
           evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),
+        // Same live red track as RecordScreen so leaving the record UI
+        // doesn't hide the ride on the "outer" map.
+        if (trackPoints.length > 1)
+          PolylineLayer(
+            polylines: [
+              Polyline(
+                points: [for (final p in trackPoints) p.latLng],
+                strokeWidth: 4,
+                color: const Color(0xFFE53935),
+              ),
+            ],
+          ),
         if (_currentLocation != null)
           MarkerLayer(
             markers: [

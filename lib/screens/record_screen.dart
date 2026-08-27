@@ -61,7 +61,11 @@ final _supportsBackgroundRecording =
 /// it only runs while some tab/window of the app stays open - see
 /// AppLocalizations.recordingForegroundNotice for that case.
 class RecordScreen extends StatefulWidget {
-  const RecordScreen({super.key});
+  const RecordScreen({super.key, this.initialShowMap = false});
+
+  /// When returning from home/list while a ride is already running: `true`
+  /// opens the live map with the track; `false` opens the text/stats page.
+  final bool initialShowMap;
 
   @override
   State<RecordScreen> createState() => _RecordScreenState();
@@ -91,7 +95,8 @@ class _RecordScreenState extends State<RecordScreen>
   /// True once recording has started and the rider has switched to the map
   /// page (see [_buildInfoPage]/[_buildMapPage]). Recording always opens on
   /// the info page - the map is one tap away via the toggle button in either
-  /// page's header.
+  /// page's header - unless [RecordScreen.initialShowMap] asked for the map
+  /// (e.g. home locate while a ride is already running).
   bool _showMap = false;
 
   /// Same Hive-backed base map style as the home / route map screens, so
@@ -204,6 +209,9 @@ class _RecordScreenState extends State<RecordScreen>
   void initState() {
     super.initState();
     recordScreenVisible.value = true;
+    // Seed before first build so a return-from-home locate opens the map
+    // with the live track instead of the info page.
+    _showMap = widget.initialShowMap;
     _rotationController = AnimationController(
       vsync: this,
       // Match the ~2s native GPS cadence so one camera glide is still
@@ -234,6 +242,19 @@ class _RecordScreenState extends State<RecordScreen>
     if (AppUpdateController.isSupported) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) context.read<AppUpdateController>().check();
+      });
+    }
+    if (widget.initialShowMap) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_showMap) return;
+        final location = _currentLocation;
+        if (location != null) {
+          _followMe = true;
+          _mapController.move(location, 15);
+          _markerLocation.value = location;
+          kickMapTileLayer(_mapController);
+          _applyRotation();
+        }
       });
     }
   }
