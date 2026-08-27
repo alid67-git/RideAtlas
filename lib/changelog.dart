@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.69 beta',
+    date: '2026-08-27',
+    note:
+        'İlk açılışta (ve stil değişiminde) harita bazen boş kalıyordu — '
+        'flutter_map ilk kamera hareketini tile isteğine çevirmiyordu. '
+        'Küçük bir tile “kick” eklendi; zoom’a basmadan harita boyanır.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.68 beta',
     date: '2026-08-27',
     note:

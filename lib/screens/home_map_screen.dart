@@ -62,6 +62,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Ensure tiles fetch even if GPS never moves the camera (same center/
+      // zoom as MapOptions → flutter_map may skip the first request).
+      if (mounted) kickMapTileLayer(_mapController);
       await _maybeShowWhatsNew();
       // After what's-new: check once; offer a single "Güncelle" dialog. The
       // same banner also appears on the recording/info screens via
@@ -158,10 +161,13 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final savedId = box.get(_mapStyleKey);
     if (savedId == null || !mounted) return;
     setState(() => _mapStyle = findBaseMapStyle(savedId));
+    // Style remounts TileLayer via ValueKey — nudge so the new layer paints.
+    kickMapTileLayer(_mapController);
   }
 
   Future<void> _changeMapStyle(BaseMapStyle style) async {
     setState(() => _mapStyle = style);
+    kickMapTileLayer(_mapController);
     final box = await Hive.openBox<String>(_metaBoxName);
     await box.put(_mapStyleKey, style.id);
   }
@@ -234,6 +240,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             // zooming in close. The locate-me button still zooms in close
             // (see _recenter) since that's a deliberate "take me there".
             _mapController.move(location, _defaultZoom);
+            // move() can be a no-op vs initialCenter/zoom and leave tiles blank.
+            kickMapTileLayer(_mapController);
           }
         });
   }
@@ -247,7 +255,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   void _recenter() {
     final location = _currentLocation;
-    if (location != null) _mapController.move(location, 15);
+    if (location != null) {
+      _mapController.move(location, 15);
+      kickMapTileLayer(_mapController);
+    }
   }
 
   void _zoomIn() {

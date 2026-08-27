@@ -655,7 +655,10 @@ class _RecordScreenState extends State<RecordScreen>
           if (!_centeredOnce) {
             _centeredOnce = true;
             _markerLocation.value = location;
-            if (_mapVisible) _mapController.move(location, 15);
+            if (_mapVisible) {
+              _mapController.move(location, 15);
+              kickMapTileLayer(_mapController);
+            }
           } else if (_followMe && _mapVisible) {
             // Position and rotation animate together over the same
             // duration - see _animateCameraTo - rather than the map

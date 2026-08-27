@@ -16,6 +16,22 @@ NetworkTileProvider createRideAtlasTileProvider() => NetworkTileProvider(
       headers: <String, String>{'User-Agent': kTileUserAgent},
     );
 
+/// Forces [TileLayer] to request tiles after the first programmatic camera
+/// move. flutter_map sometimes skips the initial fetch when [MapController.move]
+/// matches [MapOptions.initialCenter]/[MapOptions.initialZoom] (no MapEvent),
+/// leaving a blank map until the rider zooms by hand.
+void kickMapTileLayer(MapController controller) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    try {
+      final camera = controller.camera;
+      controller.move(camera.center, camera.zoom + 0.001);
+      controller.move(camera.center, camera.zoom);
+    } catch (_) {
+      // Controller not attached yet - ignore; a later kick will run.
+    }
+  });
+}
+
 /// A selectable base map (tile layer) style. Google's own map tiles can't be
 /// hotlinked outside their SDK per their terms of service, so these are
 /// free/legally embeddable alternatives covering similar looks (street,
