@@ -80,9 +80,12 @@ class _BlinkingRecIconState extends State<_BlinkingRecIcon>
           widget.isPaused ? Icons.pause : Icons.fiber_manual_record,
           color: Colors.white,
         ),
-        onPressed: () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const RecordScreen())),
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            // Red REC icon → text/stats (info) page of the active ride.
+            builder: (_) => const RecordScreen(initialShowMap: false),
+          ),
+        ),
       ),
     );
     if (widget.isPaused) return button;
