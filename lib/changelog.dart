@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.63 beta',
+    date: '2026-08-27',
+    note:
+        'Kayıt haritasındaki rota seçim diyaloğu: "Kaydet" → "Göster", '
+        '"Hepsi" kutusu ile tek dokunuşta hepsini seç/kaldır, "Temizle" '
+        'kaldırıldı. Çoklu "Haritada göster" artık önce haritayı açıp '
+        'her rotayı arka planda parse ederek adım adım çiziyor (önceden '
+        'hepsi bitene kadar kilitleniyordu / "cevap vermiyor").',
+  ),
+  ChangelogEntry(
     version: 'v1.4.62 beta',
     date: '2026-08-26',
     note:
