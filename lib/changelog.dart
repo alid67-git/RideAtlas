@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.66 beta',
+    date: '2026-08-27',
+    note:
+        'Kayıt haritasında "konumuma dön" artık her zaman cihaz GPS '
+        'konumuna sabit yakın zoom ile gider (kayıt ederken / etmezken aynı; '
+        'önceden takip açıkken hiç tepki vermiyor veya ara zoom / tween '
+        'kalıntısına zıplayabiliyordu). Tüm kaydı göstermek için zoom-out '
+        'ikonu ayrı duruyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.65 beta',
     date: '2026-08-27',
     note:

@@ -219,6 +219,9 @@ class _RecordScreenState extends State<RecordScreen>
     _loadMapStyle();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       if (_isUserMapGesture(event.source) && _followMe) {
+        // Stop any in-flight glide so a pan isn't yanked by the last GPS
+        // tween for up to ~1.8s after the rider touches the map.
+        _cancelCameraAnimation();
         setState(() => _followMe = false);
       }
     });
@@ -445,17 +448,17 @@ class _RecordScreenState extends State<RecordScreen>
     });
   }
 
-  /// Recenters and resumes following the live position, course-up. A repeat
-  /// tap while already following is a no-op - there's nothing further to
-  /// switch to.
+  /// Snaps the camera to the live GPS fix at a fixed close zoom (same as the
+  /// home map's locate button), then resumes course-up follow. Always does
+  /// this - even when already following - so a tap never lands mid-tween or
+  /// on a leftover overview zoom. Whole-track overview stays on
+  /// [_showWholeTrack].
   void _recenter() {
-    if (_followMe) return;
     _cancelCameraAnimation();
     final location = _currentLocation;
     setState(() => _followMe = true);
     if (location != null) {
-      final zoom = _mapController.camera.zoom;
-      _mapController.move(location, zoom < 15 ? 16 : zoom);
+      _mapController.move(location, 15);
       _markerLocation.value = location;
     }
     _applyRotation();
@@ -463,7 +466,7 @@ class _RecordScreenState extends State<RecordScreen>
 
   /// Zooms out to fit the entire recorded track on screen, north-up, and
   /// stops auto-follow so the overview stays put. Tapping the recenter
-  /// button ([_recenter]) returns to the live position, course-up.
+  /// button ([_recenter]) returns to the live position.
   void _showWholeTrack() {
     final points = _recorder.points;
     if (points.length < 2) return;
@@ -652,7 +655,7 @@ class _RecordScreenState extends State<RecordScreen>
           if (!_centeredOnce) {
             _centeredOnce = true;
             _markerLocation.value = location;
-            if (_mapVisible) _mapController.move(location, 16);
+            if (_mapVisible) _mapController.move(location, 15);
           } else if (_followMe && _mapVisible) {
             // Position and rotation animate together over the same
             // duration - see _animateCameraTo - rather than the map
