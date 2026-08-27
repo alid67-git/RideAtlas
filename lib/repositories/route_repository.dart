@@ -26,7 +26,7 @@ class RouteRepository extends ChangeNotifier {
   Box<String>? _box;
 
   List<GpxRoute> get routes => List.unmodifiable(
-    _routes.toList()..sort((a, b) => b.importedAt.compareTo(a.importedAt)),
+    _routes.toList()..sort((a, b) => b.recordedAt.compareTo(a.recordedAt)),
   );
 
   bool get isLoading => _loading;
@@ -42,11 +42,51 @@ class RouteRepository extends ChangeNotifier {
     final box = await _openBox();
     final raw = box.get(_indexKey);
     final list = raw == null ? const [] : jsonDecode(raw) as List<dynamic>;
+    final missingRecordedAt = <String>{};
     _routes
       ..clear()
-      ..addAll(list.map((e) => GpxRoute.fromJson(e as Map<String, dynamic>)));
+      ..addAll(
+        list.map((e) {
+          final json = e as Map<String, dynamic>;
+          if (json['recordedAt'] == null) {
+            missingRecordedAt.add(json['id'] as String);
+          }
+          return GpxRoute.fromJson(json);
+        }),
+      );
 
     _loading = false;
+    notifyListeners();
+
+    // One-shot: pre-recordedAt installs only stored import time. Re-read each
+    // track's first GPS timestamp so the list sorts by when the ride happened.
+    if (missingRecordedAt.isNotEmpty) {
+      await _backfillRecordedAt(box, missingRecordedAt);
+    }
+  }
+
+  Future<void> _backfillRecordedAt(
+    Box<String> box,
+    Set<String> ids,
+  ) async {
+    var changed = false;
+    for (var i = 0; i < _routes.length; i++) {
+      final route = _routes[i];
+      if (!ids.contains(route.id)) continue;
+      final xml = box.get(_contentKey(route.id));
+      if (xml == null) continue;
+      try {
+        final parsed = await compute(parseTrackXml, xml);
+        final start = trackTimeRange(parsed.points).start;
+        if (start == null || start == route.recordedAt) continue;
+        _routes[i] = route.copyWith(recordedAt: start);
+        changed = true;
+      } catch (_) {
+        // Keep importedAt fallback; do not block list load on a bad file.
+      }
+    }
+    if (!changed) return;
+    await _persistIndex(box);
     notifyListeners();
   }
 

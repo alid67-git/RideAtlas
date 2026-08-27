@@ -34,7 +34,7 @@ class RouteCard extends StatelessWidget {
     final dateStr = DateFormat(
       'd MMM yyyy',
       Localizations.localeOf(context).languageCode,
-    ).format(route.importedAt);
+    ).format(route.recordedAt);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
