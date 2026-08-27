@@ -31,8 +31,15 @@ enum RecordingStartError {
 /// Elsewhere (web / desktop) this uses [Geolocator.getPositionStream] and
 /// only works while the tab/window is active.
 class GpsRecorder extends ChangeNotifier {
-  static const _autoPauseSpeedThresholdKmh = 3.0;
-  static const _autoPauseResumeThresholdKmh = 6.0;
+  // Stationary / traffic-light floor. Kept low so a slow walk (~3–5 km/h)
+  // stays in the recording state instead of flipping into auto-pause.
+  static const _autoPauseSpeedThresholdKmh = 1.5;
+  // Resume as soon as motion is clearly above a crawl. Was 6 km/h, which
+  // left walkers stuck on "Otomatik duraklatıldı" the whole way.
+  static const _autoPauseResumeThresholdKmh = 2.5;
+  // Phone GPS often reports speed ≈ 0 while walking; treat a real move away
+  // from the pause spot as resume even when Doppler speed stays low.
+  static const _autoPauseResumeDisplacementMeters = 20.0;
   // Just a visual "waiting" cue while genuinely stationary (traffic light,
   // junction) - separate from what counts as a "mola" (see
   // _minMolaDuration below), so making this quick doesn't affect rest
@@ -76,6 +83,8 @@ class GpsRecorder extends ChangeNotifier {
   double? _currentHeading;
   bool _isAutoPaused = false;
   DateTime? _stationarySince;
+  /// Fix where auto-pause engaged - used for displacement-based resume.
+  LatLng? _autoPauseOrigin;
   int? _batteryStartPercent;
   final List<double> _recentSpeedsKmh = [];
   String _notificationTitle = 'RideAtlas';
@@ -220,6 +229,7 @@ class GpsRecorder extends ChangeNotifier {
     _currentHeading = null;
     _isAutoPaused = false;
     _stationarySince = null;
+    _autoPauseOrigin = null;
     _recentSpeedsKmh.clear();
     _lastAcceptedSpeedKmh = null;
     _lastAcceptedSpeedTime = null;
@@ -367,6 +377,7 @@ class GpsRecorder extends ChangeNotifier {
         ]);
       _isAutoPaused = false;
       _stationarySince = null;
+      _autoPauseOrigin = null;
       if (manualPaused) {
         _state = RecordingState.paused;
         final pauseStartMs = session?.pauseStartedAtMs;
@@ -383,6 +394,9 @@ class GpsRecorder extends ChangeNotifier {
           _pauseStartedAt = pauseStartMs != null
               ? DateTime.fromMillisecondsSinceEpoch(pauseStartMs)
               : DateTime.now();
+          if (_points.isNotEmpty) {
+            _autoPauseOrigin = _points.last.latLng;
+          }
         } else {
           _pauseStartedAt = null;
         }
@@ -504,9 +518,16 @@ class GpsRecorder extends ChangeNotifier {
     }
 
     if (_isAutoPaused) {
-      if (smoothedSpeedKmh >= _autoPauseResumeThresholdKmh) {
+      final here = LatLng(pos.latitude, pos.longitude);
+      _autoPauseOrigin ??= here;
+      final movedMeters = _distance(_autoPauseOrigin!, here);
+      final shouldResume =
+          smoothedSpeedKmh >= _autoPauseResumeThresholdKmh ||
+          movedMeters >= _autoPauseResumeDisplacementMeters;
+      if (shouldResume) {
         _isAutoPaused = false;
         _stationarySince = null;
+        _autoPauseOrigin = null;
         final pauseStarted = _pauseStartedAt;
         if (pauseStarted != null) {
           final now = DateTime.now();
@@ -528,6 +549,7 @@ class GpsRecorder extends ChangeNotifier {
       if (DateTime.now().difference(_stationarySince!) >= _autoPauseDelay) {
         _isAutoPaused = true;
         _pauseStartedAt = DateTime.now();
+        _autoPauseOrigin = LatLng(pos.latitude, pos.longitude);
         // Slows the native GPS request cadence while genuinely stationary
         // (see RecordingLocationService.buildLocationRequest) - auto-pause
         // was previously a display-only/recording filter that left GPS
@@ -581,6 +603,7 @@ class GpsRecorder extends ChangeNotifier {
     }
     _isAutoPaused = false;
     _stationarySince = null;
+    _autoPauseOrigin = null;
     _state = RecordingState.recording;
     if (NativeRecording.isSupported) {
       unawaited(NativeRecording.setPaused(false, manualPaused: false));
@@ -618,6 +641,7 @@ class GpsRecorder extends ChangeNotifier {
     _seenNativeTimeMs.clear();
     _isAutoPaused = false;
     _stationarySince = null;
+    _autoPauseOrigin = null;
     _recentSpeedsKmh.clear();
     for (final raw in batch) {
       final lat = (raw['latitude'] as num?)?.toDouble();
@@ -673,6 +697,7 @@ class GpsRecorder extends ChangeNotifier {
     _currentHeading = null;
     _isAutoPaused = false;
     _stationarySince = null;
+    _autoPauseOrigin = null;
     _recentSpeedsKmh.clear();
     _lastAcceptedSpeedKmh = null;
     _lastAcceptedSpeedTime = null;

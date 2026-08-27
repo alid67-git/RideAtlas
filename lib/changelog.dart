@@ -20,6 +20,12 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.72 beta',
+    date: '2026-08-27',
+    note:
+        'Yürürken oto-duraklama kalkar: düşük hızda veya ~20 m ilerleyince kayıt devam eder.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.71 beta',
     date: '2026-08-27',
     note:
