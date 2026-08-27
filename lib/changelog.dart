@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.64 beta',
+    date: '2026-08-27',
+    note:
+        'Çoklu rota haritasında üstteki "N rota" başlığına basınca tüm '
+        'kayıtların listesi açılıyor; Hepsi / tek tek seçip Göster ile '
+        'haritayı yeniden yükleyebiliyorsunuz (yine kademeli çizim).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.63 beta',
     date: '2026-08-27',
     note:

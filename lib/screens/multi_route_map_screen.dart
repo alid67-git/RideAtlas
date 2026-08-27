@@ -56,6 +56,8 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   bool _loading = true;
   int _loadedCount = 0;
   Timer? _revealTimer;
+  late List<String> _activeRouteIds;
+  int _loadGeneration = 0;
 
   /// Compass bearing only - avoid [setState] on every rotate tick so long
   /// overlays are not rebuilt while the rider pinches/pans.
@@ -65,6 +67,7 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   @override
   void initState() {
     super.initState();
+    _activeRouteIds = List<String>.from(widget.routeIds);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     _loadMapStyle();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
@@ -99,19 +102,24 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   }
 
   Future<void> _load() async {
+    final gen = ++_loadGeneration;
+    _revealTimer?.cancel();
+
     final repo = context.read<RouteRepository>();
     final byId = {for (final r in repo.routes) r.id: r};
     final routes = [
-      for (final id in widget.routeIds)
+      for (final id in _activeRouteIds)
         if (byId[id] != null) byId[id]!,
     ];
 
     if (routes.isEmpty) {
-      if (!mounted) return;
+      if (!mounted || gen != _loadGeneration) return;
       setState(() {
         _bootstrapped = true;
         _loading = false;
-        _error = AppLocalizations.of(context)!.routeFileReadError('empty');
+        _loadedCount = 0;
+        _error = null;
+        _lines.clear();
       });
       return;
     }
@@ -128,20 +136,20 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
 
     try {
       for (var i = 0; i < routes.length; i++) {
-        if (!mounted) return;
+        if (!mounted || gen != _loadGeneration) return;
         final route = routes[i];
         final xml = await repo.readTrackContent(route);
-        if (!mounted) return;
+        if (!mounted || gen != _loadGeneration) return;
         final parsed = await compute(parseAndFilterTrackXml, xml);
-        if (!mounted) return;
-        await _revealRoute(route, parsed.points, colorForDay(i));
-        if (!mounted) return;
+        if (!mounted || gen != _loadGeneration) return;
+        await _revealRoute(route, parsed.points, colorForDay(i), gen);
+        if (!mounted || gen != _loadGeneration) return;
         setState(() => _loadedCount = i + 1);
       }
-      if (!mounted) return;
+      if (!mounted || gen != _loadGeneration) return;
       setState(() => _loading = false);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || gen != _loadGeneration) return;
       setState(() {
         _loading = false;
         _error = AppLocalizations.of(context)!.routeFileReadError('$e');
@@ -149,13 +157,100 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     }
   }
 
+  /// Same picker as the recording overlay: Hepsi + checkboxes, then Göster
+  /// reloads the map with the new selection (progressive draw again).
+  Future<void> _reselectRoutes() async {
+    final l10n = AppLocalizations.of(context)!;
+    final routes = context.read<RouteRepository>().routes;
+    if (routes.isEmpty) return;
+
+    final selected = Set<String>.from(_activeRouteIds);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setLocal) {
+            final allSelected =
+                routes.isNotEmpty && selected.length == routes.length;
+            return AlertDialog(
+              title: Text(l10n.recordOverlayTitle),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: routes.length + 1,
+                  itemBuilder: (context, i) {
+                    if (i == 0) {
+                      return CheckboxListTile(
+                        value: allSelected,
+                        title: Text(l10n.recordOverlaySelectAll),
+                        onChanged: (_) => setLocal(() {
+                          if (allSelected) {
+                            selected.clear();
+                          } else {
+                            selected
+                              ..clear()
+                              ..addAll(routes.map((r) => r.id));
+                          }
+                        }),
+                      );
+                    }
+                    final route = routes[i - 1];
+                    return CheckboxListTile(
+                      value: selected.contains(route.id),
+                      title: Text(route.name),
+                      subtitle: Text(
+                        '${route.distanceKm.toStringAsFixed(1)} km',
+                      ),
+                      onChanged: (v) => setLocal(() {
+                        if (v == true) {
+                          selected.add(route.id);
+                        } else {
+                          selected.remove(route.id);
+                        }
+                      }),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text(l10n.cancel),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: Text(l10n.recordOverlayShow),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+
+    final next = [
+      for (final r in routes)
+        if (selected.contains(r.id)) r.id,
+    ];
+    final same = next.length == _activeRouteIds.length &&
+        next.asMap().entries.every((e) => e.value == _activeRouteIds[e.key]);
+    if (same) return;
+
+    setState(() => _activeRouteIds = next);
+    await _load();
+  }
+
   Future<void> _revealRoute(
     GpxRoute route,
     List<TrackPoint> trackPoints,
     Color color,
+    int gen,
   ) async {
     final points = [for (final p in trackPoints) p.latLng];
     if (points.length < 2) return;
+    if (!mounted || gen != _loadGeneration) return;
 
     final line = _RouteLine(route: route, points: const [], color: color);
     setState(() => _lines.add(line));
@@ -168,14 +263,14 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
 
     final total = points.length;
     // Larger batches when many routes are queued so drawing finishes sooner.
-    final routeFactor = max(1, widget.routeIds.length ~/ 4);
+    final routeFactor = max(1, _activeRouteIds.length ~/ 4);
     final batch = max(30, min(1200, (total / 60).ceil() * routeFactor));
     final done = Completer<void>();
     var shown = 0;
 
     _revealTimer?.cancel();
     _revealTimer = Timer.periodic(const Duration(milliseconds: 16), (timer) {
-      if (!mounted) {
+      if (!mounted || gen != _loadGeneration) {
         timer.cancel();
         if (!done.isCompleted) done.complete();
         return;
@@ -242,7 +337,7 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final lines = _lines;
-    final total = widget.routeIds.length;
+    final total = _activeRouteIds.length;
 
     return Scaffold(
       body: Stack(
@@ -269,25 +364,46 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.surface.withValues(alpha: 0.92),
+                          child: Material(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surface.withValues(alpha: 0.92),
+                            borderRadius: BorderRadius.circular(20),
+                            elevation: 2,
+                            shadowColor: Colors.black26,
+                            child: InkWell(
                               borderRadius: BorderRadius.circular(20),
-                              boxShadow: const [
-                                BoxShadow(color: Colors.black26, blurRadius: 6),
-                              ],
-                            ),
-                            child: Text(
-                              l10n.routesCountLabel(total),
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w600),
+                              onTap: _reselectRoutes,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 10,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        l10n.routesCountLabel(total),
+                                        textAlign: TextAlign.center,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Icons.arrow_drop_down,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
