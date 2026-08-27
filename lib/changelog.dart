@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.68 beta',
+    date: '2026-08-27',
+    note:
+        'Haritadaki araç/konum ("ride") ikonu küçültüldü ama beyaz kenar + '
+        'gölge/glow ile daha vurgulu hale getirildi; uydu haritada ne '
+        'devasa görünüyor ne de arkada kayboluyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.67 beta',
     date: '2026-08-27',
     note:
