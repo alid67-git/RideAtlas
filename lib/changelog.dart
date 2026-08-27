@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.65 beta',
+    date: '2026-08-27',
+    note:
+        'Android/web derlemesi düzeltildi (kayıt ekranında eksik gpx_parser '
+        'import). Üstteki "N rota" ile listeden yeniden seçim (1.4.64) bu '
+        'sürümle telefona iner.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.64 beta',
     date: '2026-08-27',
     note:

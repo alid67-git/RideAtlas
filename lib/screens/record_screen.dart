@@ -27,6 +27,7 @@ import '../services/daily_analysis.dart' show colorForDay;
 import '../services/exif_gps.dart';
 import '../services/gallery_scan.dart';
 import '../services/gps_recorder.dart';
+import '../services/gpx_parser.dart';
 import '../services/app_update_controller.dart';
 import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';

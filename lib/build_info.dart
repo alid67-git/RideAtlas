@@ -1,7 +1,7 @@
 /// Bumped by hand on every push so the running build can be eyeballed on
 /// screen (Chrome tabs / dev servers can otherwise silently serve stale JS).
-const String kAppBuildLabel = 'v1.4.64 beta';
+const String kAppBuildLabel = 'v1.4.65 beta';
 
 /// Shown once, in a dialog, the first time this build label is seen.
 const String kAppBuildNote =
-    'Çoklu haritada üstteki rota sayısına basınca listeden yeniden seçim.';
+    'Üstteki N rota ile yeniden seçim; APK derleme düzeltmesi.';
