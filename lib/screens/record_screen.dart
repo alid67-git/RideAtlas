@@ -27,6 +27,7 @@ import '../services/daily_analysis.dart' show colorForDay;
 import '../services/exif_gps.dart';
 import '../services/gallery_scan.dart';
 import '../services/gps_recorder.dart';
+import '../services/live_location.dart';
 import '../services/gpx_parser.dart';
 import '../services/app_update_controller.dart';
 import '../services/track_io.dart';
@@ -474,13 +475,29 @@ class _RecordScreenState extends State<RecordScreen>
   /// this - even when already following - so a tap never lands mid-tween or
   /// on a leftover overview zoom. Whole-track overview stays on
   /// [_showWholeTrack].
-  void _recenter() {
+  Future<void> _recenter() async {
     _cancelCameraAnimation();
-    final location = _currentLocation;
+  LatLng? location = _recorder.currentLatLng;
+  if (location == null) {
+    final pos = await fetchFreshDevicePosition();
+    if (pos != null) {
+      location = LatLng(pos.latitude, pos.longitude);
+      if (mounted) {
+        setState(() {
+          _currentLocation = location;
+          _currentHeading = pos.heading.isFinite && pos.heading >= 0
+              ? pos.heading
+              : _currentHeading;
+        });
+      }
+    }
+  }
+  location ??= _currentLocation;
     setState(() => _followMe = true);
     if (location != null) {
       _mapController.move(location, 15);
       _markerLocation.value = location;
+      kickMapTileLayer(_mapController);
     }
     _applyRotation();
   }
@@ -659,6 +676,7 @@ class _RecordScreenState extends State<RecordScreen>
                 ),
         ).listen((pos) {
           if (!mounted) return;
+          if (!isAcceptableLivePosition(pos)) return;
           final location = LatLng(pos.latitude, pos.longitude);
           // A heading reading near 0 accuracy/while stationary is noisy
           // GPS jitter, not a real course - ignore it rather than let the
@@ -1225,7 +1243,7 @@ class _RecordScreenState extends State<RecordScreen>
                     foregroundColor: _followMe
                         ? Theme.of(context).colorScheme.onPrimary
                         : null,
-                    onPressed: _currentLocation == null ? null : _recenter,
+                    onPressed: _recenter,
                     // A compass-needle icon while auto-following (course-up),
                     // the plain dot otherwise - the same visual language most
                     // map/nav apps use for this.
@@ -1770,7 +1788,7 @@ class _RecordScreenState extends State<RecordScreen>
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
-        initialCenter: _currentLocation ?? const LatLng(41.0082, 28.9784),
+        initialCenter: _currentLocation ?? kUnknownLocationMapCenter,
         initialZoom: 16,
       ),
       children: [

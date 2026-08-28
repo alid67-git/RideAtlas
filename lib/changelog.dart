@@ -20,6 +20,13 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.73 beta',
+    date: '2026-08-28',
+    note:
+        'Konum tuşu canlı GPS okur; eski önbellek ve İstanbul varsayılanı '
+        'kaldırıldı — Tampa vb. yerlerde yanlış şehre gitmez.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.72 beta',
     date: '2026-08-27',
     note:
