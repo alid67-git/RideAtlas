@@ -150,7 +150,7 @@ class MainActivity : FlutterActivity() {
 
     private fun readOpenPayload(intent: Intent): Map<String, Any>? {
         val action = intent.action ?: return null
-        val uri: Uri? = when (action) {
+        val uri = when (action) {
             Intent.ACTION_VIEW -> intent.data
             Intent.ACTION_SEND -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
