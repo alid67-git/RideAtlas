@@ -7,6 +7,7 @@ alwaysApply: true
 
 ## Releases
 - Bump `lib/build_info.dart` (`kAppBuildLabel` + `kAppBuildNote`) and add a matching entry at the top of `lib/changelog.dart` on every user-facing push to `main`.
+- Web update versioning is automatic: deploy-web.yml stamps `web/sw.js` `APP_VERSION`, `web/index.html` `RIDEATLAS_WEB_VERSION` and the `?v=` cache busters from `kAppBuildLabel` on every deploy. Do not hand-edit those version strings; do not add a second web update UI (bottom banner only, no header icon).
 - Prefer **one product change per version**. Do not ship a product version solely for CI/toolchain bumps.
 - Infra-only fixes (Gradle/AGP/Kotlin/CI): bump toolchain in **one** commit; mention briefly in the product note only if users must reinstall, otherwise keep the note product-focused.
 
