@@ -13,6 +13,7 @@ import '../models/base_map_style.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/app_update_controller.dart';
 import '../services/gps_recorder.dart';
+import '../services/live_location.dart';
 import '../services/native_recording.dart';
 import '../widgets/app_update_ui.dart';
 import '../widgets/recording_indicator.dart';
@@ -227,6 +228,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           ),
         ).listen((pos) {
           if (!mounted) return;
+          if (!isAcceptableLivePosition(pos)) return;
           final location = LatLng(pos.latitude, pos.longitude);
           final firstFix = !_hadGpsFix;
           setState(() {
@@ -258,7 +260,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   /// Recenters on the live GPS fix. While a recording is in progress this
   /// opens [RecordScreen] on the map page (with the live track) instead of
   /// only moving the home camera — home and record map stay one place.
-  void _recenter() {
+  Future<void> _recenter() async {
     final recorder = context.read<GpsRecorder>();
     if (!recorder.isIdle) {
       Navigator.of(context).push(
@@ -268,8 +270,17 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       );
       return;
     }
-    final location = _currentLocation;
+    final pos = await fetchFreshDevicePosition();
+    if (!mounted) return;
+    final location = pos != null
+        ? LatLng(pos.latitude, pos.longitude)
+        : _currentLocation;
     if (location != null) {
+      setState(() {
+        _currentLocation = location;
+        _locationError = null;
+        if (pos != null) _hadGpsFix = true;
+      });
       _mapController.move(location, 15);
       kickMapTileLayer(_mapController);
     }
@@ -467,7 +478,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                 const SizedBox(height: 12),
                 FloatingActionButton(
                   heroTag: 'homeLocate',
-                  onPressed: _currentLocation == null ? null : _recenter,
+                  onPressed: _recenter,
                   child: const Icon(Icons.my_location),
                 ),
               ],
@@ -487,7 +498,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
-        initialCenter: _currentLocation ?? const LatLng(41.0082, 28.9784),
+        initialCenter: _currentLocation ?? kUnknownLocationMapCenter,
         initialZoom: _defaultZoom,
       ),
       children: [
