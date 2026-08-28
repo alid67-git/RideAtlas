@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.77 beta',
+    date: '2026-08-28',
+    note:
+        'Saat dilimi: çok günlük analiz ve gün filtreleri artık UTC yerine '
+        'cihazın yerel takvim gününe göre bölünüyor (Türkiye UTC+3\'te gece '
+        'yarısından sonraki noktalar önceki güne yazılıyordu - "dün '
+        'gitmediğim kadar yol" görünümü). Kayıt tarihi/saati gösterimleri '
+        'toLocal() ile düzeldi. Android: GPX/KML/KMZ için VIEW + SEND '
+        'intent-filter eklendi - dosya yöneticisinde "Şununla aç" listesinde '
+        'RideAtlas görünür; seçilince dosya içeriye alınır ve haritada '
+        'açılır (paylaş menüsü de desteklenir).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.76 beta',
     date: '2026-08-28',
     note:

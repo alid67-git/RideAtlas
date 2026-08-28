@@ -15,16 +15,14 @@ import 'screens/home_map_screen.dart';
 import 'services/app_update_controller.dart';
 import 'services/car_bridge.dart';
 import 'services/gps_recorder.dart';
+import 'navigation/root_navigator.dart';
+import 'widgets/incoming_track_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   runApp(const RideAtlasApp());
 }
-
-/// Above the app's Navigator, for anything that needs to push/show
-/// something without its own [BuildContext].
-final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 class RideAtlasApp extends StatelessWidget {
   const RideAtlasApp({super.key});
@@ -54,9 +52,10 @@ class RideAtlasApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AppUpdateController()),
       ],
       child: _CarBridgeGate(
-        child: Consumer<LocaleController>(
-          builder: (context, localeController, _) {
-            return MaterialApp(
+        child: IncomingTrackGate(
+          child: Consumer<LocaleController>(
+            builder: (context, localeController, _) {
+              return MaterialApp(
               title: 'RideAtlas',
               debugShowCheckedModeBanner: false,
               navigatorKey: rootNavigatorKey,
@@ -96,6 +95,7 @@ class RideAtlasApp extends StatelessWidget {
               home: const HomeMapScreen(),
             );
           },
+        ),
         ),
       ),
     );

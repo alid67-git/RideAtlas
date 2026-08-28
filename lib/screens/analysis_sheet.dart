@@ -175,7 +175,7 @@ class _AnalysisSheetState extends State<AnalysisSheet>
                 DateFormat(
                   'd MMMM yyyy, HH:mm',
                   localeName,
-                ).format(route.recordedAt),
+                ).format(route.recordedAt.toLocal()),
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
