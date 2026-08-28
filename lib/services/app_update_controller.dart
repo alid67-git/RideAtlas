@@ -11,11 +11,17 @@ class AppUpdateController extends ChangeNotifier {
   bool installing = false;
   bool _checking = false;
 
+  /// Bytes received / expected while [installing]. Null until the first chunk.
+  (int received, int total)? downloadProgress;
+
   static final bool isSupported =
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-  bool get showBanner =>
-      isSupported && available != null && !dismissed && !installing;
+  bool get showBanner {
+    if (!isSupported) return false;
+    if (installing) return true;
+    return available != null && !dismissed;
+  }
 
   Future<void> check() async {
     if (!isSupported || _checking || available != null) return;
@@ -39,11 +45,18 @@ class AppUpdateController extends ChangeNotifier {
   void beginInstall() {
     if (installing) return;
     installing = true;
+    downloadProgress = null;
+    notifyListeners();
+  }
+
+  void reportDownloadProgress(int received, int total) {
+    downloadProgress = (received, total);
     notifyListeners();
   }
 
   void endInstall({required bool success}) {
     installing = false;
+    downloadProgress = null;
     if (success) dismissed = true;
     notifyListeners();
   }

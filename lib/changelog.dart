@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.74 beta',
+    date: '2026-08-28',
+    note:
+        'Güncelleme MedyaAtlas gibi arka planda indirilir: kilitleyen yüzde '
+        'diyaloğu yok; ana/kayıt ekranındaki banner’da % görünür, uygulama '
+        'kullanılabilir. APK doğrudan dosyaya akar (bellekte biriktirilmez).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.73 beta',
     date: '2026-08-28',
     note:
