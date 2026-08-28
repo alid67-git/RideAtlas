@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.75 beta',
+    date: '2026-08-28',
+    note:
+        'Sokak ve sade/siyasi haritada CARTO "API KEY REQUIRED" filigranı '
+        'kalktı (OSM/Esri katmanları). Kayıt sırasında GPS sıçrama '
+        'patlamaları canlı izden otomatik düzeltilir.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.74 beta',
     date: '2026-08-28',
     note:
