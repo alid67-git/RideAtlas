@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
@@ -89,26 +88,51 @@ Future<void> downloadAndInstallUpdate(
     final request = http.Request('GET', Uri.parse(info.downloadUrl));
     final response = await client
         .send(request)
-        .timeout(const Duration(minutes: 2));
+        .timeout(const Duration(minutes: 8));
     if (response.statusCode != 200) {
       throw HttpException('HTTP ${response.statusCode}');
     }
 
     final total = response.contentLength ??
         (info.sizeBytes > 0 ? info.sizeBytes : null);
-    final bytes = BytesBuilder(copy: false);
-    var received = 0;
-    onProgress?.call(0, total);
-
-    await for (final chunk in response.stream) {
-      bytes.add(chunk);
-      received += chunk.length;
-      onProgress?.call(received, total);
-    }
-
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/RideAtlas-update.apk');
-    await file.writeAsBytes(bytes.takeBytes(), flush: true);
+    if (await file.exists()) {
+      try {
+        await file.delete();
+      } catch (_) {}
+    }
+
+    final sink = file.openWrite();
+    var received = 0;
+    var lastPct = -1;
+    var lastReceivedForUnknown = 0;
+    onProgress?.call(0, total);
+
+    try {
+      await for (final chunk in response.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (total != null && total > 0) {
+          final pct = received * 100 ~/ total;
+          if (pct != lastPct || received >= total) {
+            lastPct = pct;
+            onProgress?.call(received, total);
+          }
+        } else if (received - lastReceivedForUnknown >= 256 * 1024) {
+          lastReceivedForUnknown = received;
+          onProgress?.call(received, total);
+        }
+      }
+    } finally {
+      await sink.close();
+    }
+
+    if (!await file.exists() || await file.length() < 1024) {
+      throw const HttpException('İndirilen dosya geçersiz veya boş.');
+    }
+
+    onProgress?.call(received, total ?? received);
 
     final result = await OpenFilex.open(file.path);
     if (result.type != ResultType.done) {
