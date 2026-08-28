@@ -96,6 +96,7 @@ class CarBridge {
       suggestedFileName: '$name.gpx',
       batteryStartPercent: batteryStart,
       batteryEndPercent: batteryEnd,
+      skipDuplicateCheck: true,
     );
   }
 

@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.78 beta',
+    date: '2026-08-28',
+    note:
+        'Sürüş listesi: sıralama kayıttaki GPS tarihine (recordedAt) göre '
+        'yeniden → eskiye; indeks Hive\'da önbellekli - liste her açılışta '
+        'GPX dosyalarını yeniden okumaz. Aynı iz (nokta parmak izi) tekrar '
+        'içe aktarılamaz: dosya seçince / "Şununla aç" ile aynı rota gelirse '
+        '"zaten kayıtlı" uyarısı + mevcut kayıt açılır. Eski kayıtlara '
+        'parmak izi bir kez arka planda yazılır.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.77 beta',
     date: '2026-08-28',
     note:

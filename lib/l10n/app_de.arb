@@ -5,6 +5,8 @@
   "fileNotReadable": "Datei konnte nicht gelesen werden.",
   "importFailedGeneric": "Datei konnte nicht importiert werden: {error}",
   "trackHasNoPoints": "In der Datei wurden keine Strecken-/Trackpunkte gefunden.",
+  "duplicateRouteMessage": "Diese Route ist bereits gespeichert: {name}",
+  "@duplicateRouteMessage": {"placeholders": {"name": {"type": "String"}}},
   "renameRouteTitle": "Route umbenennen",
   "cancel": "Abbrechen",
   "save": "Speichern",

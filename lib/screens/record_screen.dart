@@ -908,6 +908,7 @@ class _RecordScreenState extends State<RecordScreen>
       suggestedFileName: '$name.gpx',
       batteryStartPercent: batteryStart,
       batteryEndPercent: batteryEnd,
+      skipDuplicateCheck: true,
     );
     _savedPointCount = points.length;
     if (!mounted) return;
