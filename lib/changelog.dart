@@ -20,6 +20,25 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.76 beta',
+    date: '2026-08-28',
+    note:
+        'Web otomatik güncelleme (KDO mimarisi): web/sw.js service worker '
+        'eklendi - sürümlü cache (rideatlas-vX.Y.Z), install\'da çekirdek '
+        'shell precache, activate\'te eski cache temizliği + '
+        'clients.claim(), SKIP_WAITING mesajı desteği; HTML network-first, '
+        'diğer varlıklar cache-then-network. app_update.js SW\'yi kaydeder, '
+        'bekleyen yeni SW görünce alttan sabit "Yeni sürüm hazır / '
+        'Güncelle" banner\'ı gösterir (TR/EN/DE), Güncelle → SKIP_WAITING '
+        '→ controllerchange\'de tek seferlik reload; 60 sn\'de bir ve '
+        'sekme öne gelince arka planda reg.update(). Sürüm değişiminde '
+        'localStorage karşılaştırmalı tek seferlik hard-reload emniyeti. '
+        'Sürüm + SW cache adı + ?v= buster\'lar deploy-web.yml tarafından '
+        'build_info.dart\'tan otomatik damgalanır; elle senkron gerekmez. '
+        'Header\'a ikon eklenmedi, yalnız alt banner; Android APK '
+        'güncelleme akışına dokunulmadı.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.75 beta',
     date: '2026-08-28',
     note:

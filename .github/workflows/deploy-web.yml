@@ -33,6 +33,23 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # Single source of truth for the web release version: kAppBuildLabel
+      # in lib/build_info.dart. Stamps the SW cache name (sw.js APP_VERSION),
+      # the shell version (index.html RIDEATLAS_WEB_VERSION) and every ?v=
+      # cache buster so all of them advance together on each release - no
+      # manual sync, no drift.
+      - name: Stamp web version from build_info.dart
+        run: |
+          VERSION=$(grep -oE "v[0-9]+\.[0-9]+\.[0-9]+" lib/build_info.dart | head -1 | tr -d v)
+          test -n "$VERSION"
+          echo "Stamping web version $VERSION"
+          sed -i -E "s/(APP_VERSION = ')[^']+/\1${VERSION}/" web/sw.js
+          sed -i -E "s/(RIDEATLAS_WEB_VERSION = ')[^']+/\1${VERSION}/" web/index.html
+          sed -i -E "s/\?v=[0-9.]+/?v=${VERSION}/g" web/index.html
+          grep -q "rideatlas-v' + APP_VERSION" web/sw.js
+          grep -q "APP_VERSION = '${VERSION}'" web/sw.js
+          grep -q "RIDEATLAS_WEB_VERSION = '${VERSION}'" web/index.html
+
       - name: Build web
         run: flutter build web --release --base-href /RideAtlas/ --pwa-strategy=none
 
