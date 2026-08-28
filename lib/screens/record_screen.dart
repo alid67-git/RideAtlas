@@ -477,22 +477,22 @@ class _RecordScreenState extends State<RecordScreen>
   /// [_showWholeTrack].
   Future<void> _recenter() async {
     _cancelCameraAnimation();
-  LatLng? location = _recorder.currentLatLng;
-  if (location == null) {
-    final pos = await fetchFreshDevicePosition();
-    if (pos != null) {
-      location = LatLng(pos.latitude, pos.longitude);
-      if (mounted) {
-        setState(() {
-          _currentLocation = location;
-          _currentHeading = pos.heading.isFinite && pos.heading >= 0
-              ? pos.heading
-              : _currentHeading;
-        });
+    LatLng? location = _recorder.currentLatLng;
+    if (location == null) {
+      final pos = await fetchFreshDevicePosition();
+      if (pos != null) {
+        location = LatLng(pos.latitude, pos.longitude);
+        if (mounted) {
+          setState(() {
+            _currentLocation = location;
+            _currentHeading = pos.heading.isFinite && pos.heading >= 0
+                ? pos.heading
+                : _currentHeading;
+          });
+        }
       }
     }
-  }
-  location ??= _currentLocation;
+    location ??= _currentLocation;
     setState(() => _followMe = true);
     if (location != null) {
       _mapController.move(location, 15);
