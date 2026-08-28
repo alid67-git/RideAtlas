@@ -164,6 +164,17 @@ class _RouteListScreenState extends State<RouteListScreen> {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)),
       );
+    } on DuplicateRouteException catch (e) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.duplicateRouteMessage(e.existing.name))),
+      );
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => RouteMapScreen(routeId: e.existing.id),
+        ),
+      );
     } on FormatException catch (_) {
       if (mounted) _showError(AppLocalizations.of(context)!.trackHasNoPoints);
     } catch (e) {

@@ -14,6 +14,18 @@ const _uuid = Uuid();
 
 String _contentKey(String id) => 'content_$id';
 
+/// Thrown when [RouteRepository.importFromBytes] finds an already-saved
+/// ride with the same track fingerprint. [existing] is the copy already
+/// in the library - callers typically open it instead of importing again.
+class DuplicateRouteException implements Exception {
+  DuplicateRouteException(this.existing);
+
+  final GpxRoute existing;
+
+  @override
+  String toString() => 'DuplicateRouteException(${existing.id})';
+}
+
 /// Owns the set of imported GPX routes: persists their raw GPX text and
 /// cached summary stats in a [Hive] box so the list screen can render
 /// instantly without re-parsing GPX on every launch. Hive is backed by
@@ -25,14 +37,25 @@ class RouteRepository extends ChangeNotifier {
   bool _loading = true;
   Box<String>? _box;
 
-  List<GpxRoute> get routes => List.unmodifiable(
-    _routes.toList()..sort((a, b) => b.recordedAt.compareTo(a.recordedAt)),
-  );
+  /// Newest ride first ([GpxRoute.recordedAt] descending). The list is kept
+  /// sorted in memory after every load/import/edit - the getter does **not**
+  /// re-read GPX files or re-sort from scratch on every rebuild.
+  List<GpxRoute> get routes => List.unmodifiable(_routes);
 
   bool get isLoading => _loading;
 
   Future<Box<String>> _openBox() async {
     return _box ??= await Hive.openBox<String>(_boxName);
+  }
+
+  /// Newest [recordedAt] first; [importedAt] breaks ties so two rides from
+  /// the same second stay stable.
+  void _sortInPlace() {
+    _routes.sort((a, b) {
+      final byRecorded = b.recordedAt.compareTo(a.recordedAt);
+      if (byRecorded != 0) return byRecorded;
+      return b.importedAt.compareTo(a.importedAt);
+    });
   }
 
   Future<void> load() async {
@@ -43,6 +66,7 @@ class RouteRepository extends ChangeNotifier {
     final raw = box.get(_indexKey);
     final list = raw == null ? const [] : jsonDecode(raw) as List<dynamic>;
     final missingRecordedAt = <String>{};
+    final missingFingerprint = <String>{};
     _routes
       ..clear()
       ..addAll(
@@ -51,53 +75,91 @@ class RouteRepository extends ChangeNotifier {
           if (json['recordedAt'] == null) {
             missingRecordedAt.add(json['id'] as String);
           }
+          if (json['trackFingerprint'] == null) {
+            missingFingerprint.add(json['id'] as String);
+          }
           return GpxRoute.fromJson(json);
         }),
       );
+    _sortInPlace();
 
     _loading = false;
     notifyListeners();
 
-    // One-shot: pre-recordedAt installs only stored import time. Re-read each
-    // track's first GPS timestamp so the list sorts by when the ride happened.
-    if (missingRecordedAt.isNotEmpty) {
-      await _backfillRecordedAt(box, missingRecordedAt);
+    // One-shot backfills: only touch routes whose index row is missing the
+    // field. List display itself never re-parses GPX for sorting.
+    if (missingRecordedAt.isNotEmpty || missingFingerprint.isNotEmpty) {
+      await _backfillIndexFields(
+        box,
+        missingRecordedAt: missingRecordedAt,
+        missingFingerprint: missingFingerprint,
+      );
     }
   }
 
-  Future<void> _backfillRecordedAt(
-    Box<String> box,
-    Set<String> ids,
-  ) async {
+  Future<void> _backfillIndexFields(
+    Box<String> box, {
+    required Set<String> missingRecordedAt,
+    required Set<String> missingFingerprint,
+  }) async {
+    final needParse = {...missingRecordedAt, ...missingFingerprint};
     var changed = false;
     for (var i = 0; i < _routes.length; i++) {
       final route = _routes[i];
-      if (!ids.contains(route.id)) continue;
+      if (!needParse.contains(route.id)) continue;
       final xml = box.get(_contentKey(route.id));
       if (xml == null) continue;
       try {
         final parsed = await compute(parseTrackXml, xml);
-        final start = trackTimeRange(parsed.points).start;
-        if (start == null || start == route.recordedAt) continue;
-        _routes[i] = route.copyWith(recordedAt: start);
-        changed = true;
+        var next = route;
+        if (missingRecordedAt.contains(route.id)) {
+          final start = trackTimeRange(parsed.points).start;
+          if (start != null && start != route.recordedAt) {
+            next = next.copyWith(recordedAt: start);
+          }
+        }
+        if (missingFingerprint.contains(route.id) &&
+            (next.trackFingerprint == null || next.trackFingerprint!.isEmpty)) {
+          next = next.copyWith(
+            trackFingerprint: trackFingerprint(parsed.points),
+          );
+        }
+        if (next != route) {
+          _routes[i] = next;
+          changed = true;
+        }
       } catch (_) {
-        // Keep importedAt fallback; do not block list load on a bad file.
+        // Keep existing index row; do not block list load on a bad file.
       }
     }
     if (!changed) return;
+    _sortInPlace();
     await _persistIndex(box);
     notifyListeners();
+  }
+
+  GpxRoute? _findByFingerprint(String fingerprint) {
+    for (final r in _routes) {
+      if (r.trackFingerprint == fingerprint) return r;
+    }
+    return null;
   }
 
   /// Imports a GPX, KML or KMZ file from raw bytes, parses it, stores its
   /// text content and adds it to the route index. Returns the new route's
   /// metadata.
+  ///
+  /// Throws [DuplicateRouteException] when the same track (by point
+  /// fingerprint) is already in the library - callers should open
+  /// [DuplicateRouteException.existing] instead of importing again.
+  /// Pass [skipDuplicateCheck] for in-app recording saves that may
+  /// intentionally snapshot an in-progress ride more than once.
   Future<GpxRoute> importFromBytes({
     required Uint8List bytes,
     required String suggestedFileName,
     int? batteryStartPercent,
     int? batteryEndPercent,
+    bool skipDuplicateCheck = false,
   }) async {
     final xml = decodeTrackBytes(bytes, fileName: suggestedFileName);
     // Off the UI isolate - large GPX/KML imports used to freeze the app
@@ -105,6 +167,14 @@ class RouteRepository extends ChangeNotifier {
     final parsed = await compute(parseTrackXml, xml);
     if (parsed.points.isEmpty) {
       throw const FormatException('Dosyada rota/track noktası bulunamadı.');
+    }
+
+    final fingerprint = trackFingerprint(parsed.points);
+    if (!skipDuplicateCheck) {
+      final existing = _findByFingerprint(fingerprint);
+      if (existing != null) {
+        throw DuplicateRouteException(existing);
+      }
     }
 
     final id = _uuid.v4();
@@ -132,6 +202,7 @@ class RouteRepository extends ChangeNotifier {
     await box.put(_contentKey(id), xml);
 
     _routes.add(route);
+    _sortInPlace();
     await _persistIndex(box);
     notifyListeners();
     return route;
@@ -159,6 +230,7 @@ class RouteRepository extends ChangeNotifier {
     final index = _routes.indexWhere((r) => r.id == id);
     if (index == -1) return;
     _routes[index] = metadata;
+    _sortInPlace();
     final box = await _openBox();
     await box.put(_contentKey(id), xml);
     await _persistIndex(box);

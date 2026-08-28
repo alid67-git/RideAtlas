@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:gpx/gpx.dart' as gpxlib;
 import 'package:latlong2/latlong.dart';
 
@@ -7,6 +10,26 @@ import '../models/track_point.dart';
 import '../models/waypoint.dart';
 
 const _distance = Distance();
+
+/// Stable identity of a ride path for duplicate-import detection: rounded
+/// lat/lng (+ UTC time when present) of every point, hashed. Independent of
+/// file name / GPX metadata wrapper noise - the same track saved twice
+/// under different names still matches.
+String trackFingerprint(List<TrackPoint> points) {
+  final buf = StringBuffer('${points.length}');
+  for (final p in points) {
+    buf.write('|');
+    buf.write(p.latLng.latitude.toStringAsFixed(5));
+    buf.write(',');
+    buf.write(p.latLng.longitude.toStringAsFixed(5));
+    final t = p.time;
+    if (t != null) {
+      buf.write(',');
+      buf.write(t.toUtc().millisecondsSinceEpoch);
+    }
+  }
+  return sha1.convert(utf8.encode(buf.toString())).toString();
+}
 
 /// Parses raw GPX XML into track points and waypoints.
 ///
@@ -160,6 +183,7 @@ GpxRoute buildRouteMetadata({
     west: west,
     batteryStartPercent: batteryStartPercent,
     batteryEndPercent: batteryEndPercent,
+    trackFingerprint: trackFingerprint(points),
   );
 }
 

@@ -1446,6 +1446,19 @@ class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
       navigator.pushReplacement(
         MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)),
       );
+    } on DuplicateRouteException catch (e) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.duplicateRouteMessage(e.existing.name))),
+      );
+      final navigator = Navigator.of(context);
+      navigator.pop();
+      navigator.pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => RouteMapScreen(routeId: e.existing.id),
+        ),
+      );
     } on FormatException catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

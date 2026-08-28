@@ -21,6 +21,7 @@ class GpxRoute {
     required this.west,
     this.batteryStartPercent,
     this.batteryEndPercent,
+    this.trackFingerprint,
   });
 
   final String id;
@@ -31,7 +32,8 @@ class GpxRoute {
 
   /// When the ride itself happened (first GPS timestamp on the track).
   /// Falls back to [importedAt] when the file has no point times.
-  /// Route lists sort by this, newest first.
+  /// Route lists sort by this, newest first - cached in the Hive index so
+  /// showing the list never re-reads GPX content.
   final DateTime recordedAt;
 
   final double distanceMeters;
@@ -58,6 +60,11 @@ class GpxRoute {
   final int? batteryStartPercent;
   final int? batteryEndPercent;
 
+  /// Stable hash of the track's points (rounded lat/lng + times) - used to
+  /// refuse re-importing the same ride. Null on pre-fingerprint installs
+  /// until [RouteRepository] backfills it once from stored content.
+  final String? trackFingerprint;
+
   double get distanceKm => distanceMeters / 1000;
 
   Duration? get duration =>
@@ -69,7 +76,11 @@ class GpxRoute {
     return distanceKm / (d.inSeconds / 3600);
   }
 
-  GpxRoute copyWith({String? name, DateTime? recordedAt}) {
+  GpxRoute copyWith({
+    String? name,
+    DateTime? recordedAt,
+    String? trackFingerprint,
+  }) {
     return GpxRoute(
       id: id,
       name: name ?? this.name,
@@ -88,6 +99,7 @@ class GpxRoute {
       west: west,
       batteryStartPercent: batteryStartPercent,
       batteryEndPercent: batteryEndPercent,
+      trackFingerprint: trackFingerprint ?? this.trackFingerprint,
     );
   }
 
@@ -109,6 +121,7 @@ class GpxRoute {
     'west': west,
     'batteryStartPercent': batteryStartPercent,
     'batteryEndPercent': batteryEndPercent,
+    if (trackFingerprint != null) 'trackFingerprint': trackFingerprint,
   };
 
   factory GpxRoute.fromJson(Map<String, dynamic> json) {
@@ -135,6 +148,7 @@ class GpxRoute {
       west: (json['west'] as num).toDouble(),
       batteryStartPercent: json['batteryStartPercent'] as int?,
       batteryEndPercent: json['batteryEndPercent'] as int?,
+      trackFingerprint: json['trackFingerprint'] as String?,
     );
   }
 }

@@ -7,6 +7,8 @@
   "importFailedGeneric": "Dosya içe aktarılamadı: {error}",
   "@importFailedGeneric": {"placeholders": {"error": {"type": "String"}}},
   "trackHasNoPoints": "Dosyada rota/track noktası bulunamadı.",
+  "duplicateRouteMessage": "Bu rota zaten kayıtlı: {name}",
+  "@duplicateRouteMessage": {"placeholders": {"name": {"type": "String"}}},
   "renameRouteTitle": "Rotayı yeniden adlandır",
   "cancel": "Vazgeç",
   "save": "Kaydet",

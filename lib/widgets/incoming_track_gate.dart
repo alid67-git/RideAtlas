@@ -60,6 +60,15 @@ class _IncomingTrackGateState extends State<IncomingTrackGate> {
       await nav.push(
         MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)),
       );
+    } on DuplicateRouteException catch (e) {
+      _snack((l10n) => l10n.duplicateRouteMessage(e.existing.name));
+      final nav = rootNavigatorKey.currentState;
+      if (nav == null) return;
+      await nav.push(
+        MaterialPageRoute(
+          builder: (_) => RouteMapScreen(routeId: e.existing.id),
+        ),
+      );
     } on FormatException {
       _snack((l10n) => l10n.trackHasNoPoints);
     } catch (e) {

@@ -50,6 +50,7 @@ dependencies:
   xml: ^7.0.1
   http: ^1.4.0
   archive: ^4.0.7
+  crypto: ^3.0.6
   geolocator: ^14.0.2
   image_picker: ^1.1.2
   exif: ^3.3.0
