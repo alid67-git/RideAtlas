@@ -47,7 +47,7 @@ class DayStats {
 
   final int dayNumber;
 
-  /// Midnight UTC of this day - a label, not a precise instant.
+  /// Local midnight of this calendar day - a label, not a precise instant.
   final DateTime date;
   final List<TrackPoint> points;
   final Color color;
@@ -69,11 +69,23 @@ class DayStats {
   final List<String> countries;
 }
 
-/// Splits a track into calendar-day (UTC) segments for multi-day trips.
-/// Returns an empty list if no point carries a timestamp - day splitting
-/// needs GPS time data. [geography] is optional; when supplied (once the
-/// route's country/stop analysis has finished), rest time and countries are
-/// filled in per day instead of being left at defaults.
+/// Midnight of the device-local calendar day that [t] falls on - used as a
+/// day-bucket key, not a precise instant. GPS timestamps are usually UTC
+/// (see RecordingLocationService / GPX `time`), so using [DateTime.utc]'s
+/// Y/M/D directly would put late-evening / early-morning rides on the
+/// wrong calendar day for anyone east or west of UTC (e.g. Turkey UTC+3:
+/// a 01:00 local ride on the 28th is still the 27th in UTC, and gets
+/// counted into "yesterday").
+DateTime calendarDayLocal(DateTime t) {
+  final local = t.toLocal();
+  return DateTime(local.year, local.month, local.day);
+}
+
+/// Splits a track into device-local calendar-day segments for multi-day
+/// trips. Returns an empty list if no point carries a timestamp - day
+/// splitting needs GPS time data. [geography] is optional; when supplied
+/// (once the route's country/stop analysis has finished), rest time and
+/// countries are filled in per day instead of being left at defaults.
 List<DayStats> splitIntoDays(
   List<TrackPoint> points, {
   RouteGeography? geography,
@@ -82,7 +94,7 @@ List<DayStats> splitIntoDays(
   for (final p in points) {
     final t = p.time;
     if (t == null) continue;
-    final day = DateTime.utc(t.year, t.month, t.day);
+    final day = calendarDayLocal(t);
     groups.putIfAbsent(day, () => []).add(p);
   }
   if (groups.isEmpty) return const [];
@@ -137,7 +149,7 @@ List<DayStats> splitIntoDays(
       for (final stop in geography.stops) {
         final s = stop.start;
         if (s == null) continue;
-        if (DateTime.utc(s.year, s.month, s.day) == day) {
+        if (calendarDayLocal(s) == day) {
           restDuration += stop.duration;
         }
       }
