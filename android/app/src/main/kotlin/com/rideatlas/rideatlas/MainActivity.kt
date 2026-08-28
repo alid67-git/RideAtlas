@@ -20,6 +20,7 @@ private const val CAR_METHOD_CHANNEL = "com.rideatlas.app/car"
 private const val BATTERY_METHOD_CHANNEL = "com.rideatlas.app/battery"
 private const val SATELLITE_METHOD_CHANNEL = "com.rideatlas.app/satellites"
 private const val OPEN_FILE_METHOD_CHANNEL = "com.rideatlas.app/open_file"
+private const val DAILY_MODE_METHOD_CHANNEL = "com.rideatlas.app/daily_mode"
 
 class MainActivity : FlutterActivity() {
 
@@ -108,6 +109,24 @@ class MainActivity : FlutterActivity() {
             this,
             flutterEngine.dartExecutor.binaryMessenger,
         )
+
+        // Daily mode flag for BootReceiver (Hive isn't readable from native).
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            DAILY_MODE_METHOD_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setEnabled" -> {
+                    val enabled = call.arguments as? Boolean ?: false
+                    getSharedPreferences(BootReceiver.PREFS_NAME, MODE_PRIVATE)
+                        .edit()
+                        .putBoolean(BootReceiver.KEY_ENABLED, enabled)
+                        .apply()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
 
         // GPX/KML/KMZ opened via "Şununla aç" / share sheet.
         val openChannel = MethodChannel(

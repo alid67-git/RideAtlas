@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 
 import 'l10n/gen/app_localizations.dart';
+import 'repositories/daily_mode_controller.dart';
 import 'repositories/live_stats_layout_controller.dart';
 import 'repositories/locale_controller.dart';
 import 'repositories/photo_repository.dart';
@@ -37,6 +38,9 @@ class RideAtlasApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => VehicleIconController()..load()),
         ChangeNotifierProvider(
           create: (_) => SatelliteVisibilityController()..load(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => DailyModeController()..load(),
         ),
         ChangeNotifierProvider(
           create: (_) => StatIconSettingsController()..load(),

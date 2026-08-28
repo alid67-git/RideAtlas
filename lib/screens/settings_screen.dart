@@ -4,11 +4,16 @@ import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../repositories/daily_mode_controller.dart';
 import '../repositories/locale_controller.dart';
+import '../repositories/route_repository.dart';
 import '../repositories/satellite_visibility_controller.dart';
 import '../repositories/stat_icon_settings_controller.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/battery_optimization.dart';
+import '../services/daily_recording_coordinator.dart';
+import '../services/gps_recorder.dart';
+import '../services/native_recording.dart';
 import '../widgets/vehicle_marker.dart';
 import 'about_screen.dart';
 import 'help_screen.dart';
@@ -50,6 +55,7 @@ class SettingsScreen extends StatelessWidget {
     };
     final vehicleIcon = context.watch<VehicleIconController>().option;
     final satelliteController = context.watch<SatelliteVisibilityController>();
+    final dailyMode = context.watch<DailyModeController>();
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle)),
@@ -62,6 +68,43 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => showLanguagePicker(context),
           ),
           if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) ...[
+            const Divider(height: 1),
+            SwitchListTile(
+              secondary: const Icon(Icons.today_outlined),
+              title: Text(l10n.dailyModeTitle),
+              subtitle: Text(l10n.dailyModeSubtitle),
+              value: dailyMode.enabled,
+              onChanged: (enabled) async {
+                if (enabled) {
+                  final coordinator = DailyRecordingCoordinator(
+                    recorder: context.read<GpsRecorder>(),
+                    routes: context.read<RouteRepository>(),
+                    dailyMode: dailyMode,
+                  );
+                  await coordinator.preparePermissions();
+                  coordinator.dispose();
+                }
+                await dailyMode.setEnabled(enabled);
+                if (!enabled || !context.mounted) return;
+                // Kick today's recording immediately when turning on.
+                if (NativeRecording.isSupported) {
+                  final coordinator = DailyRecordingCoordinator(
+                    recorder: context.read<GpsRecorder>(),
+                    routes: context.read<RouteRepository>(),
+                    dailyMode: dailyMode,
+                  );
+                  final ok = await coordinator.silentStart(l10n: l10n);
+                  if (ok) {
+                    await dailyMode.setSessionDay(DailyModeController.dayKey());
+                  } else if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(l10n.dailyModeNeedsPermission)),
+                    );
+                  }
+                  coordinator.dispose();
+                }
+              },
+            ),
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.location_on_outlined),

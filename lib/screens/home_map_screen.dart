@@ -10,8 +10,11 @@ import 'package:provider/provider.dart';
 import '../build_info.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
+import '../repositories/daily_mode_controller.dart';
+import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/app_update_controller.dart';
+import '../services/daily_recording_coordinator.dart';
 import '../services/gps_recorder.dart';
 import '../services/live_location.dart';
 import '../services/native_recording.dart';
@@ -57,6 +60,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   bool _hadGpsFix = false;
   bool _offlineHintShown = false;
 
+  DailyRecordingCoordinator? _dailyCoordinator;
+  DailyModeController? _dailyModeListened;
+
   static const _gpsFlashDuration = Duration(seconds: 4);
 
   @override
@@ -80,34 +86,72 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       }
       // If a fix hasn't arrived yet, tell the user recording would start offline.
       if (!_hadGpsFix && mounted) _showOfflineGpsHint();
-      if (NativeRecording.isSupported) await _restoreInterruptedRecording();
+      if (NativeRecording.isSupported) await _bootstrapRecordingOnOpen();
     });
     _loadMapStyle();
     _startLocationUpdates();
   }
 
-  /// Like Motion GPX: if a recording was in progress when the app was
-  /// killed/locked, reopen continues that session and jumps back into
-  /// [RecordScreen]. Idle stays idle. Replaces the old "always delete
-  /// orphaned points on launch" behaviour, which threw away recoverable
-  /// rides.
-  Future<void> _restoreInterruptedRecording() async {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final daily = context.read<DailyModeController>();
+    if (!identical(daily, _dailyModeListened)) {
+      _dailyModeListened?.removeListener(_onDailyModeChanged);
+      _dailyModeListened = daily;
+      _dailyModeListened!.addListener(_onDailyModeChanged);
+    }
+  }
+
+  void _onDailyModeChanged() {
+    final coordinator = _dailyCoordinator;
+    if (coordinator == null || !mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    coordinator.syncDayWatch(
+      l10n: l10n,
+      localeLanguageCode: Localizations.localeOf(context).languageCode,
+    );
+  }
+
+  /// Daily mode: silent resume / day-rollover / auto-start (no Record screen).
+  /// Classic mode: interrupted session → Record screen + snackbar.
+  Future<void> _bootstrapRecordingOnOpen() async {
     try {
       final recorder = context.read<GpsRecorder>();
+      final routes = context.read<RouteRepository>();
+      final daily = context.read<DailyModeController>();
       final l10n = AppLocalizations.of(context)!;
-      final restored = await recorder.tryRestoreInterruptedSession(
-        androidNotificationTitle: l10n.recordingNotificationTitle,
-        androidNotificationText: l10n.recordingNotificationText,
+      final lang = Localizations.localeOf(context).languageCode;
+
+      _dailyCoordinator?.dispose();
+      final coordinator = DailyRecordingCoordinator(
+        recorder: recorder,
+        routes: routes,
+        dailyMode: daily,
       );
-      if (!restored || !mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.recordingSessionResumed)),
+      _dailyCoordinator = coordinator;
+
+      final result = await coordinator.onAppOpen(
+        l10n: l10n,
+        localeLanguageCode: lang,
+        openRecordScreen: () async {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.recordingSessionResumed)),
+          );
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const RecordScreen(initialShowMap: true),
+            ),
+          );
+        },
       );
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const RecordScreen(initialShowMap: true),
-        ),
-      );
+      if (!mounted) return;
+      if (result == DailyBootstrapResult.needsPermission) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.dailyModeNeedsPermission)),
+        );
+      }
     } catch (_) {
       // Bridge missing in tests / non-Android - nothing to do.
     }
@@ -252,6 +296,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   @override
   void dispose() {
+    _dailyModeListened?.removeListener(_onDailyModeChanged);
+    _dailyCoordinator?.dispose();
     _gpsFlashTimer?.cancel();
     _positionSub?.cancel();
     super.dispose();

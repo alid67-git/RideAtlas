@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.79 beta',
+    date: '2026-08-28',
+    note:
+        'Günlük kayıt modu (Ayarlar, Android): açıkken uygulama veya telefon '
+        'açılınca onay diyaloğu olmadan bugünün kaydı başlar / kaldığı yerden '
+        'devam eder. Her yerel takvim günü ayrı bir rota olarak kaydedilir '
+        '("Günlük 28 Ağu 2026"). Gece yarısı geçişinde dünün rotası sessizce '
+        'kaydedilip yeni gün başlar. Pil bitip yeniden açılınca BootReceiver + '
+        'native oturum dosyası ile hemen devam. Konum "Her zaman izin ver" '
+        'olmalı; açılırken bir kez izin/pil ayarı istenir.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.78 beta',
     date: '2026-08-28',
     note:

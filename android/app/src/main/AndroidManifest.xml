@@ -26,6 +26,7 @@
          lets RecordScreen prompt the user for that exemption directly (see
          MainActivity.kt's battery method channel) instead of only working
          while the screen stays on. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <!-- Lets the in-app "Güncelle" button hand a downloaded APK straight to
          the system installer (see lib/services/update_checker.dart), rather
@@ -72,6 +73,20 @@
             android:exported="false"
             android:foregroundServiceType="location"
             android:stopWithTask="false" />
+        <!-- Relaunches the app after boot when daily mode is on so recording
+             can auto-start without a manual tap (see BootReceiver). -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
         <!-- Android Auto: lets a recording already running on the phone be
              viewed and controlled (start/pause/resume/finish) from the
              car's own screen. See android/app/src/main/kotlin/.../car/. -->
