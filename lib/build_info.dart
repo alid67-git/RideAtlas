@@ -1,7 +1,7 @@
 /// Bumped by hand on every push so the running build can be eyeballed on
 /// screen (Chrome tabs / dev servers can otherwise silently serve stale JS).
-const String kAppBuildLabel = 'v1.4.74 beta';
+const String kAppBuildLabel = 'v1.4.75 beta';
 
 /// Shown once, in a dialog, the first time this build label is seen.
 const String kAppBuildNote =
-    'Güncelleme arka planda indirilir; harita/kayıt kullanılabilir, yüzde banner’da.';
+    'Sokak/siyasi harita API hatası düzeltildi; kayıtta GPS sıçramaları otomatik temizlenir.';

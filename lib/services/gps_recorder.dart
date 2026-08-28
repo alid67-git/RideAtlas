@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/track_point.dart';
 import 'battery_info.dart';
+import 'gpx_parser.dart';
 import 'native_recording.dart';
 
 const _distance = Distance();
@@ -489,7 +490,15 @@ class GpsRecorder extends ChangeNotifier {
   /// against the last *accepted* point (not the last raw fix) means a run
   /// of several consecutive bad fixes gets skipped in full rather than each
   /// one anchoring the next comparison to more noise.
-  static const _maxPlausibleSpeedKmh = 300.0;
+  static const _maxPlausibleSpeedKmh = 250.0;
+
+  /// How many recent points to re-scan for spike-and-return glitches after
+  /// each fix ([findExcursionPointIndices] lookahead is ~150).
+  static const _glitchPruneWindow = 220;
+
+  /// Full-track glitch sweep every N accepted points so an old spike outside
+  /// the recent window still gets cleaned once the return pattern is visible.
+  static const _glitchFullScanInterval = 40;
 
   bool _isPlausiblePoint(LatLng latLng, DateTime time) {
     if (_points.isEmpty) return true;
@@ -501,6 +510,45 @@ class GpsRecorder extends ChangeNotifier {
     final meters = _distance(last.latLng, latLng);
     final impliedKmh = (meters / dtSeconds) * 3.6;
     return impliedKmh <= _maxPlausibleSpeedKmh;
+  }
+
+  void _recomputeDistanceMeters() {
+    _distanceMeters = 0;
+    for (var i = 1; i < _points.length; i++) {
+      _distanceMeters += _distance(_points[i - 1].latLng, _points[i].latLng);
+    }
+  }
+
+  /// Drops GPS spike-and-return clusters live — same rules as saved-route
+  /// cleanup ([filterImplausiblePoints]), so the red line does not shoot out
+  /// to a wrong fix and snap back minutes later.
+  void _pruneGpsGlitchPoints({required bool fullScan}) {
+    if (_points.length < 4) return;
+    final before = _points.length;
+    if (fullScan) {
+      final cleaned = filterImplausiblePoints(_points);
+      if (cleaned.length == before) return;
+      _points
+        ..clear()
+        ..addAll(cleaned);
+    } else {
+      final start = _points.length > _glitchPruneWindow
+          ? _points.length - _glitchPruneWindow
+          : 0;
+      final flagged = findImplausiblePointIndices(_points.sublist(start))
+          .map((i) => i + start)
+          .toSet();
+      if (flagged.isEmpty) return;
+      final kept = [
+        for (var i = 0; i < _points.length; i++)
+          if (!flagged.contains(i)) _points[i],
+      ];
+      _points
+        ..clear()
+        ..addAll(kept);
+    }
+    if (_points.length == before) return;
+    _recomputeDistanceMeters();
   }
 
   void _onPosition(Position pos) {
@@ -568,9 +616,6 @@ class GpsRecorder extends ChangeNotifier {
 
     final latLng = LatLng(pos.latitude, pos.longitude);
     if (_isPlausiblePoint(latLng, pos.timestamp)) {
-      if (_points.isNotEmpty) {
-        _distanceMeters += _distance(_points.last.latLng, latLng);
-      }
       _points.add(
         TrackPoint(
           latLng: latLng,
@@ -578,6 +623,16 @@ class GpsRecorder extends ChangeNotifier {
           time: pos.timestamp,
         ),
       );
+      final countAfterAdd = _points.length;
+      _pruneGpsGlitchPoints(
+        fullScan: countAfterAdd % _glitchFullScanInterval == 0,
+      );
+      if (_points.length == countAfterAdd && countAfterAdd > 1) {
+        _distanceMeters += _distance(
+          _points[countAfterAdd - 2].latLng,
+          _points[countAfterAdd - 1].latLng,
+        );
+      }
     }
     notifyListeners();
   }
@@ -666,6 +721,13 @@ class GpsRecorder extends ChangeNotifier {
       );
       _currentSpeedKmh = speedMs > 0 ? speedMs * 3.6 : 0;
       _currentAltitude = altitude;
+    }
+    final cleaned = filterImplausiblePoints(_points);
+    if (cleaned.length != _points.length) {
+      _points
+        ..clear()
+        ..addAll(cleaned);
+      _recomputeDistanceMeters();
     }
   }
 

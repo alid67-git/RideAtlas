@@ -64,10 +64,10 @@ const kBaseMapStyles = <BaseMapStyle>[
     id: 'voyager',
     label: 'Sokak',
     icon: Icons.map,
-    urlTemplate:
-        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    subdomains: ['a', 'b', 'c', 'd'],
-    attribution: 'OpenStreetMap katkıda bulunanlar, CARTO',
+    // CARTO raster basemaps now watermark without an API key — use OSM
+    // directly (same data, no carto.com/basemaps/apikey tile).
+    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: 'OpenStreetMap katkıda bulunanlar',
   ),
   BaseMapStyle(
     id: 'satellite',
@@ -97,18 +97,17 @@ const kBaseMapStyles = <BaseMapStyle>[
     label: 'Koyu',
     icon: Icons.dark_mode,
     urlTemplate:
-        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    subdomains: ['a', 'b', 'c', 'd'],
-    attribution: 'OpenStreetMap katkıda bulunanlar, CARTO',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Esri, OpenStreetMap katkıda bulunanlar',
   ),
   BaseMapStyle(
     id: 'positron',
     label: 'Sade / Siyasi',
     icon: Icons.public,
+    // Light political-style base without CARTO API key.
     urlTemplate:
-        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    subdomains: ['a', 'b', 'c', 'd'],
-    attribution: 'OpenStreetMap katkıda bulunanlar, CARTO',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Esri, OpenStreetMap katkıda bulunanlar',
   ),
 ];
 

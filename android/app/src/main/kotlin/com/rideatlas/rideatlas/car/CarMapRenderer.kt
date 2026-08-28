@@ -44,7 +44,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback {
         private const val TILE_SIZE = 256
         private const val TILE_GRID_RADIUS = 2 // draws a 5x5 tile grid
         private const val TILE_URL =
-            "https://a.basemaps.cartocdn.com/rastertiles/voyager/%d/%d/%d.png"
+            "https://tile.openstreetmap.org/%d/%d/%d.png"
     }
 
     private val renderExecutor = Executors.newSingleThreadExecutor()
