@@ -31,6 +31,7 @@ import '../services/live_location.dart';
 import '../services/gpx_parser.dart';
 import '../services/app_update_controller.dart';
 import '../services/map_camera_fit.dart';
+import '../services/track_heading.dart';
 import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';
 import '../widgets/heading_cone.dart';
@@ -122,20 +123,20 @@ class _RecordScreenState extends State<RecordScreen>
   /// idle case, which left the idle map stuck wherever it opened.
   bool get _mapVisible => _showMap || _recorder.isIdle;
 
-  /// The device's live position, tracked independently of [GpsRecorder] and
-  /// kept running for the entire lifetime of this screen (idle and
-  /// recording alike) - this is the map's one and only source of truth for
-  /// "where am I". It's tempting to switch to the recorder's own points once
-  /// recording starts (that's a second, separate GPS subscription
-  /// [GpsRecorder] owns for the actual track), but doing that caused a
-  /// visible jump: a freshly-started stream's first fix can be a quick,
-  /// less-accurate cached location before it settles, which reads as
-  /// "teleporting" right when recording begins. Keeping one continuous
-  /// stream driving the map avoids that, at the minor cost of two GPS
-  /// subscriptions running at once while recording.
+  /// Idle map position comes from a Dart [Geolocator] stream. Once a
+  /// recording has track points, course-up follow is driven by the same
+  /// [GpsRecorder] tip that draws the red line (last 2–3 points → location
+  /// + heading). Using a second GPS stream for the camera while the line
+  /// came from native FGS made the tip creep up-screen then "flow down"
+  /// as the camera tween chased a different fix.
   StreamSubscription<Position>? _liveLocationSub;
   LatLng? _currentLocation;
   bool _centeredOnce = false;
+
+  /// Point-count at the last track-driven follow update - skip no-op
+  /// [GpsRecorder] notifies (timer ticks, pause flags, …).
+  int _lastFollowPointCount = 0;
+  GpsRecorder? _recorderListened;
 
   /// Where the vehicle marker is actually drawn. While course-up follow is
   /// active this is driven by the *same* tween as the camera (see
@@ -249,7 +250,7 @@ class _RecordScreenState extends State<RecordScreen>
     if (widget.initialShowMap) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_showMap) return;
-        final location = _currentLocation;
+        final location = _recorder.currentLatLng ?? _currentLocation;
         if (location != null) {
           _followMe = true;
           _mapController.move(location, 15);
@@ -258,6 +259,68 @@ class _RecordScreenState extends State<RecordScreen>
           _applyRotation();
         }
       });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final recorder = context.read<GpsRecorder>();
+    if (!identical(recorder, _recorderListened)) {
+      _recorderListened?.removeListener(_onRecorderChanged);
+      _recorderListened = recorder;
+      _recorderListened!.addListener(_onRecorderChanged);
+    }
+  }
+
+  /// True while recording and the red track already has at least one point
+  /// — camera/marker must follow that tip, not the parallel Geolocator stream.
+  bool get _followFromTrack =>
+      !_recorder.isIdle && _recorder.points.isNotEmpty;
+
+  void _onRecorderChanged() {
+    if (!mounted) return;
+    if (_recorder.isIdle) {
+      _lastFollowPointCount = 0;
+      return;
+    }
+    final points = _recorder.points;
+    if (points.isEmpty) return;
+    if (points.length == _lastFollowPointCount) return;
+    _lastFollowPointCount = points.length;
+    _followFromTrackTip(points);
+  }
+
+  /// Frames course-up from the drawn track: tip = last point; heading from
+  /// the last 2–3 points (old → new), matching what the red polyline shows.
+  void _followFromTrackTip(List<TrackPoint> points) {
+    final tip = points.last.latLng;
+    final recent = _recentLatLngs(points);
+    final rawHeading = headingFromRecentTrackPoints(recent);
+    final time = points.last.time ?? DateTime.now();
+    final heading = rawHeading != null
+        ? _plausibleHeading(rawHeading, time)
+        : (_recorder.currentHeading ?? _currentHeading);
+
+    setState(() {
+      _currentLocation = tip;
+      if (heading != null) _currentHeading = heading;
+    });
+
+    if (!_centeredOnce) {
+      _centeredOnce = true;
+      _markerLocation.value = tip;
+      if (_mapVisible) {
+        _mapController.move(tip, 15);
+        kickMapTileLayer(_mapController);
+      }
+      return;
+    }
+
+    if (_followMe && _mapVisible) {
+      _animateCameraTo(location: tip, heading: heading);
+    } else {
+      _markerLocation.value = tip;
     }
   }
 
@@ -492,14 +555,39 @@ class _RecordScreenState extends State<RecordScreen>
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_showMap) return;
-      final location = _currentLocation;
-      final heading = _currentHeading;
+      final location = _recorder.currentLatLng ?? _currentLocation;
+      final heading = _headingFromTrackOrLive;
       if (location != null) {
         _animateCameraTo(location: location, heading: heading);
       } else if (heading != null) {
         _animateCameraTo(heading: heading);
       }
     });
+  }
+
+  /// Prefer track-derived course while recording; fall back to live GPS COG.
+  double? get _headingFromTrackOrLive {
+    final points = _recorder.points;
+    if (points.length >= 2) {
+      final raw = headingFromRecentTrackPoints(_recentLatLngs(points));
+      if (raw != null) {
+        return _plausibleHeading(raw, points.last.time ?? DateTime.now());
+      }
+    }
+    return _recorder.currentHeading ?? _currentHeading;
+  }
+
+  /// Last up-to-three track positions (old → new) for course-up heading.
+  static List<LatLng> _recentLatLngs(List<TrackPoint> points) {
+    if (points.length <= 3) {
+      return [for (final p in points) p.latLng];
+    }
+    final n = points.length;
+    return [
+      points[n - 3].latLng,
+      points[n - 2].latLng,
+      points[n - 1].latLng,
+    ];
   }
 
   /// Snaps the camera to the live GPS fix at a fixed close zoom (same as the
@@ -555,7 +643,7 @@ class _RecordScreenState extends State<RecordScreen>
 
   /// Rotates the map to the live heading (course-up), if known yet.
   void _applyRotation() {
-    final heading = _currentHeading;
+    final heading = _headingFromTrackOrLive;
     if (heading != null) _animateCameraTo(heading: heading);
   }
 
@@ -708,6 +796,10 @@ class _RecordScreenState extends State<RecordScreen>
         ).listen((pos) {
           if (!mounted) return;
           if (!isAcceptableLivePosition(pos)) return;
+          // While recording, the drawn track tip owns camera/marker follow.
+          // Geolocator still seeds the map before the first native point.
+          if (_followFromTrack) return;
+
           final location = LatLng(pos.latitude, pos.longitude);
           // A heading reading near 0 accuracy/while stationary is noisy
           // GPS jitter, not a real course - ignore it rather than let the
@@ -747,6 +839,7 @@ class _RecordScreenState extends State<RecordScreen>
   @override
   void dispose() {
     recordScreenVisible.value = false;
+    _recorderListened?.removeListener(_onRecorderChanged);
     _tickTimer?.cancel();
     _overlayRevealTimer?.cancel();
     _liveLocationSub?.cancel();
