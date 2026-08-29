@@ -39,3 +39,12 @@ double? headingFromRecentTrackPoints(
   if (!bearing.isFinite) return null;
   return (bearing % 360 + 360) % 360;
 }
+
+/// flutter_map camera rotation that puts [headingDegrees] at the **top**
+/// of the screen (travel up, trail behind / down).
+///
+/// [MapController.rotate] / [MapController.moveAndRotate] are clockwise.
+/// Passing the heading itself rotates the wrong way: travel points down
+/// and older points sit at the top. Same sign as Android Auto's
+/// `canvas.rotate(-heading)`.
+double courseUpMapRotation(double headingDegrees) => -headingDegrees;

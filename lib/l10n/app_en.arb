@@ -142,6 +142,7 @@
   "recordingSavedTitle": "Recording saved",
   "recordingSavedMessage": "The route was added to your rides. You can resume recording or reset.",
   "showWholeTrackTooltip": "Show whole track",
+  "showRecentTrackTooltip": "Show last 15 minutes",
   "exitRecordingConfirmTitle": "Leave the recording?",
   "exitRecordingConfirmMessage": "Recording is still in progress. Leaving will lose it.",
   "locationServiceDisabledError": "Location services are turned off. Please enable them.",

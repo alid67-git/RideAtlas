@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.81 beta',
+    date: '2026-08-29',
+    note:
+        'Kayıt haritası course-up işaret düzeltmesi: flutter_map dönüşü '
+        'heading değil -heading (Android Auto ile aynı). Gidiş yukarı, '
+        'eski noktalar aşağıda (gelinen yol arkada). Ayrıca son 15 dakikayı '
+        'sığdıran ayrı bir özet tuşu (saat ikonu); "tüm iz" duruyor. '
+        'Canlı takip hâlâ son 2–3 noktadan.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.80 beta',
     date: '2026-08-29',
     note:
