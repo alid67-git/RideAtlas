@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.82 beta',
+    date: '2026-08-29',
+    note:
+        'Kayıt haritası kilitlenmesi: GpsRecorder her noktada + her saniye '
+        'saat tikinde tüm FlutterMap (karo + tüm polyline) yeniden kuruluyordu; '
+        '2–3 dakika sonra UI donuyordu. Artık iskele sadece idle/kayıt '
+        'geçişinde yenilenir; karolar durur, kırmızı çizgi eklenerek büyür, '
+        'süre ayrı notifier ile akar. Referans rota çizimi de setState ile '
+        'tüm ekranı 16ms\'de bir yıkmaz.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.81 beta',
     date: '2026-08-29',
     note:

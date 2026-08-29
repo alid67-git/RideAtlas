@@ -92,6 +92,14 @@ class _RecordScreenState extends State<RecordScreen>
   double? _lastAcceptedHeading;
   DateTime? _lastAcceptedHeadingTime;
   Timer? _tickTimer;
+  /// Clock-only tick so the duration label advances without rebuilding
+  /// [FlutterMap] (a full-screen setState every second was tearing down
+  /// tiles/polylines and locking the recording map after a couple minutes).
+  final _clockTick = ValueNotifier<int>(0);
+  final _overlayPolylines = ValueNotifier<List<Polyline>>(const []);
+  final _headingListenable = ValueNotifier<double?>(null);
+  List<LatLng> _liveLineCache = [];
+  int _liveLineCacheCount = 0;
   bool _starting = false;
   bool _saving = false;
 
@@ -110,7 +118,6 @@ class _RecordScreenState extends State<RecordScreen>
 
   /// Optional saved GPX routes drawn under the live track so the rider can
   /// follow / compare against a previous ride. Empty until they pick some.
-  List<Polyline> _referencePolylines = const [];
   Set<String> _referenceRouteIds = {};
   Timer? _overlayRevealTimer;
 
@@ -236,9 +243,12 @@ class _RecordScreenState extends State<RecordScreen>
         setState(() => _followMe = false);
       }
     });
-    // Refreshes the elapsed-time label even between GPS fixes.
+    // Refreshes the elapsed-time label even between GPS fixes — notifier
+    // only, so the map tiles are not rebuilt every second.
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && _recorder.isRecording) setState(() {});
+      if (mounted && _recorder.isRecording) {
+        _clockTick.value++;
+      }
     });
     // Same shared update check as the home screen - so the banner also
     // appears here if the rider jumped straight into recording.
@@ -302,10 +312,11 @@ class _RecordScreenState extends State<RecordScreen>
         ? _plausibleHeading(rawHeading, time)
         : (_recorder.currentHeading ?? _currentHeading);
 
-    setState(() {
-      _currentLocation = tip;
-      if (heading != null) _currentHeading = heading;
-    });
+    _currentLocation = tip;
+    if (heading != null) {
+      _currentHeading = heading;
+      _headingListenable.value = heading;
+    }
 
     if (!_centeredOnce) {
       _centeredOnce = true;
@@ -437,17 +448,13 @@ class _RecordScreenState extends State<RecordScreen>
   Future<void> _applyReferenceRoutes(Set<String> ids) async {
     _overlayRevealTimer?.cancel();
     if (ids.isEmpty) {
-      setState(() {
-        _referenceRouteIds = {};
-        _referencePolylines = const [];
-      });
+      setState(() => _referenceRouteIds = {});
+      _overlayPolylines.value = const [];
       return;
     }
 
-    setState(() {
-      _referenceRouteIds = ids;
-      _referencePolylines = const [];
-    });
+    setState(() => _referenceRouteIds = ids);
+    _overlayPolylines.value = const [];
 
     final repo = context.read<RouteRepository>();
     final byId = {for (final r in repo.routes) r.id: r};
@@ -509,7 +516,7 @@ class _RecordScreenState extends State<RecordScreen>
     if (points.length < 150) {
       built.add(Polyline(points: points, strokeWidth: 4, color: color));
       if (!mounted) return;
-      setState(() => _referencePolylines = List<Polyline>.from(built));
+      _overlayPolylines.value = List<Polyline>.from(built);
       return;
     }
 
@@ -535,7 +542,7 @@ class _RecordScreenState extends State<RecordScreen>
         strokeWidth: 4,
         color: color,
       );
-      setState(() => _referencePolylines = List<Polyline>.from(built));
+      _overlayPolylines.value = List<Polyline>.from(built);
       if (shown >= total) {
         timer.cancel();
         if (!done.isCompleted) done.complete();
@@ -888,6 +895,9 @@ class _RecordScreenState extends State<RecordScreen>
     _rotationController.dispose();
     _bgController.dispose();
     _markerLocation.dispose();
+    _clockTick.dispose();
+    _overlayPolylines.dispose();
+    _headingListenable.dispose();
     super.dispose();
   }
 
@@ -1015,6 +1025,8 @@ class _RecordScreenState extends State<RecordScreen>
       if (confirmed != true || !mounted) return;
     }
     _savedPointCount = -1;
+    _liveLineCache = [];
+    _liveLineCacheCount = 0;
     await _recorder.discard();
   }
 
@@ -1248,12 +1260,12 @@ class _RecordScreenState extends State<RecordScreen>
 
   @override
   Widget build(BuildContext context) {
-    final recorder = context.watch<GpsRecorder>();
-    // Idle (not recording yet) always shows the map with the start button -
-    // the info/map split only matters once there's a ride actually in
-    // progress to show stats for.
-    if (recorder.isIdle) {
-      return _buildMapPage(context, recorder);
+    // Only rebuild this scaffold when idle↔recording flips — not on every
+    // GPS point. Watching GpsRecorder here used to remount FlutterMap
+    // (tiles + full polyline) every fix / every clock tick.
+    final isIdle = context.select<GpsRecorder, bool>((r) => r.isIdle);
+    if (isIdle) {
+      return _buildMapPage(context);
     }
     // Keep FlutterMap mounted while the info page is visible so
     // MapController stays attached - tearing it down broke course-up
@@ -1265,15 +1277,22 @@ class _RecordScreenState extends State<RecordScreen>
           enabled: _showMap,
           child: Offstage(
             offstage: !_showMap,
-            child: _buildMapPage(context, recorder),
+            child: _buildMapPage(context),
           ),
         ),
-        if (!_showMap) _buildInfoPage(context, recorder),
+        if (!_showMap)
+          ValueListenableBuilder<int>(
+            valueListenable: _clockTick,
+            builder: (_, _, _) => Consumer<GpsRecorder>(
+              builder: (context, recorder, _) =>
+                  _buildInfoPage(context, recorder),
+            ),
+          ),
       ],
     );
   }
 
-  Widget _buildMapPage(BuildContext context, GpsRecorder recorder) {
+  Widget _buildMapPage(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
@@ -1290,7 +1309,8 @@ class _RecordScreenState extends State<RecordScreen>
                   horizontal: 12,
                   vertical: 8,
                 ),
-                child: Column(
+                child: Consumer<GpsRecorder>(
+                  builder: (context, recorder, _) => Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Row(
@@ -1345,7 +1365,11 @@ class _RecordScreenState extends State<RecordScreen>
                     // digits the speed number has, or on the icons above.
                     if (!recorder.isIdle) ...[
                       const SizedBox(height: 8),
-                      _buildMiniStatsRow(context, l10n, recorder),
+                      ValueListenableBuilder<int>(
+                        valueListenable: _clockTick,
+                        builder: (_, _, _) =>
+                            _buildMiniStatsRow(context, l10n, recorder),
+                      ),
                     ],
                     if (context.watch<AppUpdateController>().showBanner) ...[
                       const SizedBox(height: 8),
@@ -1357,6 +1381,7 @@ class _RecordScreenState extends State<RecordScreen>
                     ],
                   ],
                 ),
+                ),
               ),
             ),
           ),
@@ -1365,7 +1390,8 @@ class _RecordScreenState extends State<RecordScreen>
             bottom: 100,
             child: SafeArea(
               top: false,
-              child: Column(
+              child: Consumer<GpsRecorder>(
+                builder: (context, recorder, _) => Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   FloatingActionButton.small(
@@ -1375,17 +1401,20 @@ class _RecordScreenState extends State<RecordScreen>
                     child: Icon(_mapStyle.icon),
                   ),
                   const SizedBox(height: 8),
-                  FloatingActionButton.small(
-                    heroTag: 'recordOverlayRoutes',
-                    tooltip: l10n.recordOverlayTooltip,
-                    backgroundColor: _referencePolylines.isNotEmpty
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-                    foregroundColor: _referencePolylines.isNotEmpty
-                        ? Theme.of(context).colorScheme.onPrimary
-                        : null,
-                    onPressed: _pickReferenceRoutes,
-                    child: const Icon(Icons.route),
+                  ValueListenableBuilder<List<Polyline>>(
+                    valueListenable: _overlayPolylines,
+                    builder: (context, overlays, _) => FloatingActionButton.small(
+                      heroTag: 'recordOverlayRoutes',
+                      tooltip: l10n.recordOverlayTooltip,
+                      backgroundColor: overlays.isNotEmpty
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                      foregroundColor: overlays.isNotEmpty
+                          ? Theme.of(context).colorScheme.onPrimary
+                          : null,
+                      onPressed: _pickReferenceRoutes,
+                      child: const Icon(Icons.route),
+                    ),
                   ),
                   // Overview of everything recorded so far; the recenter
                   // button below returns to the live position, course-up.
@@ -1425,6 +1454,7 @@ class _RecordScreenState extends State<RecordScreen>
                   ),
                 ],
               ),
+              ),
             ),
           ),
           Positioned(
@@ -1433,7 +1463,12 @@ class _RecordScreenState extends State<RecordScreen>
             bottom: 24,
             child: SafeArea(
               top: false,
-              child: Center(child: _buildControls(l10n, recorder)),
+              child: Center(
+                child: Consumer<GpsRecorder>(
+                  builder: (context, recorder, _) =>
+                      _buildControls(l10n, recorder),
+                ),
+              ),
             ),
           ),
         ],
@@ -1950,10 +1985,21 @@ class _RecordScreenState extends State<RecordScreen>
     );
   }
 
+  void _syncLiveLineCache(List<TrackPoint> points) {
+    if (points.length < _liveLineCacheCount) {
+      _liveLineCache = [for (final p in points) p.latLng];
+      _liveLineCacheCount = points.length;
+      return;
+    }
+    for (var i = _liveLineCacheCount; i < points.length; i++) {
+      _liveLineCache.add(points[i].latLng);
+    }
+    _liveLineCacheCount = points.length;
+  }
+
   Widget _buildMap() {
-    final recorder = context.watch<GpsRecorder>();
+    final recorder = context.read<GpsRecorder>();
     final vehicleIcon = context.watch<VehicleIconController>().option;
-    final points = recorder.points;
     final style = _mapStyle;
     final markerSize = vehicleMarkerSize(vehicleIcon);
 
@@ -1972,18 +2018,23 @@ class _RecordScreenState extends State<RecordScreen>
           maxNativeZoom: style.maxNativeZoom,
           evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),
-        if (_referencePolylines.isNotEmpty)
-          PolylineLayer(polylines: _referencePolylines),
-        if (points.length > 1)
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: [for (final p in points) p.latLng],
-                strokeWidth: 4,
-                color: const Color(0xFFE53935),
-              ),
-            ],
-          ),
+        ListenableBuilder(
+          listenable: Listenable.merge([recorder, _overlayPolylines]),
+          builder: (context, _) {
+            _syncLiveLineCache(recorder.points);
+            return PolylineLayer(
+              polylines: [
+                ..._overlayPolylines.value,
+                if (_liveLineCache.length > 1)
+                  Polyline(
+                    points: _liveLineCache,
+                    strokeWidth: 4,
+                    color: const Color(0xFFE53935),
+                  ),
+              ],
+            );
+          },
+        ),
         // The marker position updates every animation frame while
         // course-up follow glides the camera (see _markerLocation) - a
         // ValueListenableBuilder keeps those per-frame rebuilds scoped to
@@ -2018,11 +2069,18 @@ class _RecordScreenState extends State<RecordScreen>
                       // turns to keep the direction of travel pointing up
                       // (course-up), so the cone always points straight up
                       // too.
-                      if (_currentHeading != null)
-                        HeadingCone(
-                          size: markerSize * _coneMarkerScale,
-                          color: const Color(0xFFFFA726),
-                        ),
+                      ValueListenableBuilder<double?>(
+                        valueListenable: _headingListenable,
+                        builder: (_, heading, _) {
+                          if (heading == null) {
+                            return const SizedBox.shrink();
+                          }
+                          return HeadingCone(
+                            size: markerSize * _coneMarkerScale,
+                            color: const Color(0xFFFFA726),
+                          );
+                        },
+                      ),
                       // Always points straight up: the map itself rotates
                       // to keep the direction of travel pointing up.
                       SizedBox(
