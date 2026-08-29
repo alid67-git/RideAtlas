@@ -20,7 +20,7 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
-    version: 'v1.4.80 beta',
+    version: 'v1.4.79 beta',
     date: '2026-08-29',
     note:
         'İz yükleme / harita: yeni GPX açılınca rota haritasında gösterilir. '
