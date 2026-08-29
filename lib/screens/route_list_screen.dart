@@ -43,10 +43,17 @@ class _RouteListScreenState extends State<RouteListScreen> {
     // Replace, not push: RouteListScreen sits directly on the home map, so
     // this keeps that one-screen depth instead of stacking indefinitely -
     // a single back/pop returns straight to the home map.
+    // MediaAtlas-style: one track → dedicated route map (fits that track);
+    // several → multi map (fits the union of all).
+    final ids = _selectedIds.toList();
+    final Widget screen;
+    if (ids.length == 1) {
+      screen = RouteMapScreen(routeId: ids.first);
+    } else {
+      screen = MultiRouteMapScreen(routeIds: ids);
+    }
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => MultiRouteMapScreen(routeIds: _selectedIds.toList()),
-      ),
+      MaterialPageRoute(builder: (_) => screen),
     );
   }
 

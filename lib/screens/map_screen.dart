@@ -24,6 +24,7 @@ import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart';
 import '../services/exif_gps.dart';
+import '../services/map_camera_fit.dart';
 import '../services/route_geography.dart';
 import '../services/track_io.dart';
 import '../widgets/recording_indicator.dart';
@@ -486,17 +487,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   }
 
   void _fitToRoute(GpxRoute route) {
-    final bounds = LatLngBounds(
-      LatLng(route.south, route.west),
-      LatLng(route.north, route.east),
-    );
+    final bounds = boundsForRoutes([route]);
+    if (bounds == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _mapController.fitCamera(
-        CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(48)),
-      );
-      // TileLayer sometimes skips the first programmatic camera move —
-      // a tiny distinct nudge forces the first tile fetch.
-      kickMapTileLayer(_mapController);
+      if (!mounted) return;
+      fitMapToBounds(_mapController, bounds: bounds);
     });
   }
 

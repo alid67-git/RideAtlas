@@ -14,6 +14,7 @@ import '../models/gpx_route.dart';
 import '../models/track_point.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart' show colorForDay;
+import '../services/map_camera_fit.dart';
 import '../services/track_io.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 
@@ -287,17 +288,13 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     await done.future;
   }
 
-  LatLngBounds _boundsFor(GpxRoute route) => LatLngBounds(
-    LatLng(route.south, route.west),
-    LatLng(route.north, route.east),
-  );
+  LatLngBounds _boundsFor(GpxRoute route) =>
+      boundsForRoutes([route]) ??
+      LatLngBounds(LatLng(route.south, route.west), LatLng(route.north, route.east));
 
   void _fitToRoutes(List<GpxRoute> routes) {
-    if (routes.isEmpty) return;
-    final bounds = _boundsFor(routes.first);
-    for (final route in routes.skip(1)) {
-      bounds.extendBounds(_boundsFor(route));
-    }
+    final bounds = boundsForRoutes(routes);
+    if (bounds == null) return;
     _fitBounds(bounds);
   }
 
@@ -309,10 +306,7 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   void _fitBounds(LatLngBounds bounds) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _mapController.fitCamera(
-        CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(48)),
-      );
-      kickMapTileLayer(_mapController);
+      fitMapToBounds(_mapController, bounds: bounds);
     });
   }
 
