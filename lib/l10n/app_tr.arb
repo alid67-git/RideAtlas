@@ -162,6 +162,7 @@
   "recordingSavedTitle": "Kayıt kaydedildi",
   "recordingSavedMessage": "Rota sürüşlerinize eklendi. Kayda devam edebilir veya sıfırlayabilirsiniz.",
   "showWholeTrackTooltip": "Tüm kaydı göster",
+  "showRecentTrackTooltip": "Son 15 dakikayı göster",
   "exitRecordingConfirmTitle": "Kayıttan çıkılsın mı?",
   "exitRecordingConfirmMessage": "Hâlâ kayıt yapılıyor. Çıkarsanız bu kayıt kaybolur.",
   "locationServiceDisabledError": "Konum servisi kapalı. Lütfen açın.",

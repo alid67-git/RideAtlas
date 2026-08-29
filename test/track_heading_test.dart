@@ -34,4 +34,10 @@ void main() {
   test('headingFromRecentTrackPoints: needs at least two points', () {
     expect(headingFromRecentTrackPoints(const [LatLng(40.0, 29.0)]), isNull);
   });
+
+  test('courseUpMapRotation is opposite of heading (trail down)', () {
+    expect(courseUpMapRotation(0), 0);
+    expect(courseUpMapRotation(90), -90);
+    expect(courseUpMapRotation(180), -180);
+  });
 }

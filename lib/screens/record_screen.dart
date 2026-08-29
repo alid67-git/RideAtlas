@@ -641,6 +641,44 @@ class _RecordScreenState extends State<RecordScreen>
     _fitLoadedTracks(overlayRoutes);
   }
 
+  /// Overview of the last 15 minutes of the live track (north-up), then
+  /// stops auto-follow. Falls back to the whole ride when the session is
+  /// shorter than that window.
+  void _showRecentTrack() {
+    final recent = _pointsInLastMinutes(_recorder.points, 15);
+    if (recent.length < 2) {
+      _showWholeTrack();
+      return;
+    }
+    _cancelCameraAnimation();
+    setState(() => _followMe = false);
+    _mapController.rotate(0);
+    fitMapToBounds(
+      _mapController,
+      bounds: LatLngBounds.fromPoints(recent),
+      padding: const EdgeInsets.fromLTRB(48, 240, 48, 170),
+    );
+  }
+
+  /// Points from [window] minutes ago to now. If timestamps are missing,
+  /// uses the last third of the track as a rough stand-in.
+  static List<LatLng> _pointsInLastMinutes(
+    List<TrackPoint> points,
+    int minutes,
+  ) {
+    if (points.length < 2) return const [];
+    final cutoff = DateTime.now().subtract(Duration(minutes: minutes));
+    final dated = [
+      for (final p in points)
+        if (p.time != null && !p.time!.isBefore(cutoff)) p.latLng,
+    ];
+    if (dated.length >= 2) return dated;
+    final start = (points.length * 2 / 3).floor();
+    return [
+      for (var i = start; i < points.length; i++) points[i].latLng,
+    ];
+  }
+
   /// Rotates the map to the live heading (course-up), if known yet.
   void _applyRotation() {
     final heading = _headingFromTrackOrLive;
@@ -702,7 +740,9 @@ class _RecordScreenState extends State<RecordScreen>
     final endLng = location?.longitude ?? startLng;
     var endRotation = startRotation;
     if (heading != null) {
-      var delta = (heading - startRotation) % 360;
+      // Course-up: travel at the top, older points at the bottom.
+      final targetRotation = courseUpMapRotation(heading);
+      var delta = (targetRotation - startRotation) % 360;
       if (delta > 180) delta -= 360;
       if (delta < -180) delta += 360;
       endRotation = startRotation + delta;
@@ -1350,6 +1390,13 @@ class _RecordScreenState extends State<RecordScreen>
                   // Overview of everything recorded so far; the recenter
                   // button below returns to the live position, course-up.
                   if (recorder.points.length > 1) ...[
+                    const SizedBox(height: 8),
+                    FloatingActionButton.small(
+                      heroTag: 'recordShowRecentTrack',
+                      tooltip: l10n.showRecentTrackTooltip,
+                      onPressed: _showRecentTrack,
+                      child: const Icon(Icons.history),
+                    ),
                     const SizedBox(height: 8),
                     FloatingActionButton.small(
                       heroTag: 'recordShowWholeTrack',

@@ -142,6 +142,7 @@
   "recordingSavedTitle": "Aufzeichnung gespeichert",
   "recordingSavedMessage": "Die Route wurde zu deinen Fahrten hinzugefügt. Du kannst die Aufzeichnung fortsetzen oder zurücksetzen.",
   "showWholeTrackTooltip": "Gesamte Strecke anzeigen",
+  "showRecentTrackTooltip": "Letzte 15 Minuten anzeigen",
   "exitRecordingConfirmTitle": "Aufzeichnung verlassen?",
   "exitRecordingConfirmMessage": "Die Aufzeichnung läuft noch. Beim Verlassen geht sie verloren.",
   "locationServiceDisabledError": "Standortdienste sind deaktiviert. Bitte aktivieren.",
