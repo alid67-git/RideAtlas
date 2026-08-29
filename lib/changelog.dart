@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.80 beta',
+    date: '2026-08-29',
+    note:
+        'Kayıt haritası course-up: kamera ve araç işareti artık kırmızı '
+        'izin ucundan (son 2–3 nokta, eskiden → yeniye bearing) takip eder; '
+        'önceden ayrı Geolocator akışı çizgiyle senkron olmayınca iz yukarı '
+        'gidip aşağı kayıyormuş gibi görünüyordu. Idle konum hâlâ Dart GPS; '
+        'kayıt başladıktan sonra tek kaynak native iz.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.79 beta',
     date: '2026-08-29',
     note:
