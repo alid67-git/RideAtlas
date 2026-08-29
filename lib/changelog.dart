@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.80 beta',
+    date: '2026-08-29',
+    note:
+        'İz yükleme / harita: yeni GPX açılınca rota haritasında gösterilir. '
+        'Tek iz tüm pencereye sığacak şekilde (MediaAtlas tarzı) otomatik '
+        'yakınlaşır; birden fazla seçili iz birlikte kapsanır. Kayıt '
+        'ekranında referans rota yüklenince de aynı sığdırma; "tüm iz" tuşu '
+        'canlı kayıt + yüklenen referansları birlikte çerçeveler. Listeden '
+        'tek seçim → tek rota haritası, çoklu → çoklu harita.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.78 beta',
     date: '2026-08-28',
     note:

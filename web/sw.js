@@ -11,7 +11,7 @@
 // lib/build_info.dart's kAppBuildLabel on every deploy, together with
 // index.html's RIDEATLAS_WEB_VERSION and its ?v= cache busters, so all
 // three always advance in lockstep with the app version.
-const APP_VERSION = '1.4.78';
+const APP_VERSION = '1.4.80';
 const CACHE = 'rideatlas-v' + APP_VERSION;
 
 // Minimal app shell, precached at install. Everything else (main.dart.js,

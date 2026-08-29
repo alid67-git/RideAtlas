@@ -30,6 +30,7 @@ import '../services/gps_recorder.dart';
 import '../services/live_location.dart';
 import '../services/gpx_parser.dart';
 import '../services/app_update_controller.dart';
+import '../services/map_camera_fit.dart';
 import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';
 import '../widgets/heading_cone.dart';
@@ -366,6 +367,10 @@ class _RecordScreenState extends State<RecordScreen>
   /// Clears overlays immediately, then parses each selected GPX off the UI
   /// isolate and grows the polyline in batches so selecting many long
   /// tracks never freezes the recording screen.
+  ///
+  /// After the first readable route is known, frames the map MediaAtlas-style:
+  /// one selected track fills the window; several zoom out to cover all
+  /// (plus any live recording points already on the map).
   Future<void> _applyReferenceRoutes(Set<String> ids) async {
     _overlayRevealTimer?.cancel();
     if (ids.isEmpty) {
@@ -383,6 +388,13 @@ class _RecordScreenState extends State<RecordScreen>
 
     final repo = context.read<RouteRepository>();
     final byId = {for (final r in repo.routes) r.id: r};
+    final selectedRoutes = [
+      for (final id in ids)
+        if (byId[id] != null) byId[id]!,
+    ];
+    // Fit as soon as metadata is known - don't wait for XML parse/reveal.
+    _fitLoadedTracks(selectedRoutes);
+
     var colorIndex = 1; // skip red - reserved for the live track
     final built = <Polyline>[];
 
@@ -404,6 +416,26 @@ class _RecordScreenState extends State<RecordScreen>
         // Skip unreadable routes; keep whatever else loaded.
       }
     }
+  }
+
+  /// MediaAtlas-style: frame [routes] (1 → that track, N → union). When a
+  /// live recording already has points, those are included too.
+  void _fitLoadedTracks(List<GpxRoute> routes) {
+    if (!_mapVisible) return;
+    var bounds = boundsForRoutes(routes);
+    bounds = extendBoundsWithPoints(
+      bounds,
+      [for (final p in _recorder.points) p.latLng],
+    );
+    if (bounds == null) return;
+    _cancelCameraAnimation();
+    setState(() => _followMe = false);
+    _mapController.rotate(0);
+    fitMapToBounds(
+      _mapController,
+      bounds: bounds,
+      padding: const EdgeInsets.fromLTRB(48, 240, 48, 170),
+    );
   }
 
   Future<void> _revealOverlayPolyline(
@@ -502,24 +534,23 @@ class _RecordScreenState extends State<RecordScreen>
     _applyRotation();
   }
 
-  /// Zooms out to fit the entire recorded track on screen, north-up, and
-  /// stops auto-follow so the overview stays put. Tapping the recenter
-  /// button ([_recenter]) returns to the live position.
+  /// Zooms out to fit the live track (and any loaded reference overlays)
+  /// on screen, north-up, and stops auto-follow so the overview stays put.
+  /// Tapping the recenter button ([_recenter]) returns to the live position.
   void _showWholeTrack() {
-    final points = _recorder.points;
-    if (points.length < 2) return;
-    _cancelCameraAnimation();
-    setState(() => _followMe = false);
-    final bounds = LatLngBounds.fromPoints([for (final p in points) p.latLng]);
-    _mapController.rotate(0);
-    _mapController.fitCamera(
-      CameraFit.bounds(
-        bounds: bounds,
-        // Keeps the track clear of the stats overlay on top and the
-        // controls at the bottom.
-        padding: const EdgeInsets.fromLTRB(48, 240, 48, 170),
-      ),
+    final repo = context.read<RouteRepository>();
+    final byId = {for (final r in repo.routes) r.id: r};
+    final overlayRoutes = [
+      for (final id in _referenceRouteIds)
+        if (byId[id] != null) byId[id]!,
+    ];
+    var bounds = boundsForRoutes(overlayRoutes);
+    bounds = extendBoundsWithPoints(
+      bounds,
+      [for (final p in _recorder.points) p.latLng],
     );
+    if (bounds == null) return;
+    _fitLoadedTracks(overlayRoutes);
   }
 
   /// Rotates the map to the live heading (course-up), if known yet.
