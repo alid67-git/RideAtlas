@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.83 beta',
+    date: '2026-08-30',
+    note:
+        'Büyük rota haritası (ör. 8 günlük GPX): kaydırma/pinch sırasında '
+        'on binlerce nokta her karede boyanıyordu ve kilitleniyordu. Ekranda '
+        'en fazla ~8000 köşe çizilir (analiz/kayıt tam kalır); 3000+ noktada '
+        'çizgi animasyonu atlanır; dokununca animasyon iptal. flutter_map '
+        'sadeleştirme toleransı yükseltildi.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.82 beta',
     date: '2026-08-29',
     note:

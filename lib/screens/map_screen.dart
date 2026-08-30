@@ -26,6 +26,7 @@ import '../services/daily_analysis.dart';
 import '../services/exif_gps.dart';
 import '../services/map_camera_fit.dart';
 import '../services/route_geography.dart';
+import '../services/track_display_simplify.dart';
 import '../services/track_io.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/route_photo_strip.dart';
@@ -106,7 +107,7 @@ List<Polyline> buildTrackPolylines({
   if (points.isEmpty) return const [];
 
   Polyline fullTrack({Color? color}) => Polyline(
-        points: [for (final p in points) p.latLng],
+        points: latLngsForMapDisplay([for (final p in points) p.latLng]),
         strokeWidth: 4,
         color: color ?? _trackRevealColor,
       );
@@ -123,6 +124,11 @@ List<Polyline> buildTrackPolylines({
       visibleDayNumbers == null ||
       visibleDayNumbers.contains(days[index].dayNumber);
 
+  final perDayCap = max(
+    400,
+    kMapDisplayMaxPoints ~/ max(days.length, 1),
+  );
+
   final built = <Polyline>[
     for (var i = 0; i < days.length; i++)
       if (isShown(i))
@@ -133,7 +139,10 @@ List<Polyline> buildTrackPolylines({
             // (e.g. day 1 + day 7 selected) would draw a stray line
             // straight across the skipped days.
             if (i > 0 && isShown(i - 1)) days[i - 1].points.last.latLng,
-            for (final p in days[i].points) p.latLng,
+            ...latLngsForMapDisplay(
+              [for (final p in days[i].points) p.latLng],
+              maxPoints: perDayCap,
+            ),
           ],
           strokeWidth: 4,
           color: days[i].color,
@@ -225,12 +234,34 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     _loadMapStyle();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
+      if (_trackDrawing && _isUserMapGesture(event.source)) {
+        // Skip remaining reveal frames so pan/pinch isn't fighting 60fps
+        // setState on a huge growing polyline.
+        _cancelReveal();
+      }
       final rotation = event.camera.rotation;
       if (rotation != _rotationDeg.value) {
         _rotationDeg.value = rotation;
       }
     });
     context.read<RouteRepository>().addListener(_onRepoChanged);
+  }
+
+  static bool _isUserMapGesture(MapEventSource source) {
+    switch (source) {
+      case MapEventSource.dragStart:
+      case MapEventSource.onDrag:
+      case MapEventSource.dragEnd:
+      case MapEventSource.multiFingerGestureStart:
+      case MapEventSource.onMultiFinger:
+      case MapEventSource.multiFingerEnd:
+      case MapEventSource.flingAnimationController:
+      case MapEventSource.doubleTapZoomAnimationController:
+      case MapEventSource.scrollWheel:
+        return true;
+      default:
+        return false;
+    }
   }
 
   @override
@@ -395,15 +426,18 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       return;
     }
 
-    // Short tracks: one frame is enough - animation would just flicker.
-    if (points.length < 150) {
+    // Short tracks: one frame. Huge tracks: skip the 16ms grow animation —
+    // it rebuilds a tens-of-thousands-point polyline ~60 times/sec and
+    // locks the map if the rider pans during load (8-day GPX).
+    if (points.length < 150 || points.length >= 3000) {
       if (!mounted || gen != _loadGeneration) return;
+      final display = latLngsForMapDisplay([for (final p in points) p.latLng]);
       setState(() {
         _trackStart = points.first.latLng;
         _trackEnd = points.last.latLng;
         _polylines = [
           Polyline(
-            points: [for (final p in points) p.latLng],
+            points: display,
             strokeWidth: 4,
             color: _trackRevealColor,
           ),
@@ -968,7 +1002,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           // caused the topo flicker when OpenTopoMap rate-limited).
           evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),
-        PolylineLayer(polylines: _polylines),
+        PolylineLayer(
+          simplificationTolerance: 1.5,
+          polylines: _polylines,
+        ),
         MarkerLayer(
           markers: [
             if (trackReady)

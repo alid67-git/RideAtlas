@@ -15,6 +15,7 @@ import '../models/track_point.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart' show colorForDay;
 import '../services/map_camera_fit.dart';
+import '../services/track_display_simplify.dart';
 import '../services/track_io.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 
@@ -251,7 +252,10 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     Color color,
     int gen,
   ) async {
-    final points = [for (final p in trackPoints) p.latLng];
+    final points = latLngsForMapDisplay(
+      [for (final p in trackPoints) p.latLng],
+      maxPoints: 4000,
+    );
     if (points.length < 2) return;
     if (!mounted || gen != _loadGeneration) return;
 
@@ -259,7 +263,7 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     setState(() => _lines.add(line));
     final slot = _lines.length - 1;
 
-    if (points.length < 150) {
+    if (points.length < 150 || trackPoints.length >= 3000) {
       setState(() => _lines[slot].points = points);
       return;
     }
@@ -515,6 +519,7 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
         ),
         if (_lines.isNotEmpty)
           PolylineLayer(
+            simplificationTolerance: 1.5,
             polylines: [
               for (final line in _lines)
                 if (line.points.length >= 2)
