@@ -7,6 +7,8 @@
   "trackHasNoPoints": "No route/track points found in this file.",
   "duplicateRouteMessage": "This route is already saved: {name}",
   "@duplicateRouteMessage": {"placeholders": {"name": {"type": "String"}}},
+  "openWithImported": "Added to rides: {name}",
+  "@openWithImported": {"placeholders": {"name": {"type": "String"}}},
   "renameRouteTitle": "Rename route",
   "cancel": "Cancel",
   "save": "Save",

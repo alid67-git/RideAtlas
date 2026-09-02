@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.84 beta',
+    date: '2026-09-02',
+    note:
+        'Android "RideAtlas ile aç": soğuk açılışta dosya yayın akışında '
+        'dinleyici yokken düşüyordu — uygulama açılıyor, iz kaydedilmiyordu. '
+        'Şimdi önce dinle, sonra al; import izler listesine yazılır, harita '
+        'açılır. Haritada çizgi her zaman nokta nokta (eski→yeni) büyür; '
+        'büyük GPX sadeleştirilmiş köşelerle animasyonlanır.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.83 beta',
     date: '2026-08-30',
     note:
