@@ -426,12 +426,12 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       return;
     }
 
-    // Short tracks: one frame. Huge tracks: skip the 16ms grow animation —
-    // it rebuilds a tens-of-thousands-point polyline ~60 times/sec and
-    // locks the map if the rider pans during load (8-day GPX).
-    if (points.length < 150 || points.length >= 3000) {
+    // Always grow the *display* polyline point-by-point (old → new). Full
+    // GPX can be 50k–200k vertices; we animate the simplified list so an
+    // 8-day ride still "writes" onto the map without locking the UI.
+    final display = latLngsForMapDisplay([for (final p in points) p.latLng]);
+    if (display.length < 2) {
       if (!mounted || gen != _loadGeneration) return;
-      final display = latLngsForMapDisplay([for (final p in points) p.latLng]);
       setState(() {
         _trackStart = points.first.latLng;
         _trackEnd = points.last.latLng;
@@ -446,11 +446,29 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       return;
     }
 
-    final total = points.length;
-    final batch = max(30, min(800, (total / 60).ceil()));
-    final start = points.first.latLng;
+    if (display.length < 40) {
+      if (!mounted || gen != _loadGeneration) return;
+      setState(() {
+        _trackStart = display.first;
+        _trackEnd = display.last;
+        _polylines = [
+          Polyline(
+            points: display,
+            strokeWidth: 4,
+            color: _trackRevealColor,
+          ),
+        ];
+      });
+      return;
+    }
+
+    final total = display.length;
+    // ~80–120 frames so the line is visibly drawn point-by-point, not a pop.
+    final batch = max(8, min(80, (total / 100).ceil()));
+    final start = display.first;
     final done = Completer<void>();
     var shown = 0;
+    final grown = <LatLng>[];
 
     _cancelReveal();
     _revealDone = done;
@@ -460,16 +478,15 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         if (!done.isCompleted) done.complete();
         return;
       }
-      shown = min(total, shown + batch);
-      final line = <LatLng>[
-        for (var i = 0; i < shown; i++) points[i].latLng,
-      ];
+      final next = min(total, shown + batch);
+      grown.addAll(display.sublist(shown, next));
+      shown = next;
       setState(() {
         _trackStart = start;
-        _trackEnd = line.last;
+        _trackEnd = grown.last;
         _polylines = [
           Polyline(
-            points: line,
+            points: List<LatLng>.from(grown),
             strokeWidth: 4,
             color: _trackRevealColor,
           ),

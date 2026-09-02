@@ -33,9 +33,10 @@ class _IncomingTrackGateState extends State<IncomingTrackGate> {
   }
 
   Future<void> _start() async {
+    // Subscribe first so takeInitialOpen can't land on a broadcast stream
+    // with zero listeners (that dropped the file: app opened, ride not saved).
+    _sub = IncomingTrackOpener.listen(_onFile);
     await IncomingTrackOpener.start();
-    if (!mounted) return;
-    _sub = IncomingTrackOpener.stream.listen(_onFile);
   }
 
   Future<void> _onFile(IncomingTrackFile file) async {
@@ -55,6 +56,7 @@ class _IncomingTrackGateState extends State<IncomingTrackGate> {
         suggestedFileName: file.name,
       );
       if (!mounted) return;
+      _snack((l10n) => l10n.openWithImported(route.name));
       final nav = rootNavigatorKey.currentState;
       if (nav == null) return;
       await nav.push(

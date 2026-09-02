@@ -7,6 +7,8 @@
   "trackHasNoPoints": "In der Datei wurden keine Strecken-/Trackpunkte gefunden.",
   "duplicateRouteMessage": "Diese Route ist bereits gespeichert: {name}",
   "@duplicateRouteMessage": {"placeholders": {"name": {"type": "String"}}},
+  "openWithImported": "Zu den Fahrten hinzugefügt: {name}",
+  "@openWithImported": {"placeholders": {"name": {"type": "String"}}},
   "renameRouteTitle": "Route umbenennen",
   "cancel": "Abbrechen",
   "save": "Speichern",

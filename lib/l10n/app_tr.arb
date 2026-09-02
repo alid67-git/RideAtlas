@@ -9,6 +9,8 @@
   "trackHasNoPoints": "Dosyada rota/track noktası bulunamadı.",
   "duplicateRouteMessage": "Bu rota zaten kayıtlı: {name}",
   "@duplicateRouteMessage": {"placeholders": {"name": {"type": "String"}}},
+  "openWithImported": "İzler listesine eklendi: {name}",
+  "@openWithImported": {"placeholders": {"name": {"type": "String"}}},
   "renameRouteTitle": "Rotayı yeniden adlandır",
   "cancel": "Vazgeç",
   "save": "Kaydet",
