@@ -11,19 +11,19 @@
 // lib/build_info.dart's kAppBuildLabel on every deploy, together with
 // index.html's RIDEATLAS_WEB_VERSION and its ?v= cache busters, so all
 // three always advance in lockstep with the app version.
-const APP_VERSION = '1.4.84';
+const APP_VERSION = '1.4.85';
 const CACHE = 'rideatlas-v' + APP_VERSION;
 
 // Minimal app shell, precached at install. Everything else (main.dart.js,
 // canvaskit, assets, icons) lands in the same cache on first fetch - the
 // goal here is a consistent versioned snapshot, not full offline support.
-// app_update.js is precached under the exact ?v= URL index.html loads it
-// with - cache matches are exact-URL, so an unversioned entry would never
-// be hit.
+// app_update.js and flutter_bootstrap.js are precached under the exact ?v=
+// URLs index.html loads them with - cache matches are exact-URL.
 const CORE = [
   'index.html',
   'manifest.json',
   'favicon.png',
+  'flutter_bootstrap.js?v=' + APP_VERSION,
   'app_update.js?v=' + APP_VERSION,
 ];
 
@@ -74,8 +74,16 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   // HTML: network-first, so a fresh deploy is picked up on the next
-  // navigation; cache is only the offline/failure fallback.
-  if (request.mode === 'navigate') {
+  // navigation; cache is only the offline/failure fallback. Cover
+  // navigate, document fetches, and explicit .html / directory URLs —
+  // some browsers don't set mode=navigate for every shell load.
+  const path = url.pathname;
+  const isHtml =
+    request.mode === 'navigate' ||
+    request.destination === 'document' ||
+    path.endsWith('.html') ||
+    path.endsWith('/');
+  if (isHtml) {
     event.respondWith(
       fetch(request)
         .then((response) => {
