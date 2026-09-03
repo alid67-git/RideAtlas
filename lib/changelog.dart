@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.85 beta',
+    date: '2026-09-03',
+    note:
+        'Yeni sürüm: altta sabit banner + Güncelle (isteğe bağlı kapat). '
+        'Web’de service worker Güncelle’ye basılmadan sayfayı yenilemez; '
+        'HTML network-first. Android’de açılış diyaloğu kalktı, aynı alt '
+        'banner ve kapat; indirme yüzdesi banner’da. Header’da ikinci '
+        'güncelleme ikonu yok.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.84 beta',
     date: '2026-09-02',
     note:

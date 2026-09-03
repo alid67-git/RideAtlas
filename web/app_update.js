@@ -24,7 +24,7 @@
 
   function strings() {
     var lang = (navigator.language || 'tr').slice(0, 2).toLowerCase();
-    return STRINGS[lang] || STRINGS.en;
+    return STRINGS[lang] || STRINGS.tr;
   }
 
   // --- Version hard-reload safety -----------------------------------------
@@ -101,7 +101,6 @@
   // (clients.claim()), and reloading a first-time visitor would just flash
   // the page for nothing.
   var updateRequested = false;
-  var hadController = Boolean(navigator.serviceWorker.controller);
 
   function showBanner(worker) {
     waitingWorker = worker;
@@ -123,11 +122,10 @@
   dismissButton.addEventListener('click', hideBanner);
 
   navigator.serviceWorker.addEventListener('controllerchange', function () {
-    if (!updateRequested && !hadController) {
-      // First install taking control - not an update.
-      hadController = true;
-      return;
-    }
+    // Never reload until the rider taps Güncelle. The first SW install
+    // also fires controllerchange (clients.claim()), and a waiting SW
+    // taking control for any other reason must not yank the tab.
+    if (!updateRequested) return;
     if (reloading) return;
     reloading = true;
     try {
@@ -168,7 +166,7 @@
   }
 
   navigator.serviceWorker
-    .register('sw.js')
+    .register('./sw.js', { scope: './' })
     .then(watch)
     .catch(function () {
       // Registration failing (unsupported, storage full) must never take

@@ -250,11 +250,13 @@ class _RecordScreenState extends State<RecordScreen>
         _clockTick.value++;
       }
     });
-    // Same shared update check as the home screen - so the banner also
-    // appears here if the rider jumped straight into recording.
+    // Same shared update poll as the home screen - so the bottom banner
+    // also appears here if the rider jumped straight into recording.
     if (AppUpdateController.isSupported) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.read<AppUpdateController>().check();
+        if (mounted) {
+          context.read<AppUpdateController>().startPeriodicChecks();
+        }
       });
     }
     if (widget.initialShowMap) {
@@ -1294,6 +1296,7 @@ class _RecordScreenState extends State<RecordScreen>
 
   Widget _buildMapPage(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final showUpdateBanner = context.watch<AppUpdateController>().showBanner;
 
     return Scaffold(
       body: Stack(
@@ -1371,10 +1374,6 @@ class _RecordScreenState extends State<RecordScreen>
                             _buildMiniStatsRow(context, l10n, recorder),
                       ),
                     ],
-                    if (context.watch<AppUpdateController>().showBanner) ...[
-                      const SizedBox(height: 8),
-                      const AppUpdateBanner(),
-                    ],
                     if (recorder.isAutoPaused) ...[
                       const SizedBox(height: 8),
                       _buildAutoPausedBanner(context, l10n),
@@ -1387,7 +1386,7 @@ class _RecordScreenState extends State<RecordScreen>
           ),
           Positioned(
             right: 16,
-            bottom: 100,
+            bottom: 100 + (showUpdateBanner ? kAppUpdateBannerReserve : 0),
             child: SafeArea(
               top: false,
               child: Consumer<GpsRecorder>(
@@ -1460,13 +1459,25 @@ class _RecordScreenState extends State<RecordScreen>
           Positioned(
             left: 0,
             right: 0,
-            bottom: 24,
+            bottom: 0,
             child: SafeArea(
               top: false,
-              child: Center(
-                child: Consumer<GpsRecorder>(
-                  builder: (context, recorder, _) =>
-                      _buildControls(l10n, recorder),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                      child: Consumer<GpsRecorder>(
+                        builder: (context, recorder, _) =>
+                            _buildControls(l10n, recorder),
+                      ),
+                    ),
+                    if (showUpdateBanner) ...[
+                      const SizedBox(height: 8),
+                      const AppUpdateBanner(),
+                    ],
+                  ],
                 ),
               ),
             ),
@@ -1634,6 +1645,7 @@ class _RecordScreenState extends State<RecordScreen>
     }
     final accent = _cardAccent(theme);
     final layoutController = context.watch<LiveStatsLayoutController>();
+    final showUpdateBanner = context.watch<AppUpdateController>().showBanner;
 
     return Scaffold(
       body: Stack(
@@ -1674,11 +1686,6 @@ class _RecordScreenState extends State<RecordScreen>
                     ],
                   ),
                 ),
-                if (context.watch<AppUpdateController>().showBanner)
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
-                    child: AppUpdateBanner(),
-                  ),
                 // Total duration lives here, above the auto-paused banner,
                 // rather than paired with "Aktif sürüş süresi" below the
                 // hero speed number - that slot now holds "Mola süresi"
@@ -1899,6 +1906,11 @@ class _RecordScreenState extends State<RecordScreen>
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Center(child: _buildControls(l10n, recorder)),
                 ),
+                if (showUpdateBanner)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    child: AppUpdateBanner(),
+                  ),
               ],
             ),
           ),

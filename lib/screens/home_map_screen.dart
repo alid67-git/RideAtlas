@@ -67,16 +67,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       // zoom as MapOptions → flutter_map may skip the first request).
       if (mounted) kickMapTileLayer(_mapController);
       await _maybeShowWhatsNew();
-      // After what's-new: check once; offer a single "Güncelle" dialog. The
-      // same banner also appears on the recording/info screens via
-      // [AppUpdateController].
+      // After what's-new: start the shared update poll. The only offer is
+      // the bottom banner (no launch dialog, no header button).
       if (AppUpdateController.isSupported) {
-        final updates = context.read<AppUpdateController>();
-        await updates.check();
-        if (!mounted) return;
-        if (await offerAppUpdateDialog(context)) {
-          await installAppUpdate(context);
-        }
+        context.read<AppUpdateController>().startPeriodicChecks();
       }
       // If a fix hasn't arrived yet, tell the user recording would start offline.
       if (!_hadGpsFix && mounted) _showOfflineGpsHint();
@@ -353,7 +347,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
             ),
           ),
-          if (_locationError != null || showUpdateBanner)
+          if (_locationError != null)
             Positioned(
               top: 0,
               left: 0,
@@ -361,33 +355,21 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               child: SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(64, 8, 16, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (showUpdateBanner) ...[
-                        const AppUpdateBanner(),
-                        const SizedBox(height: 8),
-                      ],
-                      if (_locationError != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.errorContainer,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            _locationError!,
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onErrorContainer,
-                            ),
-                          ),
-                        ),
-                    ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _locationError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -396,66 +378,91 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           // its own way back in - the blinking REC pill from
           // RecordingIndicatorOverlay - so this button doesn't double up as
           // a second, confusing "start" invitation while one is live.
-          if (!recordingInProgress)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 24,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FloatingActionButton(
-                      heroTag: 'homeRecord',
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      tooltip: l10n.recordRideTooltip,
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const RecordScreen()),
-                      ),
-                      child: const Icon(Icons.fiber_manual_record, size: 28),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: SatelliteCountBadge(),
-                    ),
-                    if (_gpsFlashMessage != null)
-                      IgnorePointer(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 260),
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.55),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!recordingInProgress)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FloatingActionButton(
+                              heroTag: 'homeRecord',
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              tooltip: l10n.recordRideTooltip,
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const RecordScreen(),
                                 ),
-                                child: Text(
-                                  _gpsFlashMessage!,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    height: 1.2,
+                              ),
+                              child: const Icon(
+                                Icons.fiber_manual_record,
+                                size: 28,
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: SatelliteCountBadge(),
+                            ),
+                            if (_gpsFlashMessage != null)
+                              IgnorePointer(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 260,
+                                    ),
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.55,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        child: Text(
+                                          _gpsFlashMessage!,
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            height: 1.2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
+                          ],
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                  if (showUpdateBanner)
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      child: AppUpdateBanner(),
+                    ),
+                ],
               ),
             ),
+          ),
           Positioned(
             right: 16,
-            bottom: 24,
+            bottom: 24 + (showUpdateBanner ? kAppUpdateBannerReserve : 0),
             child: Column(
               children: [
                 FloatingActionButton.small(

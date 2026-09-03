@@ -7,8 +7,12 @@ import '../services/app_update_controller.dart';
 import '../services/update_checker.dart';
 import 'app_update_progress.dart';
 
-/// Compact banner: version text + single "Güncelle" button, or inline
-/// download progress while the APK streams in the background (MedyaAtlas-style).
+/// Space to lift map FABs so they sit above the bottom update banner.
+const double kAppUpdateBannerReserve = 80;
+
+/// Compact bottom banner: version text + "Güncelle" + optional dismiss, or
+/// inline download progress while the APK streams (same language as the
+/// web #update-banner).
 class AppUpdateBanner extends StatelessWidget {
   const AppUpdateBanner({super.key});
 
@@ -23,68 +27,59 @@ class AppUpdateBanner extends StatelessWidget {
       final progress = ctrl.downloadProgress;
       final received = progress?.$1 ?? 0;
       final total = progress?.$2 ?? ctrl.available?.sizeBytes ?? 0;
-      return Material(
-        color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: AppUpdateProgressStrip(
-            received: received,
-            total: total,
-            title: l10n.updateDownloadingTitle,
+      return Semantics(
+        container: true,
+        liveRegion: true,
+        child: Material(
+          color: theme.colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: AppUpdateProgressStrip(
+              received: received,
+              total: total,
+              title: l10n.updateDownloadingTitle,
+            ),
           ),
         ),
       );
     }
 
     final info = ctrl.available!;
-    return Material(
-      color: theme.colorScheme.primaryContainer,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                l10n.updateAvailableMessage(info.version),
-                style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Material(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 4, 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.updateAvailableMessage(info.version),
+                  style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
+                ),
               ),
-            ),
-            FilledButton(
-              onPressed: () => installAppUpdate(context),
-              child: Text(l10n.updateButtonLabel),
-            ),
-          ],
+              FilledButton(
+                onPressed: () => installAppUpdate(context),
+                child: Text(l10n.updateButtonLabel),
+              ),
+              IconButton(
+                tooltip: l10n.close,
+                onPressed: ctrl.dismiss,
+                icon: Icon(
+                  Icons.close,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-}
-
-/// Opens a one-button "Güncelle" dialog when [ctrl.available] is set and not
-/// yet dismissed. Returns whether the user tapped Update.
-Future<bool> offerAppUpdateDialog(BuildContext context) async {
-  final ctrl = context.read<AppUpdateController>();
-  final info = ctrl.available;
-  if (info == null || ctrl.dismissed || ctrl.installing) return false;
-
-  final l10n = AppLocalizations.of(context)!;
-  final accepted = await showDialog<bool>(
-    context: context,
-    useRootNavigator: true,
-    builder: (context) => AlertDialog(
-      title: Text(l10n.updateAvailableTitle),
-      content: Text(l10n.updateAvailableMessage(info.version)),
-      actions: [
-        FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: Text(l10n.updateButtonLabel),
-        ),
-      ],
-    ),
-  );
-  return accepted == true;
 }
 
 /// Downloads the APK in the background; progress appears in [AppUpdateBanner]
