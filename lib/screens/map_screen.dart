@@ -124,10 +124,12 @@ List<Polyline> buildTrackPolylines({
       visibleDayNumbers == null ||
       visibleDayNumbers.contains(days[index].dayNumber);
 
-  final perDayCap = max(
-    400,
-    kMapDisplayMaxPoints ~/ max(days.length, 1),
-  );
+  // Bölünen bir tavan (gün sayısına göre kMapDisplayMaxPoints/N) çok
+  // günlü turlarda tek günü 400 nokta gibi bir tabana düşürüp virajlı
+  // dağ yollarını (ör. geçitler) kaba/köşeli gösteriyordu. PolylineLayer
+  // zaten zoom'a göre kendi ekran-uzayı sadeleştirmesini yapıyor —
+  // her gün burada tam tavanı alsın.
+  final perDayCap = kMapDisplayMaxPoints;
 
   final built = <Polyline>[
     for (var i = 0; i < days.length; i++)
@@ -964,8 +966,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                     const SizedBox(height: 8),
                     FloatingActionButton(
                       heroTag: 'locate',
+                      tooltip: AppLocalizations.of(context)!.fitRouteTooltip,
                       onPressed: () => _fitToRoute(route),
-                      child: const Icon(Icons.my_location),
+                      child: const Icon(Icons.zoom_out_map),
                     ),
                   ],
                 ),
@@ -1020,7 +1023,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),
         PolylineLayer(
-          simplificationTolerance: 1.5,
+          // 1.5 idi: dağ geçidi gibi sık virajlı yollarda köşeleri kesip
+          // izi yola sadık olmayan kaba bir çizgiye dönüştürüyordu.
+          simplificationTolerance: 0.4,
           polylines: _polylines,
         ),
         MarkerLayer(

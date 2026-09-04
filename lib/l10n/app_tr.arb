@@ -129,6 +129,7 @@
   "dayFilterTitle": "Hangi günler gösterilsin?",
   "dayFilterShowAll": "Tüm günler",
   "northUpTooltip": "Kuzeyi yukarı al",
+  "fitRouteTooltip": "Tüm izi göster",
   "showStopsTooltip": "Molaları ve gecelemeleri göster",
   "hideStopsTooltip": "Molaları ve gecelemeleri gizle",
   "overnightLabel": "Geceleme",

@@ -480,8 +480,9 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
                 const SizedBox(height: 12),
                 FloatingActionButton(
                   heroTag: 'multiFit',
+                  tooltip: l10n.fitRouteTooltip,
                   onPressed: lines.isEmpty ? null : () => _fitToAll(lines),
-                  child: const Icon(Icons.my_location),
+                  child: const Icon(Icons.zoom_out_map),
                 ),
               ],
             ),
@@ -519,7 +520,9 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
         ),
         if (_lines.isNotEmpty)
           PolylineLayer(
-            simplificationTolerance: 1.5,
+            // 1.5 idi: virajlı yollarda köşeleri kesip yolu takip etmeyen
+            // kaba bir çizgiye dönüştürüyordu.
+            simplificationTolerance: 0.4,
             polylines: [
               for (final line in _lines)
                 if (line.points.length >= 2)
