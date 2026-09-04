@@ -114,6 +114,7 @@
   "dayFilterTitle": "Welche Tage anzeigen?",
   "dayFilterShowAll": "Alle Tage",
   "northUpTooltip": "Nach Norden ausrichten",
+  "fitRouteTooltip": "Ganze Route einpassen",
   "showStopsTooltip": "Stopps und Übernachtungen anzeigen",
   "hideStopsTooltip": "Stopps und Übernachtungen ausblenden",
   "overnightLabel": "Übernachtung",
