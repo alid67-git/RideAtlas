@@ -1470,15 +1470,25 @@ class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
   }
 
   Future<void> _importTrack() async {
-    final result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['gpx', 'kml', 'kmz'],
-      withData: true,
-    );
+    // FileType.any, not .custom with allowedExtensions: on many Android
+    // devices the OS has no registered MIME type for "gpx", and the system
+    // picker then hides those files entirely instead of just failing to
+    // match them - "kml" and "kmz" are more consistently recognized, so the
+    // OS-level filter looked like it only rejected GPX. Filtering by
+    // extension ourselves after picking works the same everywhere.
+    final result = await FilePicker.pickFiles(withData: true);
     if (result == null || result.files.isEmpty) return;
     if (!mounted) return;
 
     final file = result.files.single;
+    if (!isSupportedTrackFileName(file.name)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.unsupportedTrackFileType),
+        ),
+      );
+      return;
+    }
     final bytes = file.bytes;
     if (bytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(

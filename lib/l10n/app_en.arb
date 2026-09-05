@@ -5,6 +5,7 @@
   "fileNotReadable": "Could not read the file.",
   "importFailedGeneric": "Could not import file: {error}",
   "trackHasNoPoints": "No route/track points found in this file.",
+  "unsupportedTrackFileType": "Unsupported file type. Only .gpx, .kml and .kmz files can be imported.",
   "duplicateRouteMessage": "This route is already saved: {name}",
   "@duplicateRouteMessage": {"placeholders": {"name": {"type": "String"}}},
   "openWithImported": "Added to rides: {name}",

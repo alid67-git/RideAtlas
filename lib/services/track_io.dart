@@ -196,13 +196,24 @@ TrackExport buildTrackExport({
   );
 }
 
+final _trackExtensionPattern = RegExp(
+  r'\.(gpx|kml|kmz)$',
+  caseSensitive: false,
+);
+
 /// Strips common track file extensions from an imported file name.
 String stripTrackExtension(String fileName) {
-  return fileName.replaceAll(
-    RegExp(r'\.(gpx|kml|kmz)$', caseSensitive: false),
-    '',
-  );
+  return fileName.replaceAll(_trackExtensionPattern, '');
 }
+
+/// True when [fileName] ends in a track extension we can import. Used to
+/// validate a file picked with an unfiltered picker (see [decodeTrackBytes]
+/// callers) - filtering by extension *at the OS picker* is unreliable on
+/// Android, where a device's MimeTypeMap often has no entry for "gpx" and
+/// the document picker then hides those files entirely instead of just
+/// failing to match them.
+bool isSupportedTrackFileName(String fileName) =>
+    _trackExtensionPattern.hasMatch(fileName);
 
 /// Trims stray trailing separators (underscores, dashes, whitespace) left
 /// over from a source filename, e.g. "Kapadokya_Turu_" -> "Kapadokya_Turu".
