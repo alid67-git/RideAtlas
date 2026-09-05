@@ -1321,6 +1321,16 @@ class _RecordScreenState extends State<RecordScreen>
                           onPressed: () => Navigator.pop(context),
                         ),
                         const SizedBox(width: 8),
+                        ValueListenableBuilder<List<Polyline>>(
+                          valueListenable: _overlayPolylines,
+                          builder: (context, overlays, _) => _RoundIconButton(
+                            icon: Icons.route,
+                            tooltip: l10n.recordOverlayTooltip,
+                            filled: overlays.isNotEmpty,
+                            onPressed: _pickReferenceRoutes,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         // Not wrapped in Expanded while recording: the speed
                         // box below sizes itself to its own digits (2 vs 3
                         // figures), and used to sit in a Row alongside the
@@ -1349,14 +1359,6 @@ class _RecordScreenState extends State<RecordScreen>
                             ),
                           ),
                         ),
-                        if (!recorder.isIdle) ...[
-                          const SizedBox(width: 8),
-                          _RoundIconButton(
-                            icon: Icons.dashboard_outlined,
-                            tooltip: l10n.recordInfoTabTooltip,
-                            onPressed: () => setState(() => _showMap = false),
-                          ),
-                        ],
                       ],
                     ),
                     // Süre/Mesafe/Yükseklik now live on their own full-width
@@ -1401,21 +1403,6 @@ class _RecordScreenState extends State<RecordScreen>
                     child: Icon(_mapStyle.icon),
                   ),
                   const SizedBox(height: 8),
-                  ValueListenableBuilder<List<Polyline>>(
-                    valueListenable: _overlayPolylines,
-                    builder: (context, overlays, _) => FloatingActionButton.small(
-                      heroTag: 'recordOverlayRoutes',
-                      tooltip: l10n.recordOverlayTooltip,
-                      backgroundColor: overlays.isNotEmpty
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
-                      foregroundColor: overlays.isNotEmpty
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : null,
-                      onPressed: _pickReferenceRoutes,
-                      child: const Icon(Icons.route),
-                    ),
-                  ),
                   // Overview of everything recorded so far; the recenter
                   // button below returns to the live position, course-up.
                   if (recorder.points.length > 1) ...[
@@ -1463,10 +1450,26 @@ class _RecordScreenState extends State<RecordScreen>
             bottom: 24,
             child: SafeArea(
               top: false,
-              child: Center(
-                child: Consumer<GpsRecorder>(
-                  builder: (context, recorder, _) =>
-                      _buildControls(l10n, recorder),
+              child: Consumer<GpsRecorder>(
+                builder: (context, recorder, _) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 48,
+                        child: recorder.isIdle
+                            ? null
+                            : _RoundIconButton(
+                                icon: Icons.dashboard_outlined,
+                                tooltip: l10n.recordInfoTabTooltip,
+                                onPressed: () =>
+                                    setState(() => _showMap = false),
+                              ),
+                      ),
+                      Expanded(child: Center(child: _buildControls(l10n, recorder))),
+                      const SizedBox(width: 48),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1664,12 +1667,6 @@ class _RecordScreenState extends State<RecordScreen>
                             builder: (_) => const SettingsScreen(),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      _RoundIconButton(
-                        icon: Icons.map_outlined,
-                        tooltip: l10n.recordMapTabTooltip,
-                        onPressed: _switchToMap,
                       ),
                     ],
                   ),
@@ -1896,8 +1893,24 @@ class _RecordScreenState extends State<RecordScreen>
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Center(child: _buildControls(l10n, recorder)),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 16,
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 48,
+                        child: _RoundIconButton(
+                          icon: Icons.map_outlined,
+                          tooltip: l10n.recordMapTabTooltip,
+                          onPressed: _switchToMap,
+                        ),
+                      ),
+                      Expanded(child: Center(child: _buildControls(l10n, recorder))),
+                      const SizedBox(width: 48),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -2401,20 +2414,29 @@ class _RoundIconButton extends StatelessWidget {
     required this.icon,
     required this.onPressed,
     this.tooltip,
+    this.filled = false,
   });
 
   final IconData icon;
   final VoidCallback? onPressed;
   final String? tooltip;
 
+  /// True highlights the button (e.g. a reference route overlay is active),
+  /// matching the same primary-color convention the map FABs use.
+  final bool filled;
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
+      color: filled
+          ? scheme.primary
+          : scheme.surface.withValues(alpha: 0.92),
       shape: const CircleBorder(),
       elevation: 2,
       child: IconButton(
         icon: Icon(icon),
+        color: filled ? scheme.onPrimary : null,
         tooltip: tooltip,
         onPressed: onPressed,
       ),
