@@ -5,6 +5,7 @@
   "fileNotReadable": "Datei konnte nicht gelesen werden.",
   "importFailedGeneric": "Datei konnte nicht importiert werden: {error}",
   "trackHasNoPoints": "In der Datei wurden keine Strecken-/Trackpunkte gefunden.",
+  "unsupportedTrackFileType": "Nicht unterstützter Dateityp. Es können nur .gpx-, .kml- und .kmz-Dateien importiert werden.",
   "duplicateRouteMessage": "Diese Route ist bereits gespeichert: {name}",
   "@duplicateRouteMessage": {"placeholders": {"name": {"type": "String"}}},
   "openWithImported": "Zu den Fahrten hinzugefügt: {name}",

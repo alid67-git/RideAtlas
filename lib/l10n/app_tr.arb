@@ -7,6 +7,7 @@
   "importFailedGeneric": "Dosya içe aktarılamadı: {error}",
   "@importFailedGeneric": {"placeholders": {"error": {"type": "String"}}},
   "trackHasNoPoints": "Dosyada rota/track noktası bulunamadı.",
+  "unsupportedTrackFileType": "Desteklenmeyen dosya türü. Yalnızca .gpx, .kml ve .kmz dosyaları içe aktarılabilir.",
   "duplicateRouteMessage": "Bu rota zaten kayıtlı: {name}",
   "@duplicateRouteMessage": {"placeholders": {"name": {"type": "String"}}},
   "openWithImported": "İzler listesine eklendi: {name}",
