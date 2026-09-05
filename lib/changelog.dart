@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.101 beta',
+    date: '2026-09-05',
+    note:
+        'Kayıt ekranı son Veri/Harita tercihini hatırlıyor; kesilip süren '
+        'kayıtta kısa ortada "sürdürülüyor" bildirimi. Ana harita sol üst '
+        'iz menüsü (tümünü göster / seç / içe aktar / rota listesi). Kayıt '
+        'bitince yalnızca GPS konumlu galeri medyası sunuluyor (konumsuz '
+        'yok); fotoğraf iz üzerinde nokta. Çoklu iz / kayıt haritasında '
+        'ize dokununca isim balonu açılıp tekrar dokununca kapanıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.100 beta',
     date: '2026-09-05',
     note:

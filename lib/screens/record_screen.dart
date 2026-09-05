@@ -38,6 +38,7 @@ import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
+import '../widgets/route_photo_strip.dart' show PhotoThumb, PhotoViewerDialog;
 import 'analysis_sheet.dart' show AnalysisStatCard;
 import 'location_picker_screen.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
@@ -46,6 +47,7 @@ import 'settings_screen.dart';
 
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
+const _recordShowMapKey = 'record_show_map';
 
 /// True on a native Android build, where [GpsRecorder] runs a foreground
 /// service and recording survives the app being minimized. Everywhere else
@@ -64,11 +66,25 @@ final _supportsBackgroundRecording =
 /// it only runs while some tab/window of the app stays open - see
 /// AppLocalizations.recordingForegroundNotice for that case.
 class RecordScreen extends StatefulWidget {
-  const RecordScreen({super.key, this.initialShowMap = false});
+  const RecordScreen({
+    super.key,
+    this.initialShowMap = false,
+    this.showResumedBanner = false,
+    this.useSavedPagePreference = true,
+  });
 
   /// When returning from home/list while a ride is already running: `true`
-  /// opens the live map with the track; `false` opens the text/stats page.
+  /// opens the live map with the track; `false` opens the text/stats page
+  /// (unless [useSavedPagePreference] restores the rider's last Data/Map choice).
   final bool initialShowMap;
+
+  /// Shows a brief centered "recording resumed" flash after an interrupted
+  /// session was restored - auto-dismisses, no tap required.
+  final bool showResumedBanner;
+
+  /// When true (default), the last Data/Map page is restored from Hive.
+  /// [initialShowMap] still wins when this is false (e.g. home locate).
+  final bool useSavedPagePreference;
 
   @override
   State<RecordScreen> createState() => _RecordScreenState();
@@ -110,6 +126,20 @@ class _RecordScreenState extends State<RecordScreen>
   /// button so the rider can leave before starting. [initialShowMap] opens
   /// the map when returning mid-ride (e.g. home locate).
   bool _showMap = false;
+
+  /// Brief centered flash after an interrupted recording was restored.
+  bool _showResumedFlash = false;
+  Timer? _resumedFlashTimer;
+
+  /// Route id whose name label is currently shown (tap track to toggle).
+  /// Live recording uses the sentinel [_liveTrackLabelId].
+  String? _labeledTrackId;
+  static const _liveTrackLabelId = '__live__';
+  LatLng? _labeledTrackPoint;
+  String? _labeledTrackName;
+
+  /// Overlay tracks with identity (for tap-to-name + photo pins).
+  final List<_OverlayTrack> _overlayTracks = [];
 
   /// Same Hive-backed base map style as the home / route map screens, so
   /// picking Topo (or satellite, dark, ...) on any map sticks everywhere -
@@ -221,8 +251,16 @@ class _RecordScreenState extends State<RecordScreen>
     super.initState();
     recordScreenVisible.value = true;
     // Seed before first build so a return-from-home locate opens the map
-    // with the live track instead of the info page.
+    // with the live track instead of the info page. Preference load may
+    // still override this when [useSavedPagePreference] is true.
     _showMap = widget.initialShowMap;
+    _showResumedFlash = widget.showResumedBanner;
+    if (_showResumedFlash) {
+      _resumedFlashTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _showResumedFlash = false);
+      });
+    }
+    _loadRecordPagePreference();
     _rotationController = AnimationController(
       vsync: this,
       // Match the ~2s native GPS cadence so one camera glide is still
@@ -347,6 +385,29 @@ class _RecordScreenState extends State<RecordScreen>
     setState(() => _mapStyle = style);
     final box = await Hive.openBox<String>(_metaBoxName);
     await box.put(_mapStyleKey, style.id);
+  }
+
+  Future<void> _loadRecordPagePreference() async {
+    if (!widget.useSavedPagePreference) return;
+    // Explicit map open (home locate) wins over the saved Data/Map choice.
+    if (widget.initialShowMap) return;
+    final box = await Hive.openBox<String>(_metaBoxName);
+    final saved = box.get(_recordShowMapKey);
+    if (!mounted || saved == null) return;
+    final wantMap = saved == '1';
+    if (wantMap != _showMap) {
+      setState(() => _showMap = wantMap);
+    }
+  }
+
+  Future<void> _persistRecordPagePreference(bool showMap) async {
+    final box = await Hive.openBox<String>(_metaBoxName);
+    await box.put(_recordShowMapKey, showMap ? '1' : '0');
+  }
+
+  void _setShowMap(bool showMap) {
+    setState(() => _showMap = showMap);
+    _persistRecordPagePreference(showMap);
   }
 
   void _showMapStylePicker() {
@@ -521,12 +582,24 @@ class _RecordScreenState extends State<RecordScreen>
   Future<void> _applyReferenceRoutes(Set<String> ids) async {
     _overlayRevealTimer?.cancel();
     if (ids.isEmpty) {
-      setState(() => _referenceRouteIds = {});
+      setState(() {
+        _referenceRouteIds = {};
+        _overlayTracks.clear();
+        if (_labeledTrackId != null &&
+            _labeledTrackId != _liveTrackLabelId) {
+          _labeledTrackId = null;
+          _labeledTrackPoint = null;
+          _labeledTrackName = null;
+        }
+      });
       _overlayPolylines.value = const [];
       return;
     }
 
-    setState(() => _referenceRouteIds = ids);
+    setState(() {
+      _referenceRouteIds = ids;
+      _overlayTracks.clear();
+    });
     _overlayPolylines.value = const [];
 
     final repo = context.read<RouteRepository>();
@@ -554,11 +627,20 @@ class _RecordScreenState extends State<RecordScreen>
         if (points.length < 2) continue;
         final color = colorForDay(colorIndex);
         colorIndex++;
+        _overlayTracks.add(
+          _OverlayTrack(
+            id: route.id,
+            name: route.name,
+            points: points,
+            color: color,
+          ),
+        );
         await _revealOverlayPolyline(built, points, color);
       } catch (_) {
         // Skip unreadable routes; keep whatever else loaded.
       }
     }
+    if (mounted) setState(() {});
   }
 
   /// MediaAtlas-style: frame [routes] (1 → that track, N → union). When a
@@ -633,6 +715,7 @@ class _RecordScreenState extends State<RecordScreen>
       _showMap = true;
       _followMe = true;
     });
+    _persistRecordPagePreference(true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_showMap) return;
       final location = _recorder.currentLatLng ?? _currentLocation;
@@ -970,6 +1053,7 @@ class _RecordScreenState extends State<RecordScreen>
     _markerLocation.dispose();
     _clockTick.dispose();
     _overlayPolylines.dispose();
+    _resumedFlashTimer?.cancel();
     _headingListenable.dispose();
     super.dispose();
   }
@@ -1008,14 +1092,13 @@ class _RecordScreenState extends State<RecordScreen>
       ).showSnackBar(SnackBar(content: Text(message)));
       return;
     }
+    // Restore the rider's last Data/Map page (default Data).
+    final box = await Hive.openBox<String>(_metaBoxName);
+    final wantMap = box.get(_recordShowMapKey) == '1';
     setState(() {
       _followMe = true;
       _savedPointCount = -1;
-      // Opens on the info page - the map is one tap away via its toggle
-      // button - rather than whatever page the rider happened to be
-      // looking at before tapping start. Map stays Offstage-mounted so
-      // course-up still works the moment they switch back.
-      _showMap = false;
+      _showMap = wantMap;
     });
   }
 
@@ -1214,9 +1297,24 @@ class _RecordScreenState extends State<RecordScreen>
     }
     if (candidates.isEmpty || !mounted) return;
 
+    // Only keep shots that already carry real GPS (gallery tag or EXIF).
+    // No track-time guess, no manual pin - locationless media are skipped.
+    final withGps = <GalleryCandidate>[];
+    final gpsByAsset = <String, LatLng>{};
+    for (final candidate in candidates) {
+      final file = await candidate.asset.originFile ?? await candidate.asset.file;
+      if (file == null) continue;
+      final bytes = await file.readAsBytes();
+      final gps = await _gpsOnlyLocation(asset: candidate.asset, bytes: bytes);
+      if (gps == null) continue;
+      withGps.add(candidate);
+      gpsByAsset[candidate.asset.id] = gps;
+    }
+    if (withGps.isEmpty || !mounted) return;
+
     final selected = await Navigator.of(context).push<List<GalleryCandidate>>(
       MaterialPageRoute(
-        builder: (_) => RidePhotoPickerScreen(candidates: candidates),
+        builder: (_) => RidePhotoPickerScreen(candidates: withGps),
       ),
     );
     if (selected == null || selected.isEmpty || !mounted) return;
@@ -1228,37 +1326,23 @@ class _RecordScreenState extends State<RecordScreen>
       final file = await asset.originFile ?? await asset.file;
       if (file == null) continue;
       final fileBytes = await file.readAsBytes();
-
-      final resolved = await _resolveGalleryMediaLocation(
-        asset: asset,
-        bytes: fileBytes,
-        trackPoints: trackPoints,
-      );
-      var lat = resolved?.latitude;
-      var lng = resolved?.longitude;
-      if (lat == null || lng == null) {
-        final picked = await _pickLocationManually(route);
-        if (!mounted) return;
-        lat = picked?.latitude;
-        lng = picked?.longitude;
-      }
+      final gps = gpsByAsset[asset.id] ??
+          await _gpsOnlyLocation(asset: asset, bytes: fileBytes);
+      if (gps == null) continue;
       await photoRepo.add(
         routeId: route.id,
         bytes: fileBytes,
-        lat: lat,
-        lng: lng,
+        lat: gps.latitude,
+        lng: gps.longitude,
         type: candidate.mediaType,
       );
     }
   }
 
-  /// Android 10+ often withholds MediaStore lat/lng even when the camera
-  /// wrote GPS into the file. Try gallery metadata, then EXIF bytes, then
-  /// the live track at the asset's create time (works for videos too).
-  Future<LatLng?> _resolveGalleryMediaLocation({
+  /// Gallery MediaStore GPS first, then EXIF GPS. No track fallback.
+  Future<LatLng?> _gpsOnlyLocation({
     required AssetEntity asset,
     required Uint8List bytes,
-    required List<TrackPoint> trackPoints,
   }) async {
     try {
       final assetLocation = await asset.latlngAsync();
@@ -1270,35 +1354,12 @@ class _RecordScreenState extends State<RecordScreen>
     } catch (_) {}
 
     try {
-      final fromExif = await extractExifGps(bytes);
-      if (fromExif != null) return fromExif;
-    } catch (_) {}
-
-    return _locationFromTrackAt(trackPoints, asset.createDateTime);
-  }
-
-  /// Picks the track point closest in time to [when], accepting only if
-  /// within a few minutes - otherwise the shot is treated as unlocated.
-  LatLng? _locationFromTrackAt(List<TrackPoint> points, DateTime when) {
-    TrackPoint? best;
-    var bestDelta = const Duration(days: 365);
-    for (final p in points) {
-      final t = p.time;
-      if (t == null) continue;
-      final d = t.difference(when).abs();
-      if (d < bestDelta) {
-        bestDelta = d;
-        best = p;
-      }
+      return await extractExifGps(bytes);
+    } catch (_) {
+      return null;
     }
-    if (best == null || bestDelta > const Duration(minutes: 5)) return null;
-    return best.latLng;
   }
 
-  /// Asks whether the user wants to place a pin for a photo/video with no
-  /// known location, and if so opens [LocationPickerScreen] centered on the
-  /// route. Returns null if they skip, or don't confirm a point. Mirrors
-  /// RouteMapScreen's own manual-placement flow for a single added photo.
   Future<LatLng?> _pickLocationManually(GpxRoute route) async {
     final l10n = AppLocalizations.of(context)!;
     final wantsToPlace = await showDialog<bool>(
@@ -1419,6 +1480,38 @@ class _RecordScreenState extends State<RecordScreen>
     );
   }
 
+
+  Widget _buildResumedFlash(AppLocalizations l10n) {
+    if (!_showResumedFlash) return const SizedBox.shrink();
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Center(
+          child: AnimatedOpacity(
+            opacity: _showResumedFlash ? 1 : 0,
+            duration: const Duration(milliseconds: 250),
+            child: Material(
+              color: Colors.black.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(16),
+              elevation: 8,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+                child: Text(
+                  l10n.recordingSessionResumedFlash,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMapPage(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
@@ -1426,6 +1519,7 @@ class _RecordScreenState extends State<RecordScreen>
       body: Stack(
         children: [
           Positioned.fill(child: _buildMap()),
+          _buildResumedFlash(l10n),
           Positioned(
             top: 0,
             left: 0,
@@ -1586,8 +1680,7 @@ class _RecordScreenState extends State<RecordScreen>
                             : _RoundIconButton(
                                 icon: Icons.dashboard_outlined,
                                 tooltip: l10n.recordInfoTabTooltip,
-                                onPressed: () =>
-                                    setState(() => _showMap = false),
+                                onPressed: () => _setShowMap(false),
                               ),
                       ),
                       Expanded(
@@ -1768,6 +1861,7 @@ class _RecordScreenState extends State<RecordScreen>
       body: Stack(
         children: [
           Positioned.fill(child: _InfoPageBackground(animation: _bgController)),
+          _buildResumedFlash(l10n),
           SafeArea(
             child: Column(
               children: [
@@ -2136,6 +2230,82 @@ class _RecordScreenState extends State<RecordScreen>
     _liveLineCacheCount = points.length;
   }
 
+
+  void _toggleTrackLabel({
+    required String id,
+    required String name,
+    required LatLng point,
+  }) {
+    setState(() {
+      if (_labeledTrackId == id) {
+        _labeledTrackId = null;
+        _labeledTrackName = null;
+        _labeledTrackPoint = null;
+      } else {
+        _labeledTrackId = id;
+        _labeledTrackName = name;
+        _labeledTrackPoint = point;
+      }
+    });
+  }
+
+  /// Rough geographic hit-test: nearest polyline within ~35 m * 2^(15-zoom).
+  void _onMapTap(TapPosition tapPosition, LatLng latlng) {
+    final zoom = _mapController.camera.zoom;
+    final thresholdM = 35.0 * (1 << max(0, (15 - zoom).round()));
+    final distance = const Distance();
+
+    String? bestId;
+    String? bestName;
+    LatLng? bestPoint;
+    var bestM = thresholdM;
+
+    void consider(String id, String name, List<LatLng> points) {
+      if (points.length < 2) return;
+      for (var i = 1; i < points.length; i++) {
+        final a = points[i - 1];
+        final b = points[i];
+        // Approximate: distance to segment endpoints / midpoint.
+        for (final p in [a, b, LatLng(
+          (a.latitude + b.latitude) / 2,
+          (a.longitude + b.longitude) / 2,
+        )]) {
+          final m = distance.as(LengthUnit.Meter, latlng, p);
+          if (m < bestM) {
+            bestM = m;
+            bestId = id;
+            bestName = name;
+            bestPoint = p;
+          }
+        }
+      }
+    }
+
+    for (final track in _overlayTracks) {
+      consider(track.id, track.name, track.points);
+    }
+    if (_liveLineCache.length >= 2) {
+      final l10n = AppLocalizations.of(context)!;
+      consider(
+        _liveTrackLabelId,
+        l10n.recordingLiveTrackLabel,
+        _liveLineCache,
+      );
+    }
+
+    if (bestId == null || bestName == null || bestPoint == null) {
+      if (_labeledTrackId != null) {
+        setState(() {
+          _labeledTrackId = null;
+          _labeledTrackName = null;
+          _labeledTrackPoint = null;
+        });
+      }
+      return;
+    }
+    _toggleTrackLabel(id: bestId, name: bestName, point: bestPoint);
+  }
+
   Widget _buildMap() {
     final recorder = context.read<GpsRecorder>();
     final vehicleIcon = context.watch<VehicleIconController>().option;
@@ -2147,6 +2317,7 @@ class _RecordScreenState extends State<RecordScreen>
       options: MapOptions(
         initialCenter: _currentLocation ?? kUnknownLocationMapCenter,
         initialZoom: 16,
+        onTap: _onMapTap,
       ),
       children: [
         TileLayer(
@@ -2234,6 +2405,85 @@ class _RecordScreenState extends State<RecordScreen>
             );
           },
         ),
+        // Photo pins for reference overlays (GPS-tagged only).
+        Builder(
+          builder: (context) {
+            final photos = context.watch<PhotoRepository>();
+            final markers = <Marker>[
+              for (final track in _overlayTracks)
+                for (final photo
+                    in photos.photosFor(track.id).where((p) => p.hasLocation))
+                  Marker(
+                    point: photo.latLng!,
+                    width: 40,
+                    height: 40,
+                    child: GestureDetector(
+                      onTap: () {
+                        showDialog<void>(
+                          context: context,
+                          builder: (_) => PhotoViewerDialog(
+                            routeId: track.id,
+                            initialPhotoId: photo.id,
+                          ),
+                        );
+                      },
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.fromBorderSide(
+                            BorderSide(color: Colors.white, width: 2),
+                          ),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black38, blurRadius: 4),
+                          ],
+                        ),
+                        child: PhotoThumb(
+                          photoId: photo.id,
+                          size: 36,
+                          circle: true,
+                          isVideo: photo.isVideo,
+                        ),
+                      ),
+                    ),
+                  ),
+            ];
+            if (markers.isEmpty) return const SizedBox.shrink();
+            return MarkerLayer(markers: markers);
+          },
+        ),
+        if (_labeledTrackPoint != null && _labeledTrackName != null)
+          MarkerLayer(
+            markers: [
+              Marker(
+                point: _labeledTrackPoint!,
+                width: 180,
+                height: 36,
+                alignment: Alignment.bottomCenter,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.75),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    child: Text(
+                      _labeledTrackName!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
         RichAttributionWidget(
           attributions: [TextSourceAttribution(style.attribution)],
         ),
@@ -2244,6 +2494,21 @@ class _RecordScreenState extends State<RecordScreen>
 
 /// Actions offered by the top-left reference-route menu on the recording
 /// map (see [_RecordScreenState._handleOverlayMenuAction]).
+
+class _OverlayTrack {
+  const _OverlayTrack({
+    required this.id,
+    required this.name,
+    required this.points,
+    required this.color,
+  });
+
+  final String id;
+  final String name;
+  final List<LatLng> points;
+  final Color color;
+}
+
 enum _OverlayMenuAction { showAll, hideAll, pick, importFile }
 
 /// One row of the map page's stacked duration/distance/altitude box - label

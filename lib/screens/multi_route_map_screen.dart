@@ -12,11 +12,13 @@ import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
 import '../models/track_point.dart';
+import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart' show colorForDay;
 import '../services/map_camera_fit.dart';
 import '../services/track_display_simplify.dart';
 import '../services/track_io.dart';
+import '../widgets/route_photo_strip.dart' show PhotoThumb, PhotoViewerDialog;
 import 'map_screen.dart' show MapStylePickerDialog;
 
 const _metaBoxName = 'rideatlas_meta';
@@ -60,6 +62,9 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   Timer? _revealTimer;
   late List<String> _activeRouteIds;
   int _loadGeneration = 0;
+  String? _labeledRouteId;
+  String? _labeledRouteName;
+  LatLng? _labeledRoutePoint;
 
   /// Compass bearing only - avoid [setState] on every rotate tick so long
   /// overlays are not rebuilt while the rider pinches/pans.
@@ -492,6 +497,49 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     );
   }
 
+
+  void _onMapTap(TapPosition tapPosition, LatLng latlng) {
+    final zoom = _mapController.camera.zoom;
+    final thresholdM = 35.0 * (1 << max(0, (15 - zoom).round()));
+    final distance = const Distance();
+    String? bestId;
+    String? bestName;
+    LatLng? bestPoint;
+    var bestM = thresholdM;
+    for (final line in _lines) {
+      final points = line.points;
+      if (points.length < 2) continue;
+      for (var i = 1; i < points.length; i++) {
+        final a = points[i - 1];
+        final b = points[i];
+        for (final p in [
+          a,
+          b,
+          LatLng((a.latitude + b.latitude) / 2, (a.longitude + b.longitude) / 2),
+        ]) {
+          final meters = distance.as(LengthUnit.Meter, latlng, p);
+          if (meters < bestM) {
+            bestM = meters;
+            bestId = line.route.id;
+            bestName = line.route.name;
+            bestPoint = p;
+          }
+        }
+      }
+    }
+    setState(() {
+      if (bestId == null || bestId == _labeledRouteId) {
+        _labeledRouteId = null;
+        _labeledRouteName = null;
+        _labeledRoutePoint = null;
+      } else {
+        _labeledRouteId = bestId;
+        _labeledRouteName = bestName;
+        _labeledRoutePoint = bestPoint;
+      }
+    });
+  }
+
   Widget _buildMap() {
     if (_error != null && !_bootstrapped) {
       return Center(
@@ -508,6 +556,7 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
         // Camera is fitted to metadata bounds in [_load]; this is a fallback.
         initialCenter: const LatLng(39.0, 35.0),
         initialZoom: 5,
+        onTap: _onMapTap,
       ),
       children: [
         TileLayer(
@@ -531,6 +580,83 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
                     strokeWidth: 4,
                     color: line.color,
                   ),
+            ],
+          ),
+        Builder(
+          builder: (context) {
+            final photos = context.watch<PhotoRepository>();
+            final markers = <Marker>[
+              for (final line in _lines)
+                for (final photo
+                    in photos.photosFor(line.route.id).where((p) => p.hasLocation))
+                  Marker(
+                    point: photo.latLng!,
+                    width: 40,
+                    height: 40,
+                    child: GestureDetector(
+                      onTap: () {
+                        showDialog<void>(
+                          context: context,
+                          builder: (_) => PhotoViewerDialog(
+                            routeId: line.route.id,
+                            initialPhotoId: photo.id,
+                          ),
+                        );
+                      },
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.fromBorderSide(
+                            BorderSide(color: Colors.white, width: 2),
+                          ),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black38, blurRadius: 4),
+                          ],
+                        ),
+                        child: PhotoThumb(
+                          photoId: photo.id,
+                          size: 36,
+                          circle: true,
+                          isVideo: photo.isVideo,
+                        ),
+                      ),
+                    ),
+                  ),
+            ];
+            if (markers.isEmpty) return const SizedBox.shrink();
+            return MarkerLayer(markers: markers);
+          },
+        ),
+        if (_labeledRoutePoint != null && _labeledRouteName != null)
+          MarkerLayer(
+            markers: [
+              Marker(
+                point: _labeledRoutePoint!,
+                width: 180,
+                height: 36,
+                alignment: Alignment.bottomCenter,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.75),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    child: Text(
+                      _labeledRouteName!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         RichAttributionWidget(

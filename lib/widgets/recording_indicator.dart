@@ -83,7 +83,7 @@ class _BlinkingRecIconState extends State<_BlinkingRecIcon>
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(
             // Red REC icon → text/stats (info) page of the active ride.
-            builder: (_) => const RecordScreen(initialShowMap: false),
+            builder: (_) => const RecordScreen(),
           ),
         ),
       ),
