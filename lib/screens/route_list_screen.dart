@@ -134,17 +134,21 @@ class _RouteListScreenState extends State<RouteListScreen> {
   }
 
   Future<void> _importTrack() async {
-    // FileType.any, not .custom with allowedExtensions: on many Android
-    // devices the OS has no registered MIME type for "gpx", and the system
-    // picker then hides those files entirely instead of just failing to
-    // match them - "kml" and "kmz" are more consistently recognized, so the
-    // OS-level filter looked like it only rejected GPX. Filtering by
-    // extension ourselves after picking works the same everywhere.
-    final result = await FilePicker.pickFiles(withData: true);
+    final result = await pickTrackFiles(allowMultiple: true);
     if (result == null || result.files.isEmpty) return;
     if (!mounted) return;
 
-    final file = result.files.single;
+    final files = result.files;
+    if (files.length == 1) {
+      await _importSingleFile(files.single);
+      return;
+    }
+    await _importMultipleFiles(files);
+  }
+
+  /// A single picked file opens straight into its map, same as before
+  /// multi-select import existed.
+  Future<void> _importSingleFile(PlatformFile file) async {
     if (!isSupportedTrackFileName(file.name)) {
       _showError(AppLocalizations.of(context)!.unsupportedTrackFileType);
       return;
@@ -186,6 +190,42 @@ class _RouteListScreenState extends State<RouteListScreen> {
     } finally {
       if (mounted) setState(() => _importing = false);
     }
+  }
+
+  /// Several picked files import one after another; unlike the single-file
+  /// path this stays on the list (there is no one route to jump into) and
+  /// reports a summary count instead of a per-file message.
+  Future<void> _importMultipleFiles(List<PlatformFile> files) async {
+    setState(() => _importing = true);
+    var imported = 0;
+    var skipped = 0;
+    try {
+      final repo = context.read<RouteRepository>();
+      for (final file in files) {
+        if (!mounted) return;
+        final bytes = file.bytes;
+        if (!isSupportedTrackFileName(file.name) || bytes == null) {
+          skipped++;
+          continue;
+        }
+        try {
+          await repo.importFromBytes(bytes: bytes, suggestedFileName: file.name);
+          imported++;
+        } catch (_) {
+          // DuplicateRouteException or a bad file - either way this file
+          // just doesn't add a new route; the rest of the batch continues.
+          skipped++;
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    final message = skipped > 0
+        ? '${l10n.importedRoutesCount(imported)} ${l10n.importSkippedCount(skipped)}'
+        : l10n.importedRoutesCount(imported);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _showError(String message) {
