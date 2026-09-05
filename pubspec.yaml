@@ -40,6 +40,7 @@ dependencies:
   latlong2: ^0.10.1
   gpx: ^2.5.0
   file_picker: ^11.0.2
+  web: ^1.1.1
   fl_chart: ^1.2.0
   intl: ^0.20.2
   provider: ^6.1.5+1
