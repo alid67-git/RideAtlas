@@ -59,14 +59,29 @@ Future<FilePickerResult?> pickTrackFiles({bool allowMultiple = false}) async {
     }
   }
 
+  // Set the moment a read starts (not when it finishes) so the focus
+  // fallback below can never re-read the same FileList concurrently - on
+  // a slow read (large file, slow device) `done` is still incomplete
+  // seconds in, and reading the same web.File's arrayBuffer() from two
+  // places at once is exactly the kind of thing that silently failed and
+  // made GPX picks vanish with no error on the user's phone.
+  var readingStarted = false;
+
   Future<void> readFiles(web.FileList list) async {
+    readingStarted = true;
+    // Every picked file is kept even if unreadable (bytes: null) instead
+    // of being dropped - dropping them made a failed read indistinguishable
+    // from "nothing picked" (finish(null)), so the app did nothing and
+    // showed no error. Keeping them lets the existing "dosya okunamadı"
+    // message reach the user instead.
     final out = <PlatformFile>[];
     for (var i = 0; i < list.length; i++) {
       final file = list.item(i);
       if (file == null) continue;
       final bytes = await readFile(file);
-      if (bytes == null) continue;
-      out.add(PlatformFile(name: file.name, size: bytes.length, bytes: bytes));
+      out.add(
+        PlatformFile(name: file.name, size: bytes?.length ?? 0, bytes: bytes),
+      );
     }
     finish(out.isEmpty ? null : FilePickerResult(out));
   }
@@ -91,12 +106,14 @@ Future<FilePickerResult?> pickTrackFiles({bool allowMultiple = false}) async {
 
   // Safari doesn't reliably fire 'cancel' when the sheet is dismissed
   // without picking a file - fall back to checking on window focus
-  // (fired when the native file sheet closes either way).
+  // (fired when the native file sheet closes either way). Only acts if
+  // 'change' never fired at all (readingStarted stays false); once a
+  // read is underway this never touches the FileList again.
   var focusArmed = false;
   void onFocus(web.Event _) {
-    if (!focusArmed || done.isCompleted) return;
+    if (!focusArmed || done.isCompleted || readingStarted) return;
     Future<void>.delayed(const Duration(milliseconds: 400), () {
-      if (done.isCompleted) return;
+      if (done.isCompleted || readingStarted) return;
       final list = input.files;
       if (list != null && list.length > 0) {
         unawaited(readFiles(list));

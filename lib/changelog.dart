@@ -20,6 +20,22 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.96 beta',
+    date: '2026-09-05',
+    note:
+        'v1.4.93\'ten sonra kullanıcı iPhone/Safari\'de artık GPX dosyasını '
+        'seçebildiğini ama rotanın eklenmediğini bildirdi. Kök sebep bir '
+        'yarış durumuydu: web dosya seçicisi hem "change" olayını hem de '
+        '(Safari "cancel" olayını güvenilir vermediği için eklenen) '
+        'pencere odaklanma yedeğini dinliyordu; okuma yavaş kaldığında '
+        '(büyük dosya/yavaş cihaz) ikisi de aynı dosyayı aynı anda okumaya '
+        'çalışabiliyordu, bu da sessizce başarısız olabiliyordu - ve okuma '
+        'başarısız olan dosyalar hiç hata göstermeden tamamen atlanıyordu, '
+        'sanki hiçbir şey seçilmemiş gibi. Artık bir okuma başladığında '
+        'yedek mekanizma aynı dosyaya asla tekrar dokunmuyor, ve okunamayan '
+        'bir dosya da "dosya okunamadı" uyarısıyla kullanıcıya bildiriliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.95 beta',
     date: '2026-09-05',
     note:
