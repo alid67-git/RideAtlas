@@ -20,6 +20,20 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.98 beta',
+    date: '2026-09-05',
+    note:
+        'v1.4.97\'deki tek-ekran + alttan açılan panel denemesi geri '
+        'alındı: kullanıcı canlıda test edince paneli beğenmedi ve önceki '
+        'iki tam sayfalı (Veri / Harita, sol alttaki tuşla geçişli) '
+        'yapının aynen kalmasını istedi. Sol üstteki rota menüsü (v1.4.97 '
+        'ile gelen Tümünü göster / Tümünü gizle / Rota seç... dropdown\'ı) '
+        'korundu ve genişletildi: artık aynı menüden "İçe aktar..." ile '
+        'kayıt ekranından hiç ayrılmadan yeni bir GPX/KML/KMZ dosyası '
+        'seçilip hem İzler listesine kalıcı olarak eklenebiliyor hem de '
+        'haritada referans rota olarak gösterilebiliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.97 beta',
     date: '2026-09-05',
     note:

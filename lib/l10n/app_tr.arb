@@ -207,6 +207,7 @@
   "recordOverlayShowAllMenuItem": "Tümünü göster",
   "recordOverlayHideAllMenuItem": "Tümünü gizle",
   "recordOverlaySelectMenuItem": "Rota seç...",
+  "recordOverlayImportMenuItem": "İçe aktar...",
   "recenterTooltip": "Konumuma dön",
   "photoMediaTypeLabel": "Fotoğraf",
   "videoMediaTypeLabel": "Video",

@@ -185,6 +185,7 @@
   "recordOverlayShowAllMenuItem": "Show all",
   "recordOverlayHideAllMenuItem": "Hide all",
   "recordOverlaySelectMenuItem": "Select route...",
+  "recordOverlayImportMenuItem": "Import...",
   "recenterTooltip": "Back to my location",
   "photoMediaTypeLabel": "Photo",
   "videoMediaTypeLabel": "Video",
