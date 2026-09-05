@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.100 beta',
+    date: '2026-09-05',
+    note:
+        'Kayıt sırasında geri tuşu kaldırıldı: sol üst yalnızca iz '
+        'yönetimi (Tümünü göster / Tümünü gizle / Rota seç... / İçe '
+        'aktar...) — hem veri hem harita sayfasında aynı menü. Veri ↔ '
+        'Harita dönüşümü sadece sol alttaki tuşla; geri tuşuyla ikinci '
+        'bir harita yolu yok. Kayıt başlamadan (idle) haritada geri '
+        'hâlâ var. Sistem geri: verideyken haritaya, haritadayken '
+        'ekrandan çıkış (kayıt arka planda sürer).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.99 beta',
     date: '2026-09-05',
     note:
