@@ -20,6 +20,22 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.97 beta',
+    date: '2026-09-05',
+    note:
+        'v1.4.94\'teki düzenleme yetersiz kalmıştı: kullanıcı hâlâ veri ve '
+        'harita arasında iki ayrı sayfa gezinmek zorunda kalıyordu ve sol '
+        'üstteki rota tuşu sadece küçük bir onay kutusu diyaloğu açıyordu. '
+        'Bu sürümde kayıt ekranı gerçekten tek ekrana indirildi: harita '
+        'artık kalıcı taban katman, üzerinde de yukarı/aşağı '
+        'sürüklenebilen bir veri paneli (DraggableScrollableSheet) var - '
+        'kapalıyken sadece duraklat/kaydet/sıfırla tuşları görünüyor, '
+        'yukarı çekilince süre, hız ve tüm özelleştirilebilir istatistik '
+        'kartları geliyor. Sol üstteki rota tuşu da referans uygulamadaki '
+        'gibi gerçek bir açılır menüye (PopupMenuButton) dönüştürüldü: '
+        'Tümünü göster / Tümünü gizle / Rota seç....',
+  ),
+  ChangelogEntry(
     version: 'v1.4.96 beta',
     date: '2026-09-05',
     note:
