@@ -18,7 +18,7 @@ import '../services/daily_analysis.dart' show colorForDay;
 import '../services/map_camera_fit.dart';
 import '../services/track_display_simplify.dart';
 import '../services/track_io.dart';
-import '../widgets/route_photo_strip.dart' show PhotoThumb, PhotoViewerDialog;
+import '../widgets/route_photo_strip.dart' show PhotoViewerDialog;
 import 'map_screen.dart' show MapStylePickerDialog;
 
 const _metaBoxName = 'rideatlas_meta';
@@ -59,7 +59,6 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   bool _bootstrapped = false;
   bool _loading = true;
   int _loadedCount = 0;
-  Timer? _revealTimer;
   late List<String> _activeRouteIds;
   int _loadGeneration = 0;
   String? _labeledRouteId;
@@ -87,7 +86,6 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
 
   @override
   void dispose() {
-    _revealTimer?.cancel();
     _mapEventSub.cancel();
     _rotationDeg.dispose();
     super.dispose();
@@ -112,7 +110,6 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
 
   Future<void> _load() async {
     final gen = ++_loadGeneration;
-    _revealTimer?.cancel();
 
     final repo = context.read<RouteRepository>();
     final byId = {for (final r in repo.routes) r.id: r};
@@ -144,6 +141,8 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     _fitToRoutes(routes);
 
     try {
+      final many = routes.length > 3;
+      final pending = <_RouteLine>[];
       for (var i = 0; i < routes.length; i++) {
         if (!mounted || gen != _loadGeneration) return;
         final route = routes[i];
@@ -151,12 +150,43 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
         if (!mounted || gen != _loadGeneration) return;
         final parsed = await compute(parseAndFilterTrackXml, xml);
         if (!mounted || gen != _loadGeneration) return;
-        await _revealRoute(route, parsed.points, colorForDay(i), gen);
-        if (!mounted || gen != _loadGeneration) return;
-        setState(() => _loadedCount = i + 1);
+        final budget = mapDisplayBudget(routes.length);
+        final points = latLngsForMapDisplay(
+          [for (final p in parsed.points) p.latLng],
+          maxPoints: budget.maxPoints,
+          minSpacingMeters: budget.minSpacingMeters,
+        );
+        if (points.length < 2) {
+          if (!mounted || gen != _loadGeneration) return;
+          setState(() => _loadedCount = i + 1);
+          continue;
+        }
+        final line = _RouteLine(
+          route: route,
+          points: points,
+          color: colorForDay(i),
+        );
+        if (many) {
+          // One-shot paint: per-route setState rebuilt every polyline and
+          // ballooned intermediate lists on show-all.
+          pending.add(line);
+          if (!mounted || gen != _loadGeneration) return;
+          setState(() => _loadedCount = i + 1);
+        } else {
+          await _revealRoute(route, parsed.points, colorForDay(i), gen);
+          if (!mounted || gen != _loadGeneration) return;
+          setState(() => _loadedCount = i + 1);
+        }
       }
       if (!mounted || gen != _loadGeneration) return;
-      setState(() => _loading = false);
+      setState(() {
+        if (pending.isNotEmpty) {
+          _lines
+            ..clear()
+            ..addAll(pending);
+        }
+        _loading = false;
+      });
     } catch (e) {
       if (!mounted || gen != _loadGeneration) return;
       setState(() {
@@ -239,10 +269,12 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     );
     if (confirmed != true || !mounted) return;
 
-    final next = [
+    var next = [
       for (final r in routes)
         if (selected.contains(r.id)) r.id,
     ];
+    next = await _capRouteIds(next) ?? const <String>[];
+    if (next.isEmpty || !mounted) return;
     final same = next.length == _activeRouteIds.length &&
         next.asMap().entries.every((e) => e.value == _activeRouteIds[e.key]);
     if (same) return;
@@ -251,50 +283,77 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     await _load();
   }
 
+  /// Soft/hard caps shared with home/record "show all".
+  Future<List<String>?> _capRouteIds(List<String> ids) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (ids.length > kShowAllRoutesHardCap) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.showAllTracksTooManyTitle),
+          content: Text(
+            l10n.showAllTracksTooManyMessage(
+              ids.length,
+              kShowAllRoutesHardCap,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l10n.showAllTracksLimitButton),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return null;
+      return ids.take(kShowAllRoutesHardCap).toList();
+    }
+    if (ids.length > kShowAllRoutesSoftCap) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.showAllTracksHeavyTitle),
+          content: Text(l10n.showAllTracksHeavyMessage(ids.length)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l10n.recordOverlayShow),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return null;
+    }
+    return ids;
+  }
+
   Future<void> _revealRoute(
     GpxRoute route,
     List<TrackPoint> trackPoints,
     Color color,
     int gen,
   ) async {
+    final budget = mapDisplayBudget(_activeRouteIds.length);
     final points = latLngsForMapDisplay(
       [for (final p in trackPoints) p.latLng],
-      maxPoints: 4000,
+      maxPoints: budget.maxPoints,
+      minSpacingMeters: budget.minSpacingMeters,
     );
     if (points.length < 2) return;
     if (!mounted || gen != _loadGeneration) return;
 
-    final line = _RouteLine(route: route, points: const [], color: color);
+    // Many routes: skip progressive reveal — each setState rebuilt every
+    // polyline and froze the UI / ballooned memory with intermediate lists.
+    final line = _RouteLine(route: route, points: points, color: color);
     setState(() => _lines.add(line));
-    final slot = _lines.length - 1;
-
-    if (points.length < 150 || trackPoints.length >= 3000) {
-      setState(() => _lines[slot].points = points);
-      return;
-    }
-
-    final total = points.length;
-    // Larger batches when many routes are queued so drawing finishes sooner.
-    final routeFactor = max(1, _activeRouteIds.length ~/ 4);
-    final batch = max(30, min(1200, (total / 60).ceil() * routeFactor));
-    final done = Completer<void>();
-    var shown = 0;
-
-    _revealTimer?.cancel();
-    _revealTimer = Timer.periodic(const Duration(milliseconds: 16), (timer) {
-      if (!mounted || gen != _loadGeneration) {
-        timer.cancel();
-        if (!done.isCompleted) done.complete();
-        return;
-      }
-      shown = min(total, shown + batch);
-      setState(() => _lines[slot].points = points.sublist(0, shown));
-      if (shown >= total) {
-        timer.cancel();
-        if (!done.isCompleted) done.complete();
-      }
-    });
-    await done.future;
   }
 
   LatLngBounds _boundsFor(GpxRoute route) =>
@@ -499,43 +558,23 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
 
 
   void _onMapTap(TapPosition tapPosition, LatLng latlng) {
-    final zoom = _mapController.camera.zoom;
-    final thresholdM = 35.0 * (1 << max(0, (15 - zoom).round()));
-    final distance = const Distance();
-    String? bestId;
-    String? bestName;
-    LatLng? bestPoint;
-    var bestM = thresholdM;
-    for (final line in _lines) {
-      final points = line.points;
-      if (points.length < 2) continue;
-      for (var i = 1; i < points.length; i++) {
-        final a = points[i - 1];
-        final b = points[i];
-        for (final p in [
-          a,
-          b,
-          LatLng((a.latitude + b.latitude) / 2, (a.longitude + b.longitude) / 2),
-        ]) {
-          final meters = distance.as(LengthUnit.Meter, latlng, p);
-          if (meters < bestM) {
-            bestM = meters;
-            bestId = line.route.id;
-            bestName = line.route.name;
-            bestPoint = p;
-          }
-        }
-      }
-    }
+    final hit = findNearestTrackHit(
+      tap: latlng,
+      zoom: _mapController.camera.zoom,
+      tracks: [
+        for (final line in _lines)
+          (id: line.route.id, name: line.route.name, points: line.points),
+      ],
+    );
     setState(() {
-      if (bestId == null || bestId == _labeledRouteId) {
+      if (hit == null || hit.id == _labeledRouteId) {
         _labeledRouteId = null;
         _labeledRouteName = null;
         _labeledRoutePoint = null;
       } else {
-        _labeledRouteId = bestId;
-        _labeledRouteName = bestName;
-        _labeledRoutePoint = bestPoint;
+        _labeledRouteId = hit.id;
+        _labeledRouteName = hit.name;
+        _labeledRoutePoint = hit.point;
       }
     });
   }
@@ -584,45 +623,57 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
           ),
         Builder(
           builder: (context) {
-            final photos = context.watch<PhotoRepository>();
-            final markers = <Marker>[
-              for (final line in _lines)
-                for (final photo
-                    in photos.photosFor(line.route.id).where((p) => p.hasLocation))
+            // Lightweight pins only — PhotoThumb decoded full images for
+            // every geotagged photo on every route and OOM'd show-all.
+            final photos = context.read<PhotoRepository>();
+            var remaining = kMapPhotoPinCap;
+            final markers = <Marker>[];
+            for (final line in _lines) {
+              if (remaining <= 0) break;
+              for (final photo
+                  in photos.photosFor(line.route.id).where((p) => p.hasLocation)) {
+                if (remaining <= 0) break;
+                remaining--;
+                final routeId = line.route.id;
+                final photoId = photo.id;
+                final isVideo = photo.isVideo;
+                markers.add(
                   Marker(
                     point: photo.latLng!,
-                    width: 40,
-                    height: 40,
+                    width: 28,
+                    height: 28,
                     child: GestureDetector(
                       onTap: () {
                         showDialog<void>(
                           context: context,
                           builder: (_) => PhotoViewerDialog(
-                            routeId: line.route.id,
-                            initialPhotoId: photo.id,
+                            routeId: routeId,
+                            initialPhotoId: photoId,
                           ),
                         );
                       },
-                      child: Container(
-                        decoration: const BoxDecoration(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: isVideo
+                              ? Colors.deepPurple
+                              : Colors.teal,
                           shape: BoxShape.circle,
-                          border: Border.fromBorderSide(
-                            BorderSide(color: Colors.white, width: 2),
-                          ),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black38, blurRadius: 4),
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black38, blurRadius: 3),
                           ],
                         ),
-                        child: PhotoThumb(
-                          photoId: photo.id,
-                          size: 36,
-                          circle: true,
-                          isVideo: photo.isVideo,
+                        child: Icon(
+                          isVideo ? Icons.videocam : Icons.photo_camera,
+                          size: 14,
+                          color: Colors.white,
                         ),
                       ),
                     ),
                   ),
-            ];
+                );
+              }
+            }
             if (markers.isEmpty) return const SizedBox.shrink();
             return MarkerLayer(markers: markers);
           },

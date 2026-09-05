@@ -21,4 +21,29 @@ void main() {
     final out = latLngsForMapDisplay(points);
     expect(out, hasLength(20));
   });
+
+  test('mapDisplayBudget tightens as route count grows', () {
+    expect(mapDisplayBudget(1).maxPoints, kMapDisplayMaxPoints);
+    expect(mapDisplayBudget(10).maxPoints, lessThan(mapDisplayBudget(3).maxPoints));
+    expect(mapDisplayBudget(30).maxPoints, lessThan(mapDisplayBudget(10).maxPoints));
+  });
+
+  test('findNearestTrackHit samples and rejects distant tracks', () {
+    final near = [
+      for (var i = 0; i < 2000; i++) LatLng(40.0 + i * 0.00001, 29.0),
+    ];
+    final far = [
+      for (var i = 0; i < 2000; i++) LatLng(50.0 + i * 0.00001, 10.0),
+    ];
+    final hit = findNearestTrackHit(
+      tap: near[100],
+      zoom: 14,
+      tracks: [
+        (id: 'far', name: 'Far', points: far),
+        (id: 'near', name: 'Near', points: near),
+      ],
+    );
+    expect(hit, isNotNull);
+    expect(hit!.id, 'near');
+  });
 }

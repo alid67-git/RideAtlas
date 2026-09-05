@@ -266,5 +266,12 @@
   "@ridePhotoPickerMessage": {"placeholders": {"count": {"type": "int"}}},
   "ridePhotoPickerAddButton": "Seçilenleri ekle ({count})",
   "@ridePhotoPickerAddButton": {"placeholders": {"count": {"type": "int"}}},
-  "ridePhotoPickerSkipButton": "Atla"
+  "ridePhotoPickerSkipButton": "Atla",
+  "showAllTracksTooManyTitle": "Çok fazla iz",
+  "showAllTracksTooManyMessage": "Bir anda {count} izi göstermek uygulamayı kilitleyebilir. Yalnızca ilk {limit} iz açılacak.",
+  "@showAllTracksTooManyMessage": {"placeholders": {"count": {"type": "int"}, "limit": {"type": "int"}}},
+  "showAllTracksLimitButton": "Sınırlı aç",
+  "showAllTracksHeavyTitle": "Çok sayıda iz",
+  "showAllTracksHeavyMessage": "Tek haritada {count} iz gösterilecek. Uzun sürüşlerde uygulama yavaşlayabilir.",
+  "@showAllTracksHeavyMessage": {"placeholders": {"count": {"type": "int"}}}
 }

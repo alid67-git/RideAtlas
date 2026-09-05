@@ -32,13 +32,14 @@ import '../services/gpx_parser.dart';
 import '../services/app_update_controller.dart';
 import '../services/map_camera_fit.dart';
 import '../services/track_heading.dart';
+import '../services/track_display_simplify.dart';
 import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';
 import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
-import '../widgets/route_photo_strip.dart' show PhotoThumb, PhotoViewerDialog;
+import '../widgets/route_photo_strip.dart' show PhotoViewerDialog;
 import 'analysis_sheet.dart' show AnalysisStatCard;
 import 'location_picker_screen.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
@@ -418,15 +419,76 @@ class _RecordScreenState extends State<RecordScreen>
     );
   }
 
+
+  /// Soft/hard caps for "show all" so dozens of long GPX files cannot OOM.
+  Future<List<String>?> _confirmShowAllRouteIds(List<String> allIds) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (allIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.recordOverlayNoRoutes)),
+      );
+      return null;
+    }
+    if (allIds.length > kShowAllRoutesHardCap) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.showAllTracksTooManyTitle),
+          content: Text(
+            l10n.showAllTracksTooManyMessage(
+              allIds.length,
+              kShowAllRoutesHardCap,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l10n.showAllTracksLimitButton),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return null;
+      return allIds.take(kShowAllRoutesHardCap).toList();
+    }
+    if (allIds.length > kShowAllRoutesSoftCap) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.showAllTracksHeavyTitle),
+          content: Text(l10n.showAllTracksHeavyMessage(allIds.length)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l10n.recordOverlayShow),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return null;
+    }
+    return allIds;
+  }
+
   Future<void> _handleOverlayMenuAction(_OverlayMenuAction action) async {
     switch (action) {
       case _OverlayMenuAction.showAll:
-        final ids = context
+        final allIds = context
             .read<RouteRepository>()
             .routes
             .map((r) => r.id)
-            .toSet();
-        await _applyReferenceRoutes(ids);
+            .toList();
+        final ids = await _confirmShowAllRouteIds(allIds);
+        if (ids == null || ids.isEmpty) return;
+        await _applyReferenceRoutes(ids.toSet());
       case _OverlayMenuAction.hideAll:
         await _applyReferenceRoutes(const {});
       case _OverlayMenuAction.pick:
@@ -569,7 +631,9 @@ class _RecordScreenState extends State<RecordScreen>
       },
     );
     if (confirmed != true || !mounted) return;
-    await _applyReferenceRoutes(selected);
+    final capped = await _confirmShowAllRouteIds(selected.toList());
+    if (capped == null || capped.isEmpty || !mounted) return;
+    await _applyReferenceRoutes(capped.toSet());
   }
 
   /// Clears overlays immediately, then parses each selected GPX off the UI
@@ -623,7 +687,12 @@ class _RecordScreenState extends State<RecordScreen>
         if (!mounted) return;
         final parsed = await compute(parseAndFilterTrackXml, xml);
         if (!mounted) return;
-        final points = [for (final p in parsed.points) p.latLng];
+        final budget = mapDisplayBudget(ids.length);
+        final points = latLngsForMapDisplay(
+          [for (final p in parsed.points) p.latLng],
+          maxPoints: budget.maxPoints,
+          minSpacingMeters: budget.minSpacingMeters,
+        );
         if (points.length < 2) continue;
         final color = colorForDay(colorIndex);
         colorIndex++;
@@ -635,7 +704,14 @@ class _RecordScreenState extends State<RecordScreen>
             color: color,
           ),
         );
-        await _revealOverlayPolyline(built, points, color);
+        // One-shot draw when many overlays — progressive reveal + full
+        // vertex lists was freezing show-all.
+        if (ids.length > 3 || points.length >= 400) {
+          built.add(Polyline(points: points, strokeWidth: 4, color: color));
+          _overlayPolylines.value = List<Polyline>.from(built);
+        } else {
+          await _revealOverlayPolyline(built, points, color);
+        }
       } catch (_) {
         // Skip unreadable routes; keep whatever else loaded.
       }
@@ -2251,49 +2327,22 @@ class _RecordScreenState extends State<RecordScreen>
 
   /// Rough geographic hit-test: nearest polyline within ~35 m * 2^(15-zoom).
   void _onMapTap(TapPosition tapPosition, LatLng latlng) {
-    final zoom = _mapController.camera.zoom;
-    final thresholdM = 35.0 * (1 << max(0, (15 - zoom).round()));
-    final distance = const Distance();
-
-    String? bestId;
-    String? bestName;
-    LatLng? bestPoint;
-    var bestM = thresholdM;
-
-    void consider(String id, String name, List<LatLng> points) {
-      if (points.length < 2) return;
-      for (var i = 1; i < points.length; i++) {
-        final a = points[i - 1];
-        final b = points[i];
-        // Approximate: distance to segment endpoints / midpoint.
-        for (final p in [a, b, LatLng(
-          (a.latitude + b.latitude) / 2,
-          (a.longitude + b.longitude) / 2,
-        )]) {
-          final m = distance.as(LengthUnit.Meter, latlng, p);
-          if (m < bestM) {
-            bestM = m;
-            bestId = id;
-            bestName = name;
-            bestPoint = p;
-          }
-        }
-      }
-    }
-
-    for (final track in _overlayTracks) {
-      consider(track.id, track.name, track.points);
-    }
-    if (_liveLineCache.length >= 2) {
-      final l10n = AppLocalizations.of(context)!;
-      consider(
-        _liveTrackLabelId,
-        l10n.recordingLiveTrackLabel,
-        _liveLineCache,
-      );
-    }
-
-    if (bestId == null || bestName == null || bestPoint == null) {
+    final l10n = AppLocalizations.of(context)!;
+    final hit = findNearestTrackHit(
+      tap: latlng,
+      zoom: _mapController.camera.zoom,
+      tracks: [
+        for (final track in _overlayTracks)
+          (id: track.id, name: track.name, points: track.points),
+        if (_liveLineCache.length >= 2)
+          (
+            id: _liveTrackLabelId,
+            name: l10n.recordingLiveTrackLabel,
+            points: _liveLineCache,
+          ),
+      ],
+    );
+    if (hit == null) {
       if (_labeledTrackId != null) {
         setState(() {
           _labeledTrackId = null;
@@ -2303,7 +2352,7 @@ class _RecordScreenState extends State<RecordScreen>
       }
       return;
     }
-    _toggleTrackLabel(id: bestId, name: bestName, point: bestPoint);
+    _toggleTrackLabel(id: hit.id, name: hit.name, point: hit.point);
   }
 
   Widget _buildMap() {
@@ -2405,48 +2454,56 @@ class _RecordScreenState extends State<RecordScreen>
             );
           },
         ),
-        // Photo pins for reference overlays (GPS-tagged only).
+        // Lightweight photo pins (icons only) for overlay tracks.
         Builder(
           builder: (context) {
-            final photos = context.watch<PhotoRepository>();
-            final markers = <Marker>[
-              for (final track in _overlayTracks)
-                for (final photo
-                    in photos.photosFor(track.id).where((p) => p.hasLocation))
+            final photos = context.read<PhotoRepository>();
+            var remaining = kMapPhotoPinCap;
+            final markers = <Marker>[];
+            for (final track in _overlayTracks) {
+              if (remaining <= 0) break;
+              for (final photo
+                  in photos.photosFor(track.id).where((p) => p.hasLocation)) {
+                if (remaining <= 0) break;
+                remaining--;
+                final routeId = track.id;
+                final photoId = photo.id;
+                final isVideo = photo.isVideo;
+                markers.add(
                   Marker(
                     point: photo.latLng!,
-                    width: 40,
-                    height: 40,
+                    width: 28,
+                    height: 28,
                     child: GestureDetector(
                       onTap: () {
                         showDialog<void>(
                           context: context,
                           builder: (_) => PhotoViewerDialog(
-                            routeId: track.id,
-                            initialPhotoId: photo.id,
+                            routeId: routeId,
+                            initialPhotoId: photoId,
                           ),
                         );
                       },
-                      child: Container(
-                        decoration: const BoxDecoration(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: isVideo ? Colors.deepPurple : Colors.teal,
                           shape: BoxShape.circle,
-                          border: Border.fromBorderSide(
-                            BorderSide(color: Colors.white, width: 2),
-                          ),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black38, blurRadius: 4),
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black38, blurRadius: 3),
                           ],
                         ),
-                        child: PhotoThumb(
-                          photoId: photo.id,
-                          size: 36,
-                          circle: true,
-                          isVideo: photo.isVideo,
+                        child: Icon(
+                          isVideo ? Icons.videocam : Icons.photo_camera,
+                          size: 14,
+                          color: Colors.white,
                         ),
                       ),
                     ),
                   ),
-            ];
+                );
+              }
+            }
             if (markers.isEmpty) return const SizedBox.shrink();
             return MarkerLayer(markers: markers);
           },

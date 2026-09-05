@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.102 beta',
+    date: '2026-09-05',
+    note:
+        'Tüm izleri göster kilitlemesi giderildi: çok izde uyarı/sert sınır, '
+        'rota başına daha agresif nokta sadeleştirme, gösterimde ilerleyici '
+        'çizim kaldırıldı, harita foto pinleri artık tam görüntü yerine '
+        'hafif ikon, iz ismi için dokunma testi örnekleniyor. Kayıt '
+        'overlay ekranında da aynı sadeleştirme uygulanıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.101 beta',
     date: '2026-09-05',
     note:
