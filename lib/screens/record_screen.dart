@@ -105,9 +105,10 @@ class _RecordScreenState extends State<RecordScreen>
 
   /// True once recording has started and the rider has switched to the map
   /// page (see [_buildInfoPage]/[_buildMapPage]). Recording always opens on
-  /// the info page - the map is one tap away via the toggle button in either
-  /// page's header - unless [RecordScreen.initialShowMap] asked for the map
-  /// (e.g. home locate while a ride is already running).
+  /// the info (data) page - the map is one tap away via the bottom-left
+  /// Haritalar button, or via the top-left back arrow on the data page -
+  /// unless [RecordScreen.initialShowMap] asked for the map (e.g. home
+  /// locate while a ride is already running).
   bool _showMap = false;
 
   /// Same Hive-backed base map style as the home / route map screens, so
@@ -1342,22 +1343,34 @@ class _RecordScreenState extends State<RecordScreen>
     // Keep FlutterMap mounted while the info page is visible so
     // MapController stays attached - tearing it down broke course-up
     // (rotate/move threw or no-oped until the next full remap).
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        TickerMode(
-          enabled: _showMap,
-          child: Offstage(offstage: !_showMap, child: _buildMapPage(context)),
-        ),
-        if (!_showMap)
-          ValueListenableBuilder<int>(
-            valueListenable: _clockTick,
-            builder: (_, _, _) => Consumer<GpsRecorder>(
-              builder: (context, recorder, _) =>
-                  _buildInfoPage(context, recorder),
-            ),
+    //
+    // On the data page, back (toolbar or system) goes to the map - not
+    // out of the recording screen. Leaving the screen only happens from
+    // the map page's back button (recording keeps running in the
+    // background via [RecordingIndicatorOverlay]).
+    return PopScope(
+      canPop: _showMap,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _switchToMap();
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          TickerMode(
+            enabled: _showMap,
+            child: Offstage(offstage: !_showMap, child: _buildMapPage(context)),
           ),
-      ],
+          if (!_showMap)
+            ValueListenableBuilder<int>(
+              valueListenable: _clockTick,
+              builder: (_, _, _) => Consumer<GpsRecorder>(
+                builder: (context, recorder, _) =>
+                    _buildInfoPage(context, recorder),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -1765,7 +1778,10 @@ class _RecordScreenState extends State<RecordScreen>
                     children: [
                       _RoundIconButton(
                         icon: Icons.arrow_back,
-                        onPressed: () => Navigator.pop(context),
+                        // Data page → map (same as bottom-left Haritalar).
+                        // Leaving the recording screen is the map page's
+                        // back button; see [PopScope] in [build].
+                        onPressed: _switchToMap,
                       ),
                       const Spacer(),
                       const SatelliteCountBadge(),
