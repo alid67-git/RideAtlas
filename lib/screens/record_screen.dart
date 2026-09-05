@@ -105,9 +105,10 @@ class _RecordScreenState extends State<RecordScreen>
 
   /// True once recording has started and the rider has switched to the map
   /// page (see [_buildInfoPage]/[_buildMapPage]). Recording always opens on
-  /// the info page - the map is one tap away via the toggle button in either
-  /// page's header - unless [RecordScreen.initialShowMap] asked for the map
-  /// (e.g. home locate while a ride is already running).
+  /// the data page; the only Data ↔ Map switch is the bottom-left button.
+  /// Top-left is track management only (no back). Idle still shows a back
+  /// button so the rider can leave before starting. [initialShowMap] opens
+  /// the map when returning mid-ride (e.g. home locate).
   bool _showMap = false;
 
   /// Same Hive-backed base map style as the home / route map screens, so
@@ -1342,22 +1343,79 @@ class _RecordScreenState extends State<RecordScreen>
     // Keep FlutterMap mounted while the info page is visible so
     // MapController stays attached - tearing it down broke course-up
     // (rotate/move threw or no-oped until the next full remap).
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        TickerMode(
-          enabled: _showMap,
-          child: Offstage(offstage: !_showMap, child: _buildMapPage(context)),
-        ),
-        if (!_showMap)
-          ValueListenableBuilder<int>(
-            valueListenable: _clockTick,
-            builder: (_, _, _) => Consumer<GpsRecorder>(
-              builder: (context, recorder, _) =>
-                  _buildInfoPage(context, recorder),
-            ),
+    //
+    // No toolbar back while recording: top-left is track management only,
+    // Data ↔ Map is only the bottom-left toggle. System back on the data
+    // page still switches to the map; on the map page it leaves the screen
+    // (recording continues via [RecordingIndicatorOverlay]).
+    return PopScope(
+      canPop: _showMap,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _switchToMap();
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          TickerMode(
+            enabled: _showMap,
+            child: Offstage(offstage: !_showMap, child: _buildMapPage(context)),
           ),
-      ],
+          if (!_showMap)
+            ValueListenableBuilder<int>(
+              valueListenable: _clockTick,
+              builder: (_, _, _) => Consumer<GpsRecorder>(
+                builder: (context, recorder, _) =>
+                    _buildInfoPage(context, recorder),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Top-left track-management menu: show all / hide all / select / import.
+  Widget _buildOverlayMenuButton(AppLocalizations l10n) {
+    return ValueListenableBuilder<List<Polyline>>(
+      valueListenable: _overlayPolylines,
+      builder: (context, overlays, _) {
+        final scheme = Theme.of(context).colorScheme;
+        final active = overlays.isNotEmpty;
+        return Material(
+          color: active
+              ? scheme.primary
+              : scheme.surface.withValues(alpha: 0.92),
+          shape: const CircleBorder(),
+          elevation: 2,
+          child: PopupMenuButton<_OverlayMenuAction>(
+            tooltip: l10n.recordOverlayTooltip,
+            icon: Icon(
+              Icons.route,
+              color: active ? scheme.onPrimary : null,
+            ),
+            onSelected: _handleOverlayMenuAction,
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: _OverlayMenuAction.showAll,
+                child: Text(l10n.recordOverlayShowAllMenuItem),
+              ),
+              PopupMenuItem(
+                value: _OverlayMenuAction.hideAll,
+                enabled: active,
+                child: Text(l10n.recordOverlayHideAllMenuItem),
+              ),
+              PopupMenuItem(
+                value: _OverlayMenuAction.pick,
+                child: Text(l10n.recordOverlaySelectMenuItem),
+              ),
+              PopupMenuItem(
+                value: _OverlayMenuAction.importFile,
+                child: Text(l10n.recordOverlayImportMenuItem),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1385,60 +1443,17 @@ class _RecordScreenState extends State<RecordScreen>
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _RoundIconButton(
-                          icon: Icons.arrow_back,
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        const SizedBox(width: 8),
-                        ValueListenableBuilder<List<Polyline>>(
-                          valueListenable: _overlayPolylines,
-                          builder: (context, overlays, _) {
-                            final scheme = Theme.of(context).colorScheme;
-                            final active = overlays.isNotEmpty;
-                            return Material(
-                              color: active
-                                  ? scheme.primary
-                                  : scheme.surface.withValues(alpha: 0.92),
-                              shape: const CircleBorder(),
-                              elevation: 2,
-                              child: PopupMenuButton<_OverlayMenuAction>(
-                                tooltip: l10n.recordOverlayTooltip,
-                                icon: Icon(
-                                  Icons.route,
-                                  color: active ? scheme.onPrimary : null,
-                                ),
-                                onSelected: _handleOverlayMenuAction,
-                                itemBuilder: (context) => [
-                                  PopupMenuItem(
-                                    value: _OverlayMenuAction.showAll,
-                                    child: Text(
-                                      l10n.recordOverlayShowAllMenuItem,
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: _OverlayMenuAction.hideAll,
-                                    enabled: active,
-                                    child: Text(
-                                      l10n.recordOverlayHideAllMenuItem,
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: _OverlayMenuAction.pick,
-                                    child: Text(
-                                      l10n.recordOverlaySelectMenuItem,
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: _OverlayMenuAction.importFile,
-                                    child: Text(
-                                      l10n.recordOverlayImportMenuItem,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
+                        // Idle: back leaves before start. Recording: no back
+                        // (avoids a second "go to map" control) — top-left is
+                        // track management only; Data ↔ Map is bottom-left.
+                        if (recorder.isIdle) ...[
+                          _RoundIconButton(
+                            icon: Icons.arrow_back,
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        _buildOverlayMenuButton(l10n),
                         const SizedBox(width: 8),
                         // Not wrapped in Expanded while recording: the speed
                         // box below sizes itself to its own digits (2 vs 3
@@ -1763,10 +1778,8 @@ class _RecordScreenState extends State<RecordScreen>
                   ),
                   child: Row(
                     children: [
-                      _RoundIconButton(
-                        icon: Icons.arrow_back,
-                        onPressed: () => Navigator.pop(context),
-                      ),
+                      // Track management only — Data ↔ Map is bottom-left.
+                      _buildOverlayMenuButton(l10n),
                       const Spacer(),
                       const SatelliteCountBadge(),
                       const SizedBox(width: 8),

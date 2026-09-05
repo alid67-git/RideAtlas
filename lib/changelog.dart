@@ -20,6 +20,30 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.100 beta',
+    date: '2026-09-05',
+    note:
+        'Kayıt sırasında geri tuşu kaldırıldı: sol üst yalnızca iz '
+        'yönetimi (Tümünü göster / Tümünü gizle / Rota seç... / İçe '
+        'aktar...) — hem veri hem harita sayfasında aynı menü. Veri ↔ '
+        'Harita dönüşümü sadece sol alttaki tuşla; geri tuşuyla ikinci '
+        'bir harita yolu yok. Kayıt başlamadan (idle) haritada geri '
+        'hâlâ var. Sistem geri: verideyken haritaya, haritadayken '
+        'ekrandan çıkış (kayıt arka planda sürer).',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.99 beta',
+    date: '2026-09-05',
+    note:
+        'Kayıt veri ekranındaki geri tuşu (ve Android sistem geri) artık '
+        'kayıt ekranından çıkmak yerine doğrudan haritaya geçiyor - '
+        'haritadaki geri tuşu hâlâ ekrandan ayrılmayı sağlıyor (kayıt '
+        'arka planda devam eder). Sol alttaki Veri ↔ Haritalar geçişi ve '
+        'harita sol üstündeki rota menüsü (Tümünü göster / Tümünü gizle / '
+        'Rota seç... / İçe aktar...) v1.4.98\'deki gibi duruyor; alttan '
+        'açılan panel yok.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.98 beta',
     date: '2026-09-05',
     note:
