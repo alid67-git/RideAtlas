@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
+import 'route_thumbnail.dart';
 
 class RouteCard extends StatelessWidget {
   const RouteCard({
@@ -11,7 +12,6 @@ class RouteCard extends StatelessWidget {
     required this.onTap,
     required this.onRename,
     required this.onDelete,
-    this.selectionMode = false,
     this.selected = false,
     this.onSelectedChanged,
   });
@@ -21,9 +21,10 @@ class RouteCard extends StatelessWidget {
   final VoidCallback onRename;
   final VoidCallback onDelete;
 
-  /// When true, tapping the card toggles [selected] instead of calling
-  /// [onTap], and a checkbox replaces the route icon / popup menu.
-  final bool selectionMode;
+  /// The checkbox is always shown (see [RouteListScreen]) - tapping it (or
+  /// its own row area) toggles [selected]; tapping the rest of the card
+  /// still opens the route via [onTap], so both stay reachable with no
+  /// separate "selection mode" to switch into first.
   final bool selected;
   final ValueChanged<bool>? onSelectedChanged;
 
@@ -40,27 +41,17 @@ class RouteCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: selectionMode
-            ? () => onSelectedChanged?.call(!selected)
-            : onTap,
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              if (selectionMode)
-                Checkbox(
-                  value: selected,
-                  onChanged: (v) => onSelectedChanged?.call(v ?? false),
-                )
-              else
-                CircleAvatar(
-                  radius: 24,
-                  backgroundColor: theme.colorScheme.primaryContainer,
-                  child: Icon(
-                    Icons.route,
-                    color: theme.colorScheme.onPrimaryContainer,
-                  ),
-                ),
+              Checkbox(
+                value: selected,
+                onChanged: (v) => onSelectedChanged?.call(v ?? false),
+              ),
+              const SizedBox(width: 4),
+              RouteThumbnail(route: route),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -100,17 +91,16 @@ class RouteCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (!selectionMode)
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'rename') onRename();
-                    if (value == 'delete') onDelete();
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(value: 'rename', child: Text(l10n.rename)),
-                    PopupMenuItem(value: 'delete', child: Text(l10n.delete)),
-                  ],
-                ),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'rename') onRename();
+                  if (value == 'delete') onDelete();
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(value: 'rename', child: Text(l10n.rename)),
+                  PopupMenuItem(value: 'delete', child: Text(l10n.delete)),
+                ],
+              ),
             ],
           ),
         ),

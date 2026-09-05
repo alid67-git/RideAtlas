@@ -67,6 +67,7 @@ class RouteRepository extends ChangeNotifier {
     final list = raw == null ? const [] : jsonDecode(raw) as List<dynamic>;
     final missingRecordedAt = <String>{};
     final missingFingerprint = <String>{};
+    final missingPreview = <String>{};
     _routes
       ..clear()
       ..addAll(
@@ -78,6 +79,9 @@ class RouteRepository extends ChangeNotifier {
           if (json['trackFingerprint'] == null) {
             missingFingerprint.add(json['id'] as String);
           }
+          if (json['previewPoints'] == null) {
+            missingPreview.add(json['id'] as String);
+          }
           return GpxRoute.fromJson(json);
         }),
       );
@@ -88,11 +92,14 @@ class RouteRepository extends ChangeNotifier {
 
     // One-shot backfills: only touch routes whose index row is missing the
     // field. List display itself never re-parses GPX for sorting.
-    if (missingRecordedAt.isNotEmpty || missingFingerprint.isNotEmpty) {
+    if (missingRecordedAt.isNotEmpty ||
+        missingFingerprint.isNotEmpty ||
+        missingPreview.isNotEmpty) {
       await _backfillIndexFields(
         box,
         missingRecordedAt: missingRecordedAt,
         missingFingerprint: missingFingerprint,
+        missingPreview: missingPreview,
       );
     }
   }
@@ -101,8 +108,13 @@ class RouteRepository extends ChangeNotifier {
     Box<String> box, {
     required Set<String> missingRecordedAt,
     required Set<String> missingFingerprint,
+    required Set<String> missingPreview,
   }) async {
-    final needParse = {...missingRecordedAt, ...missingFingerprint};
+    final needParse = {
+      ...missingRecordedAt,
+      ...missingFingerprint,
+      ...missingPreview,
+    };
     var changed = false;
     for (var i = 0; i < _routes.length; i++) {
       final route = _routes[i];
@@ -123,6 +135,12 @@ class RouteRepository extends ChangeNotifier {
           next = next.copyWith(
             trackFingerprint: trackFingerprint(parsed.points),
           );
+        }
+        if (missingPreview.contains(route.id) && next.previewPoints == null) {
+          final preview = routePreviewPoints(parsed.points);
+          if (preview != null) {
+            next = next.copyWith(previewPoints: preview);
+          }
         }
         if (next != route) {
           _routes[i] = next;

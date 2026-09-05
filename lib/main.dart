@@ -81,13 +81,13 @@ class RideAtlasApp extends StatelessWidget {
               },
               theme: ThemeData(
                 colorScheme: ColorScheme.fromSeed(
-                  seedColor: const Color(0xFFE53935),
+                  seedColor: const Color(0xFF1565C0),
                 ),
                 useMaterial3: true,
               ),
               darkTheme: ThemeData(
                 colorScheme: ColorScheme.fromSeed(
-                  seedColor: const Color(0xFFE53935),
+                  seedColor: const Color(0xFF1565C0),
                   brightness: Brightness.dark,
                 ),
                 useMaterial3: true,
