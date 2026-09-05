@@ -184,7 +184,37 @@ GpxRoute buildRouteMetadata({
     batteryStartPercent: batteryStartPercent,
     batteryEndPercent: batteryEndPercent,
     trackFingerprint: trackFingerprint(points),
+    previewPoints: routePreviewPoints(points),
   );
+}
+
+/// A few dozen evenly-spaced [lat, lng] pairs tracing [points]' rough shape,
+/// for the route list's mini map thumbnail. A simple stride pick (not the
+/// distance-based display simplification used for the real map line) - a
+/// decorative shape this small doesn't need corner-preserving accuracy, and
+/// this runs on every import/backfill so it has to stay cheap.
+const routePreviewMaxPoints = 40;
+
+List<List<double>>? routePreviewPoints(
+  List<TrackPoint> points, {
+  int maxPoints = routePreviewMaxPoints,
+}) {
+  if (points.length < 2) return null;
+  if (points.length <= maxPoints) {
+    return [for (final p in points) [p.latLng.latitude, p.latLng.longitude]];
+  }
+  final step = points.length / maxPoints;
+  final out = <List<double>>[];
+  for (var i = 0; i < maxPoints; i++) {
+    final p = points[(i * step).floor()];
+    out.add([p.latLng.latitude, p.latLng.longitude]);
+  }
+  final last = points.last;
+  final lastOut = out.last;
+  if (lastOut[0] != last.latLng.latitude || lastOut[1] != last.latLng.longitude) {
+    out.add([last.latLng.latitude, last.latLng.longitude]);
+  }
+  return out;
 }
 
 /// Cumulative elevation gain/loss across [points], same simple point-to-point

@@ -22,6 +22,7 @@ class GpxRoute {
     this.batteryStartPercent,
     this.batteryEndPercent,
     this.trackFingerprint,
+    this.previewPoints,
   });
 
   final String id;
@@ -65,6 +66,13 @@ class GpxRoute {
   /// until [RouteRepository] backfills it once from stored content.
   final String? trackFingerprint;
 
+  /// A few dozen [lat, lng] pairs tracing the route's rough shape, cached at
+  /// import time so the route list can paint a mini map thumbnail instantly
+  /// without re-parsing the full GPX - same reasoning as caching the other
+  /// summary stats here. Null on pre-thumbnail installs until
+  /// [RouteRepository] backfills it once from stored content.
+  final List<List<double>>? previewPoints;
+
   double get distanceKm => distanceMeters / 1000;
 
   Duration? get duration =>
@@ -80,6 +88,7 @@ class GpxRoute {
     String? name,
     DateTime? recordedAt,
     String? trackFingerprint,
+    List<List<double>>? previewPoints,
   }) {
     return GpxRoute(
       id: id,
@@ -100,6 +109,7 @@ class GpxRoute {
       batteryStartPercent: batteryStartPercent,
       batteryEndPercent: batteryEndPercent,
       trackFingerprint: trackFingerprint ?? this.trackFingerprint,
+      previewPoints: previewPoints ?? this.previewPoints,
     );
   }
 
@@ -122,6 +132,7 @@ class GpxRoute {
     'batteryStartPercent': batteryStartPercent,
     'batteryEndPercent': batteryEndPercent,
     if (trackFingerprint != null) 'trackFingerprint': trackFingerprint,
+    if (previewPoints != null) 'previewPoints': previewPoints,
   };
 
   factory GpxRoute.fromJson(Map<String, dynamic> json) {
@@ -149,6 +160,13 @@ class GpxRoute {
       batteryStartPercent: json['batteryStartPercent'] as int?,
       batteryEndPercent: json['batteryEndPercent'] as int?,
       trackFingerprint: json['trackFingerprint'] as String?,
+      previewPoints: (json['previewPoints'] as List<dynamic>?)
+          ?.map(
+            (pair) => (pair as List<dynamic>)
+                .map((v) => (v as num).toDouble())
+                .toList(),
+          )
+          .toList(),
     );
   }
 }

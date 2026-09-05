@@ -86,6 +86,12 @@ class GpsRecorder extends ChangeNotifier {
   DateTime? _stationarySince;
   /// Fix where auto-pause engaged - used for displacement-based resume.
   LatLng? _autoPauseOrigin;
+  /// Previous fix while auto-paused - lets the resume check reject a single
+  /// glitchy fix (a multipath reflection or a moment in a pocket reporting a
+  /// 1-2 km jump) that would otherwise look like real movement and end a
+  /// genuine stop early.
+  LatLng? _lastAutoPauseFixLatLng;
+  DateTime? _lastAutoPauseFixTime;
   int? _batteryStartPercent;
   final List<double> _recentSpeedsKmh = [];
   String _notificationTitle = 'RideAtlas';
@@ -231,6 +237,8 @@ class GpsRecorder extends ChangeNotifier {
     _isAutoPaused = false;
     _stationarySince = null;
     _autoPauseOrigin = null;
+    _lastAutoPauseFixLatLng = null;
+    _lastAutoPauseFixTime = null;
     _recentSpeedsKmh.clear();
     _lastAcceptedSpeedKmh = null;
     _lastAcceptedSpeedTime = null;
@@ -379,6 +387,8 @@ class GpsRecorder extends ChangeNotifier {
       _isAutoPaused = false;
       _stationarySince = null;
       _autoPauseOrigin = null;
+      _lastAutoPauseFixLatLng = null;
+      _lastAutoPauseFixTime = null;
       if (manualPaused) {
         _state = RecordingState.paused;
         final pauseStartMs = session?.pauseStartedAtMs;
@@ -500,6 +510,17 @@ class GpsRecorder extends ChangeNotifier {
   /// the recent window still gets cleaned once the return pattern is visible.
   static const _glitchFullScanInterval = 40;
 
+  /// Cap on how many of the most recent points a "full" sweep re-scans.
+  /// Without this, scanning the *entire* ride from the start on every sweep
+  /// turns into ever-growing main-isolate work as a long recording keeps
+  /// going (each sweep costs roughly current-length x lookahead) - the
+  /// likely cause of reports of the map/UI locking up partway through
+  /// multi-hour, multi-thousand-point rides. A spike further back than this
+  /// has already been through the window scan on every point since, so
+  /// capping the sweep keeps its cost constant instead of growing with the
+  /// whole ride.
+  static const _glitchFullScanMaxPoints = 3000;
+
   bool _isPlausiblePoint(LatLng latLng, DateTime time) {
     if (_points.isEmpty) return true;
     final last = _points.last;
@@ -525,28 +546,19 @@ class GpsRecorder extends ChangeNotifier {
   void _pruneGpsGlitchPoints({required bool fullScan}) {
     if (_points.length < 4) return;
     final before = _points.length;
-    if (fullScan) {
-      final cleaned = filterImplausiblePoints(_points);
-      if (cleaned.length == before) return;
-      _points
-        ..clear()
-        ..addAll(cleaned);
-    } else {
-      final start = _points.length > _glitchPruneWindow
-          ? _points.length - _glitchPruneWindow
-          : 0;
-      final flagged = findImplausiblePointIndices(_points.sublist(start))
-          .map((i) => i + start)
-          .toSet();
-      if (flagged.isEmpty) return;
-      final kept = [
-        for (var i = 0; i < _points.length; i++)
-          if (!flagged.contains(i)) _points[i],
-      ];
-      _points
-        ..clear()
-        ..addAll(kept);
-    }
+    final scanWindow = fullScan ? _glitchFullScanMaxPoints : _glitchPruneWindow;
+    final start = _points.length > scanWindow ? _points.length - scanWindow : 0;
+    final flagged = findImplausiblePointIndices(_points.sublist(start))
+        .map((i) => i + start)
+        .toSet();
+    if (flagged.isEmpty) return;
+    final kept = [
+      for (var i = 0; i < _points.length; i++)
+        if (!flagged.contains(i)) _points[i],
+    ];
+    _points
+      ..clear()
+      ..addAll(kept);
     if (_points.length == before) return;
     _recomputeDistanceMeters();
   }
@@ -568,6 +580,29 @@ class GpsRecorder extends ChangeNotifier {
     if (_isAutoPaused) {
       final here = LatLng(pos.latitude, pos.longitude);
       _autoPauseOrigin ??= here;
+
+      // A single fix that implies an impossible speed since the previous
+      // one (same cap as the recording-side glitch filter) is a GPS glitch,
+      // not the rider actually moving 1-2 km in a couple of seconds -
+      // ignore it for resume purposes and keep waiting instead of ending
+      // the stop.
+      final prevFixLatLng = _lastAutoPauseFixLatLng;
+      final prevFixTime = _lastAutoPauseFixTime;
+      _lastAutoPauseFixLatLng = here;
+      _lastAutoPauseFixTime = pos.timestamp;
+      if (prevFixLatLng != null && prevFixTime != null) {
+        final dtSeconds =
+            pos.timestamp.difference(prevFixTime).inMilliseconds / 1000.0;
+        if (dtSeconds > 0) {
+          final impliedKmh =
+              (_distance(prevFixLatLng, here) / dtSeconds) * 3.6;
+          if (impliedKmh > _maxPlausibleSpeedKmh) {
+            notifyListeners();
+            return;
+          }
+        }
+      }
+
       final movedMeters = _distance(_autoPauseOrigin!, here);
       final shouldResume =
           smoothedSpeedKmh >= _autoPauseResumeThresholdKmh ||
@@ -576,6 +611,8 @@ class GpsRecorder extends ChangeNotifier {
         _isAutoPaused = false;
         _stationarySince = null;
         _autoPauseOrigin = null;
+        _lastAutoPauseFixLatLng = null;
+        _lastAutoPauseFixTime = null;
         final pauseStarted = _pauseStartedAt;
         if (pauseStarted != null) {
           final now = DateTime.now();
@@ -659,6 +696,8 @@ class GpsRecorder extends ChangeNotifier {
     _isAutoPaused = false;
     _stationarySince = null;
     _autoPauseOrigin = null;
+    _lastAutoPauseFixLatLng = null;
+    _lastAutoPauseFixTime = null;
     _state = RecordingState.recording;
     if (NativeRecording.isSupported) {
       unawaited(NativeRecording.setPaused(false, manualPaused: false));
@@ -697,6 +736,8 @@ class GpsRecorder extends ChangeNotifier {
     _isAutoPaused = false;
     _stationarySince = null;
     _autoPauseOrigin = null;
+    _lastAutoPauseFixLatLng = null;
+    _lastAutoPauseFixTime = null;
     _recentSpeedsKmh.clear();
     for (final raw in batch) {
       final lat = (raw['latitude'] as num?)?.toDouble();
@@ -760,6 +801,8 @@ class GpsRecorder extends ChangeNotifier {
     _isAutoPaused = false;
     _stationarySince = null;
     _autoPauseOrigin = null;
+    _lastAutoPauseFixLatLng = null;
+    _lastAutoPauseFixTime = null;
     _recentSpeedsKmh.clear();
     _lastAcceptedSpeedKmh = null;
     _lastAcceptedSpeedTime = null;

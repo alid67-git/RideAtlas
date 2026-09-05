@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -137,6 +139,15 @@ Future<void> downloadAndInstallUpdate(
     final result = await OpenFilex.open(file.path);
     if (result.type != ResultType.done) {
       throw Exception(result.message);
+    }
+    // The installer screen is now open on top of us, but this process keeps
+    // running underneath it - once the install finishes, the rider could
+    // swipe back into this same stale process instead of the fresh APK.
+    // Close it shortly after handing off to the installer.
+    if (Platform.isAndroid) {
+      unawaited(Future<void>.delayed(const Duration(milliseconds: 600), () {
+        SystemNavigator.pop();
+      }));
     }
   } finally {
     client.close();
