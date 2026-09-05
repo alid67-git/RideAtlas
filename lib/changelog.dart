@@ -20,6 +20,176 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.96 beta',
+    date: '2026-09-05',
+    note:
+        'v1.4.93\'ten sonra kullanıcı iPhone/Safari\'de artık GPX dosyasını '
+        'seçebildiğini ama rotanın eklenmediğini bildirdi. Kök sebep bir '
+        'yarış durumuydu: web dosya seçicisi hem "change" olayını hem de '
+        '(Safari "cancel" olayını güvenilir vermediği için eklenen) '
+        'pencere odaklanma yedeğini dinliyordu; okuma yavaş kaldığında '
+        '(büyük dosya/yavaş cihaz) ikisi de aynı dosyayı aynı anda okumaya '
+        'çalışabiliyordu, bu da sessizce başarısız olabiliyordu - ve okuma '
+        'başarısız olan dosyalar hiç hata göstermeden tamamen atlanıyordu, '
+        'sanki hiçbir şey seçilmemiş gibi. Artık bir okuma başladığında '
+        'yedek mekanizma aynı dosyaya asla tekrar dokunmuyor, ve okunamayan '
+        'bir dosya da "dosya okunamadı" uyarısıyla kullanıcıya bildiriliyor.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.95 beta',
+    date: '2026-09-05',
+    note:
+        'Sürüm geçmişi buraya v1.4.85\'ten bu yana eklenen sürümlerin '
+        'hepsiyle güncellendi - her push\'ta bu listenin atlanmaması '
+        'gerektiği hatırlatıldı. Ayarlar > Yardım ekranı çok daha '
+        'detaylandırıldı: otomatik duraklamanın tam eşikleri, anormal GPS '
+        'noktalarını düzenleme ekranı, kesintiye uğrayan kayıtların '
+        'otomatik kurtarılması, uydu sayısı göstergesi, konum izinleri/pil '
+        'optimizasyonu, çoklu dosya içe aktarma ve rota taslak '
+        'ikonları gibi daha önce hiç anlatılmamış özellikler artık '
+        'yardım metninde yer alıyor (TR/EN/DE).',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.94 beta',
+    date: '2026-09-05',
+    note:
+        'Kayıt ekranı düzeni sadeleşti: referans rota seçme tuşu sağ '
+        'alttaki ikon yığınından haritanın sol üstüne (geri tuşunun yanına) '
+        'taşındı - hangi rotaların gösterildiğini kontrol etmek artık '
+        'haritanın üzerinde, referans uygulamalardaki gibi. Veri ↔ Harita '
+        'geçiş tuşları artık her iki ekranda da aynı yerde: sol altta - '
+        'önceden bilgi ekranında sağ üstte "haritaya git", harita ekranında '
+        'ayrı olarak sağ üstte "veriye dön" duruyordu; şimdi ikisi de '
+        'simetrik tek bir konumda.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.93 beta',
+    date: '2026-09-05',
+    note:
+        'GPX içe aktarmama sorununun asıl kökeni netleşti: kullanıcı '
+        'uygulamayı iPhone\'da Safari üzerinden web sitesi olarak açıyordu '
+        '(native uygulama değil) - Flutter\'ın web dosya seçicisi uzantı '
+        'listesini düz bir "accept=.gpx,.kml,.kmz" dizesine çeviriyor, '
+        'Safari ise GPX\'i bu şekilde güvenilir eşleştiremiyor (sadece KML '
+        'geçiyordu - en baştaki "gpx kabul etmiyor, kml ediyor" '
+        'şikayetiyle birebir uyuşuyor). Web için MediaAtlas\'ın kanıtlanmış '
+        'çözümü uygulandı: dosya seçici artık elle kurulan bir HTML '
+        'girişiyle açılıyor, her uzantı kendi MIME türüyle ve '
+        'tanımlanamayan dosyalar için bir yedek türle eşleştiriliyor, '
+        'resim/video türü hiç yok - böylece Safari GPX/KML/KMZ\'yi '
+        'güvenilir şekilde tanıyor ve "Fotoğraf Kitaplığı" menüsü de '
+        'çıkmıyor. Android/iOS native ve masaüstü tarafı değişmedi.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.92 beta',
+    date: '2026-09-05',
+    note:
+        '"Tüm izi göster" tuşu artık MediaAtlas\'taki kadar sağlam: harita '
+        'döndürülmüşken bile önce kuzeye sıfırlayıp doğru şekilde '
+        'sığdırıyor (döndürülmüş görünüme göre sığdırma yanlış çerçeve '
+        'hesaplayıp rotayı ekranın sadece bir kısmında bırakabiliyordu), '
+        've sığdırmanın gerçekten uygulanıp uygulanmadığını haritanın '
+        'gerçek son konumuna bakarak doğruluyor - eskiden "reddedildi" ile '
+        '"kamera zaten oradaydı" ayrımı yapılamadığından buton bazen '
+        'hiçbir şey yapmıyormuş gibi görünüyordu; artık reddedilirse tüm '
+        'dünyaya sığdırmaya düşüyor.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.91 beta',
+    date: '2026-09-05',
+    note:
+        'Bir önceki düzeltme (v1.4.90) dosya seçiciyi tüm platformlarda '
+        'serbest bıraktığından iPhone\'da artık gereksiz yere "Fotoğraf '
+        'Kitaplığı" / "Fotoğraf ya da Video Çek" seçenekleri de çıkıyordu - '
+        'izin verilen dosya türleri resimleri de kapsayacak kadar '
+        'genişlediğinde iOS bu kısayolları ekliyor. Artık bu serbest '
+        'bırakma sadece Android\'de uygulanıyor; diğer platformlarda '
+        'eskisi gibi gpx/kml/kmz uzantılarına kısıtlı seçim var (iOS bunu '
+        'sistem MIME kaydına ihtiyaç duymadan doğru çözüyor). Ayrıca içe '
+        'aktarma artık tek seferde birden fazla dosya kabul ediyor, hepsini '
+        'tek seferde işleyip "X rota içe aktarıldı, Y dosya atlandı" '
+        'şeklinde bir özet gösteriyor.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.90 beta',
+    date: '2026-09-05',
+    note:
+        'GPX dosyaları içe aktarma ekranında dosya seçicide hiç '
+        'görünmüyor/seçilemiyordu, KML/KMZ ise sorunsuzdu. Sebep: '
+        'Android\'in dosya seçicisi uzantıya göre filtrelerken cihazın '
+        'MimeTypeMap\'inde çoğu zaman "gpx" için bir kayıt olmuyor, sistem '
+        'bu dosyaları listeden tamamen gizliyordu. Artık seçim serbest '
+        'bırakılıp uzantı kontrolü uygulama tarafında yapılıyor; '
+        'desteklenmeyen bir dosya seçilirse kullanıcı dostu bir uyarı '
+        'gösteriliyor.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.89 beta',
+    date: '2026-09-05',
+    note:
+        'Durma sonrası otomatik duraklama artık tek bir hatalı GPS '
+        'ölçümüyle (elde tutarken/multipath yüzünden 1-2 km\'lik anlık '
+        'sıçrama) bozulmuyor - böyle bir sıçrama artık göz ardı ediliyor. '
+        'Güncelleme kurulunca Android yükleyicisi açıldıktan kısa süre '
+        'sonra eski uygulama süreci kendini kapatıyor, eskisine geri '
+        'dönülmüyor. Uzun kayıtlarda (binlerce nokta) her "tam tarama" '
+        'GPS-sıçrama kontrolü kaydın başından itibaren tüm noktaları '
+        'taradığından kayıt uzadıkça harita giderek ağırlaşıp '
+        'kilitleniyordu - tarama artık en fazla son 3000 noktayla sınırlı. '
+        'İzler listesinde artık her satırın başında o rotanın küçük bir '
+        'taslak çizimi var (rota şekli önceden hesaplanıp saklanıyor, '
+        'listenin açılış hızı etkilenmiyor), seçim kutucukları da baştan '
+        'görünür - ayrı bir "seçim moduna" girmeye gerek yok. Renk teması '
+        'pembe-turuncu yerine mavi-beyaz ağırlıklı hale getirildi (kırmızı '
+        '"seed" renk Material 3\'te pembemsi tonlar türetiyordu).',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.88 beta',
+    date: '2026-09-05',
+    note:
+        'Uygulama ikonu bir kez daha sadeleşti: aynı kompozisyon, kalın '
+        'krem renkli siluetler ve koyu lacivert dağlarla çok daha yalın/'
+        'piktogram tarzı bir görünüm - V2\'den daha yüksek kontrast. Arka '
+        'plan rengi yine yeni gökyüzü tonuna göre güncellendi.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.87 beta',
+    date: '2026-09-05',
+    note:
+        'Uygulama ikonu daha yalın, yüksek kontrastlı bir versiyona geçti: '
+        'aynı kompozisyon (arkadan motorcu, kıvrılan yol, gün batımı, hedef '
+        'pini) ama küçük boyutlarda (48px ve altı) daha net görünen kalın '
+        'çizgili, krem rötuşlu bir stil - önceki yumuşak/gradyanlı versiyon '
+        'küçültülünce motorcu koyu bir lekeye dönüşüyordu. Arka plan rengi '
+        'yeni gökyüzü tonuna göre güncellendi.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.86 beta',
+    date: '2026-09-05',
+    note:
+        'Uygulama ikonu değişti: gün batımında arkadan görünen bir '
+        'motorcu, kıvrılan dağ yolu ve yolun ilerisinde kırmızı bir hedef '
+        'pini. Tüm platformlar (Android, iOS, macOS, web, Windows) için '
+        'ikon dosyaları yeniden üretildi; Android\'in adaptif ikonundaki '
+        'eski logo için ayarlanmış %16 boşluk kaldırıldı (tam kadraj sahne '
+        'artık kenara kadar dolduruyor); arka plan rengi yeni ikonun '
+        'gökyüzü tonuna göre güncellendi.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.85 beta',
+    date: '2026-09-04',
+    note:
+        'İz çizgileri virajlı dağ yollarında köşeleri kesip düz bir '
+        'çizgiye dönüştürüyordu - harita basitleştirme toleransı 1.5\'ten '
+        '0.4\'e düşürüldü. Ayrıca çok günlük bir turda günlük nokta bütçesi '
+        'gün sayısına bölünüyordu, bu da tek bir günü 400 noktaya kadar '
+        'sıkıştırıp virajları düzleştirebiliyordu - bu sınırlama '
+        'kaldırıldı. Rota detayı ve çoklu rota ekranlarındaki "konumum" '
+        'ikonu MediaAtlas\'taki gibi doğru "tüm izi sığdır" ikonu ve ipucu '
+        'metniyle değiştirildi (zaten GPS konumuna değil rotaya '
+        'sığdırıyordu).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.84 beta',
     date: '2026-09-02',
     note:
