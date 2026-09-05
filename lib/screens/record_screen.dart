@@ -103,6 +103,13 @@ class _RecordScreenState extends State<RecordScreen>
   bool _starting = false;
   bool _saving = false;
 
+  /// True once recording has started and the rider has switched to the map
+  /// page (see [_buildInfoPage]/[_buildMapPage]). Recording always opens on
+  /// the info page - the map is one tap away via the toggle button in either
+  /// page's header - unless [RecordScreen.initialShowMap] asked for the map
+  /// (e.g. home locate while a ride is already running).
+  bool _showMap = false;
+
   /// Same Hive-backed base map style as the home / route map screens, so
   /// picking Topo (or satellite, dark, ...) on any map sticks everywhere -
   /// including the live recording map, which previously always forced
@@ -116,12 +123,12 @@ class _RecordScreenState extends State<RecordScreen>
 
   GpsRecorder get _recorder => context.read<GpsRecorder>();
 
-  /// Whether the FlutterMap is currently on screen - always true now that
-  /// the map is the permanent base layer with the stats sheet floating
-  /// over it (no more separate info/map pages to switch between). Kept as
-  /// a getter, not inlined, so every camera-follow call site below reads
-  /// unchanged from when this did track a real toggle.
-  bool get _mapVisible => true;
+  /// Whether the FlutterMap is currently the visible page. Idle always
+  /// shows the map (see [build]); once recording, [_showMap] tracks the
+  /// rider's info/map toggle. Camera work (centering, course-up follow)
+  /// only makes sense while this is true - [_showMap] alone misses the
+  /// idle case, which left the idle map stuck wherever it opened.
+  bool get _mapVisible => _showMap || _recorder.isIdle;
 
   /// Idle map position comes from a Dart [Geolocator] stream. Once a
   /// recording has track points, course-up follow is driven by the same
@@ -212,6 +219,9 @@ class _RecordScreenState extends State<RecordScreen>
   void initState() {
     super.initState();
     recordScreenVisible.value = true;
+    // Seed before first build so a return-from-home locate opens the map
+    // with the live track instead of the info page.
+    _showMap = widget.initialShowMap;
     _rotationController = AnimationController(
       vsync: this,
       // Match the ~2s native GPS cadence so one camera glide is still
@@ -249,7 +259,7 @@ class _RecordScreenState extends State<RecordScreen>
     }
     if (widget.initialShowMap) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted || !_showMap) return;
         final location = _recorder.currentLatLng ?? _currentLocation;
         if (location != null) {
           _followMe = true;
@@ -359,7 +369,63 @@ class _RecordScreenState extends State<RecordScreen>
         await _applyReferenceRoutes(const {});
       case _OverlayMenuAction.pick:
         await _pickReferenceRoutes();
+      case _OverlayMenuAction.importFile:
+        await _importReferenceRoute();
     }
+  }
+
+  /// Lets the rider bring in a new GPX/KML/KMZ file from the recording
+  /// screen itself, without leaving to the routes list first. Saved through
+  /// the same [RouteRepository.importFromBytes] pipeline as the normal
+  /// import flow - the file becomes a permanent saved route, not just a
+  /// one-off overlay - and is immediately added to the reference overlay so
+  /// it shows on the map right away.
+  Future<void> _importReferenceRoute() async {
+    final result = await pickTrackFiles();
+    if (result == null || result.files.isEmpty || !mounted) return;
+    final file = result.files.single;
+    final l10n = AppLocalizations.of(context)!;
+
+    if (!isSupportedTrackFileName(file.name)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.unsupportedTrackFileType)));
+      return;
+    }
+    final bytes = file.bytes;
+    if (bytes == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.fileNotReadable)));
+      return;
+    }
+
+    final repo = context.read<RouteRepository>();
+    GpxRoute route;
+    try {
+      route = await repo.importFromBytes(
+        bytes: bytes,
+        suggestedFileName: file.name,
+      );
+    } on DuplicateRouteException catch (e) {
+      route = e.existing;
+    } on FormatException catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.trackHasNoPoints)));
+      }
+      return;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    await _applyReferenceRoutes({..._referenceRouteIds, route.id});
   }
 
   /// Lets the rider optionally overlay one or more saved GPX tracks under
@@ -557,6 +623,27 @@ class _RecordScreenState extends State<RecordScreen>
     await done.future;
   }
 
+  /// Switches from the info page to the map and re-enables course-up follow.
+  /// The map stays mounted under an [Offstage] while the info page is
+  /// showing (see [build]), so [MapController] stays attached - we only
+  /// need to snap to the latest position/heading.
+  void _switchToMap() {
+    setState(() {
+      _showMap = true;
+      _followMe = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_showMap) return;
+      final location = _recorder.currentLatLng ?? _currentLocation;
+      final heading = _headingFromTrackOrLive;
+      if (location != null) {
+        _animateCameraTo(location: location, heading: heading);
+      } else if (heading != null) {
+        _animateCameraTo(heading: heading);
+      }
+    });
+  }
+
   /// Prefer track-derived course while recording; fall back to live GPS COG.
   double? get _headingFromTrackOrLive {
     final points = _recorder.points;
@@ -717,6 +804,8 @@ class _RecordScreenState extends State<RecordScreen>
   /// current center/rotation each call rather than tracking separate
   /// copies of them, so this can't drift out of sync with the map itself.
   void _animateCameraTo({LatLng? location, double? heading}) {
+    // Info page keeps the map Offstage but still mounted; skip camera work
+    // while it's hidden so we don't fight a zero-size map viewport.
     if (!_mapVisible) return;
     // Detach the previous fix's animation *before* starting this one -
     // see [_cameraAnimation] for why relying on whenComplete leaked a
@@ -921,6 +1010,11 @@ class _RecordScreenState extends State<RecordScreen>
     setState(() {
       _followMe = true;
       _savedPointCount = -1;
+      // Opens on the info page - the map is one tap away via its toggle
+      // button - rather than whatever page the rider happened to be
+      // looking at before tapping start. Map stays Offstage-mounted so
+      // course-up still works the moment they switch back.
+      _showMap = false;
     });
   }
 
@@ -1237,7 +1331,35 @@ class _RecordScreenState extends State<RecordScreen>
   }
 
   @override
-  Widget build(BuildContext context) => _buildMapPage(context);
+  Widget build(BuildContext context) {
+    // Only rebuild this scaffold when idle↔recording flips — not on every
+    // GPS point. Watching GpsRecorder here used to remount FlutterMap
+    // (tiles + full polyline) every fix / every clock tick.
+    final isIdle = context.select<GpsRecorder, bool>((r) => r.isIdle);
+    if (isIdle) {
+      return _buildMapPage(context);
+    }
+    // Keep FlutterMap mounted while the info page is visible so
+    // MapController stays attached - tearing it down broke course-up
+    // (rotate/move threw or no-oped until the next full remap).
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        TickerMode(
+          enabled: _showMap,
+          child: Offstage(offstage: !_showMap, child: _buildMapPage(context)),
+        ),
+        if (!_showMap)
+          ValueListenableBuilder<int>(
+            valueListenable: _clockTick,
+            builder: (_, _, _) => Consumer<GpsRecorder>(
+              builder: (context, recorder, _) =>
+                  _buildInfoPage(context, recorder),
+            ),
+          ),
+      ],
+    );
+  }
 
   Widget _buildMapPage(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -1306,6 +1428,12 @@ class _RecordScreenState extends State<RecordScreen>
                                       l10n.recordOverlaySelectMenuItem,
                                     ),
                                   ),
+                                  PopupMenuItem(
+                                    value: _OverlayMenuAction.importFile,
+                                    child: Text(
+                                      l10n.recordOverlayImportMenuItem,
+                                    ),
+                                  ),
                                 ],
                               ),
                             );
@@ -1370,20 +1498,11 @@ class _RecordScreenState extends State<RecordScreen>
           ),
           Positioned(
             right: 16,
-            // Idle: clears the centered start button at bottom:24. Recording:
-            // clears the collapsed stats sheet (minChildSize: 0.16, see
-            // _buildStatsSheet) so it never sits under it.
             bottom: 100,
             child: SafeArea(
               top: false,
               child: Consumer<GpsRecorder>(
-                builder: (context, recorder, _) => Padding(
-                padding: EdgeInsets.only(
-                  bottom: recorder.isIdle
-                      ? 0
-                      : MediaQuery.sizeOf(context).height * 0.16,
-                ),
-                child: Column(
+                builder: (context, recorder, _) => Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   FloatingActionButton.small(
@@ -1432,21 +1551,39 @@ class _RecordScreenState extends State<RecordScreen>
                 ],
               ),
               ),
-              ),
             ),
           ),
-          Consumer<GpsRecorder>(
-            builder: (context, recorder, _) => recorder.isIdle
-                ? Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 24,
-                    child: SafeArea(
-                      top: false,
-                      child: Center(child: _buildControls(l10n, recorder)),
-                    ),
-                  )
-                : Positioned.fill(child: _buildStatsSheet(context, l10n)),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 24,
+            child: SafeArea(
+              top: false,
+              child: Consumer<GpsRecorder>(
+                builder: (context, recorder, _) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 48,
+                        child: recorder.isIdle
+                            ? null
+                            : _RoundIconButton(
+                                icon: Icons.dashboard_outlined,
+                                tooltip: l10n.recordInfoTabTooltip,
+                                onPressed: () =>
+                                    setState(() => _showMap = false),
+                              ),
+                      ),
+                      Expanded(
+                        child: Center(child: _buildControls(l10n, recorder)),
+                      ),
+                      const SizedBox(width: 48),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1585,242 +1722,314 @@ class _RecordScreenState extends State<RecordScreen>
 
   Color _cardAccent(ThemeData theme) => _infoAccent;
 
-  /// Detailed stats, in a sheet that slides up over the permanently-visible
-  /// map (see [_buildMapPage]) instead of a separate page to switch to -
-  /// map and data are the same screen now, just two depths of it. Collapsed
-  /// it shows only the drag handle and the pause/save/reset controls (so
-  /// those stay reachable without expanding); dragging up reveals the
-  /// duration banner, hero speed number, and the same customizable stat
-  /// card grid the old full-screen info page had (see Settings > Kayıt
-  /// ekranı kartları) - now in fixed-height rows instead of Expanded ones,
-  /// since a scrollable sheet can't hand a card an "however much space is
-  /// left" height the way a full page could.
-  Widget _buildStatsSheet(BuildContext context, AppLocalizations l10n) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.24,
-      minChildSize: 0.16,
-      maxChildSize: 0.92,
-      snap: true,
-      snapSizes: const [0.16, 0.24, 0.6, 0.92],
-      builder: (context, scrollController) {
-        final theme = Theme.of(context);
-        return Material(
-          color: theme.colorScheme.surface,
-          elevation: 8,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: _InfoPageBackground(animation: _bgController),
-              ),
-              Consumer<GpsRecorder>(
-                builder: (context, recorder, _) {
-                  final points = recorder.points;
-                  final speedStats = buildSpeedStats(points);
-                  final elevationChange = computeElevationChange(points);
-                  final elevationSamples = buildElevationProfile(points);
-                  final altitude = recorder.currentAltitude;
-                  double? maxAltitude;
-                  double? minAltitude;
-                  for (final s in elevationSamples) {
-                    if (maxAltitude == null || s.elevation > maxAltitude) {
-                      maxAltitude = s.elevation;
-                    }
-                    if (minAltitude == null || s.elevation < minAltitude) {
-                      minAltitude = s.elevation;
-                    }
-                  }
-                  final accent = _cardAccent(theme);
-                  final layoutController = context
-                      .watch<LiveStatsLayoutController>();
+  /// The default page while recording/paused: speed front and center (the
+  /// one number a rider actually cares about mid-ride), duration/rest right
+  /// below it, then every other stat and a compact speed/elevation chart -
+  /// all sized to fit one screen without scrolling. The map itself is one
+  /// tap away via the bottom-left toggle button, mirroring [_buildMapPage]'s
+  /// own toggle so both pages switch from the same corner.
+  Widget _buildInfoPage(BuildContext context, GpsRecorder recorder) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final points = recorder.points;
+    final speedStats = buildSpeedStats(points);
+    final elevationChange = computeElevationChange(points);
+    final elevationSamples = buildElevationProfile(points);
+    final altitude = recorder.currentAltitude;
+    double? maxAltitude;
+    double? minAltitude;
+    for (final s in elevationSamples) {
+      if (maxAltitude == null || s.elevation > maxAltitude) {
+        maxAltitude = s.elevation;
+      }
+      if (minAltitude == null || s.elevation < minAltitude) {
+        minAltitude = s.elevation;
+      }
+    }
+    final accent = _cardAccent(theme);
+    final layoutController = context.watch<LiveStatsLayoutController>();
 
-                  return ListView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+    return Scaffold(
+      body: Stack(
+        children: [
+          Positioned.fill(child: _InfoPageBackground(animation: _bgController)),
+          SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: Row(
                     children: [
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.outlineVariant,
-                            borderRadius: BorderRadius.circular(2),
+                      _RoundIconButton(
+                        icon: Icons.arrow_back,
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const Spacer(),
+                      const SatelliteCountBadge(),
+                      const SizedBox(width: 8),
+                      _RoundIconButton(
+                        icon: Icons.settings,
+                        tooltip: l10n.settingsTitle,
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SettingsScreen(),
                           ),
                         ),
                       ),
-                      Center(child: _buildControls(l10n, recorder)),
-                      const SizedBox(height: 20),
-                      if (context.watch<AppUpdateController>().showBanner)
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 12),
-                          child: AppUpdateBanner(),
-                        ),
-                      // Total duration, big - the one figure meant to stand
-                      // out above the rest of this sheet. FittedBox keeps it
-                      // from overflowing on narrow screens/long durations.
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: accent.withValues(
-                            alpha: theme.brightness == Brightness.dark
-                                ? 0.20
-                                : 0.12,
+                    ],
+                  ),
+                ),
+                if (context.watch<AppUpdateController>().showBanner)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    child: AppUpdateBanner(),
+                  ),
+                // Total duration lives here, above the auto-paused banner,
+                // rather than paired with "Aktif sürüş süresi" below the
+                // hero speed number - that slot now holds "Mola süresi"
+                // instead, which is the pairing riders actually want to see
+                // at a glance next to how long they've been moving.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(
+                        alpha: theme.brightness == Brightness.dark ? 0.20 : 0.12,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: accent.withValues(alpha: 0.35)),
+                    ),
+                    // Label (with icon) on top, the duration itself centered
+                    // below, large - was a single crammed row (icon+label+
+                    // value all inline), which read unevenly since the
+                    // label and the giant value fought for the same line.
+                    // At least double the old titleMedium size, and bigger
+                    // than the "large" stat cards below it (titleLarge) -
+                    // total duration is the one figure meant to stand out
+                    // above everything else on this strip. FittedBox keeps
+                    // it from overflowing on narrow screens/long durations.
+                    //
+                    // No "Toplam süre" text label here anymore - this is
+                    // the very first thing on the screen and a big clock
+                    // icon next to a big duration already says what it is
+                    // without spelling it out.
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Icon(Icons.schedule, size: 28, color: accent),
+                          const SizedBox(width: 10),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              _formatDuration(
+                                recorder.totalDuration ?? Duration.zero,
+                              ),
+                              style: const TextStyle(
+                                fontSize: 40,
+                                fontWeight: FontWeight.w900,
+                                height: 1,
+                              ),
+                            ),
                           ),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: accent.withValues(alpha: 0.35),
-                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (recorder.isAutoPaused)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.tertiaryContainer,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        l10n.autoPausedLabel,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: theme.colorScheme.onTertiaryContainer,
+                          fontWeight: FontWeight.w700,
                         ),
-                        child: Center(
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      children: [
+                        // The one number a rider actually needs at a glance -
+                        // everything else here is secondary to this. Bigger,
+                        // slanted and glowing rather than the plain
+                        // displayLarge style used elsewhere, so it reads as
+                        // a dashboard's hero figure, not just another label.
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
                           child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Icon(Icons.schedule, size: 28, color: accent),
-                              const SizedBox(width: 10),
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  _formatDuration(
-                                    recorder.totalDuration ?? Duration.zero,
-                                  ),
-                                  style: const TextStyle(
-                                    fontSize: 40,
+                              _AnimatedNumber(
+                                value: recorder.currentSpeedKmh,
+                                builder: (context, value) => Text(
+                                  value.round().toString(),
+                                  style: TextStyle(
+                                    fontSize: 150,
                                     fontWeight: FontWeight.w900,
-                                    height: 1,
+                                    fontStyle: FontStyle.italic,
+                                    letterSpacing: -6,
+                                    height: 0.95,
+                                    color: theme.colorScheme.onSurface,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                    shadows: [
+                                      Shadow(
+                                        color: accent.withValues(alpha: 0.55),
+                                        blurRadius: 32,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: 20,
+                                  left: 6,
+                                ),
+                                child: Text(
+                                  'km/h',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: theme.colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      // The one number a rider actually needs at a glance -
-                      // everything else here is secondary to this. Bigger,
-                      // slanted and glowing rather than a plain style, so it
-                      // reads as a dashboard's hero figure, not just another
-                      // label.
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            _AnimatedNumber(
-                              value: recorder.currentSpeedKmh,
-                              builder: (context, value) => Text(
-                                value.round().toString(),
-                                style: TextStyle(
-                                  fontSize: 130,
-                                  fontWeight: FontWeight.w900,
-                                  fontStyle: FontStyle.italic,
-                                  letterSpacing: -6,
-                                  height: 0.95,
-                                  color: theme.colorScheme.onSurface,
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures(),
-                                  ],
-                                  shadows: [
-                                    Shadow(
-                                      color: accent.withValues(alpha: 0.55),
-                                      blurRadius: 32,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: 18,
-                                left: 6,
-                              ),
-                              child: Text(
-                                'km/h',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // Which cards show and in what order is a per-rider
-                      // choice (Settings > Kayıt ekranı kartları, or
-                      // press-and-hold directly on a card below) rather than
-                      // fixed here. Each row gets a fixed height instead of
-                      // the old Expanded-fills-remaining-space one, since
-                      // this list scrolls rather than filling one page.
-                      for (final row in _pairUp(layoutController.visibleOrder))
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: SizedBox(
-                            height: 110,
-                            child: row.length == 1
-                                ? _draggableStatCard(
-                                    row[0],
-                                    layoutController,
-                                    l10n,
-                                    recorder,
-                                    speedStats,
-                                    elevationChange,
-                                    altitude,
-                                    maxAltitude,
-                                    minAltitude,
-                                    accent,
-                                  )
-                                : Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      Expanded(
-                                        child: _draggableStatCard(
-                                          row[0],
-                                          layoutController,
-                                          l10n,
-                                          recorder,
-                                          speedStats,
-                                          elevationChange,
-                                          altitude,
-                                          maxAltitude,
-                                          minAltitude,
-                                          accent,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: _draggableStatCard(
-                                          row[1],
-                                          layoutController,
-                                          l10n,
-                                          recorder,
-                                          speedStats,
-                                          elevationChange,
-                                          altitude,
-                                          maxAltitude,
-                                          minAltitude,
-                                          accent,
-                                        ),
-                                      ),
-                                    ],
+                        const SizedBox(height: 8),
+                        // Which cards show and in what order is a
+                        // per-rider choice (Settings > Kayıt ekranı
+                        // kartları, or press-and-hold directly on a card
+                        // below) rather than fixed here. Each row is
+                        // Expanded so the cards grow to fill whatever
+                        // vertical space is left instead of a small stack
+                        // sitting above empty screen.
+                        Expanded(
+                          child: Column(
+                            children: [
+                              for (final row in _pairUp(
+                                layoutController.visibleOrder,
+                              ))
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: row.length == 1
+                                        ? _draggableStatCard(
+                                            row[0],
+                                            layoutController,
+                                            l10n,
+                                            recorder,
+                                            speedStats,
+                                            elevationChange,
+                                            altitude,
+                                            maxAltitude,
+                                            minAltitude,
+                                            accent,
+                                          )
+                                        : Row(
+                                            // Without this the row's own
+                                            // height only wraps its (small)
+                                            // content and centers it in the
+                                            // Expanded slot above - stretch
+                                            // makes each card's colored box
+                                            // actually fill that slot.
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              Expanded(
+                                                child: _draggableStatCard(
+                                                  row[0],
+                                                  layoutController,
+                                                  l10n,
+                                                  recorder,
+                                                  speedStats,
+                                                  elevationChange,
+                                                  altitude,
+                                                  maxAltitude,
+                                                  minAltitude,
+                                                  accent,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: _draggableStatCard(
+                                                  row[1],
+                                                  layoutController,
+                                                  l10n,
+                                                  recorder,
+                                                  speedStats,
+                                                  elevationChange,
+                                                  altitude,
+                                                  maxAltitude,
+                                                  minAltitude,
+                                                  accent,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                   ),
+                                ),
+                            ],
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 16,
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 48,
+                        child: _RoundIconButton(
+                          icon: Icons.map_outlined,
+                          tooltip: l10n.recordMapTabTooltip,
+                          onPressed: _switchToMap,
+                        ),
+                      ),
+                      Expanded(
+                        child: Center(child: _buildControls(l10n, recorder)),
+                      ),
+                      const SizedBox(width: 48),
                     ],
-                  );
-                },
-              ),
-            ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -2022,7 +2231,7 @@ class _RecordScreenState extends State<RecordScreen>
 
 /// Actions offered by the top-left reference-route menu on the recording
 /// map (see [_RecordScreenState._handleOverlayMenuAction]).
-enum _OverlayMenuAction { showAll, hideAll, pick }
+enum _OverlayMenuAction { showAll, hideAll, pick, importFile }
 
 /// One row of the map page's stacked duration/distance/altitude box - label
 /// on the left, value on the right, both on one line.
