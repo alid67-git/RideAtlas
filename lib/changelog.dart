@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.110 beta',
+    date: '2026-09-06',
+    note:
+        'v1.4.109 derlemesi kırılmıştı: kayıt ekranında _tileLayerEpoch '
+        'alanı eksikti, web/APK çıkmadı. Alan geri eklendi; kayıt/konum '
+        'beyaz ekran düzeltmesi (GPS merkezi, onMapReady kick, TileLayer '
+        'remount) artık gerçekten dağıtılıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.109 beta',
     date: '2026-09-06',
     note:
