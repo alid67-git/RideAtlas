@@ -275,6 +275,13 @@ class _RecordScreenState extends State<RecordScreen>
     )..repeat(reverse: true);
     _startLiveLocation();
     _loadMapStyle();
+    // Same first-frame tile kick as the home map: flutter_map can skip the
+    // initial request when center/zoom match MapOptions, which left the
+    // record screen as a blank white plane on iPhone (GPS kick arrives late
+    // or never if permission is slow/denied).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) kickMapTileLayer(_mapController);
+    });
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       if (_isUserMapGesture(event.source) && _followMe) {
         // Stop any in-flight glide so a pan isn't yanked by the last GPS
@@ -380,10 +387,13 @@ class _RecordScreenState extends State<RecordScreen>
     final savedId = box.get(_mapStyleKey);
     if (savedId == null || !mounted) return;
     setState(() => _mapStyle = findBaseMapStyle(savedId));
+    // Remounted TileLayer (ValueKey(style.id)) needs a kick, same as home.
+    kickMapTileLayer(_mapController);
   }
 
   Future<void> _changeMapStyle(BaseMapStyle style) async {
     setState(() => _mapStyle = style);
+    kickMapTileLayer(_mapController);
     final box = await Hive.openBox<String>(_metaBoxName);
     await box.put(_mapStyleKey, style.id);
   }
@@ -409,6 +419,11 @@ class _RecordScreenState extends State<RecordScreen>
   void _setShowMap(bool showMap) {
     setState(() => _showMap = showMap);
     _persistRecordPagePreference(showMap);
+    if (showMap) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) kickMapTileLayer(_mapController);
+      });
+    }
   }
 
   void _showMapStylePicker() {
@@ -1118,6 +1133,13 @@ class _RecordScreenState extends State<RecordScreen>
       _savedPointCount = -1;
       _showMap = wantMap;
     });
+    // Starting remounts the map into the Offstage stack; kick tiles when
+    // the map page is the one being shown.
+    if (wantMap) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) kickMapTileLayer(_mapController);
+      });
+    }
   }
 
   /// Returns true when Android has granted "Allow all the time", or when

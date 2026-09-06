@@ -23,10 +23,11 @@ const kChangelog = <ChangelogEntry>[
     version: 'v1.4.104 beta',
     date: '2026-09-06',
     note:
-        'v1.4.103 derlemesi kırılmıştı: kayıt ekranında track_io '
-        'importu eksikti, web/APK çıkmadı. Import geri eklendi; '
-        'tüm izleri göster hızlandırması (paralel yükleme, bellek '
-        'önbelleği, tek seferde çizim) artık gerçekten dağıtılıyor.',
+        'v1.4.103 derlemesi kırılmıştı (track_io import eksikti), web/APK '
+        'çıkmadı — import geri eklendi. Tüm izleri göster hızlandırması '
+        'dağıtılıyor. iPhone: kayıt ekranı boş beyaz kalma giderildi '
+        '(ilk karede ve stil değişiminde harita karo kick; ana haritadaki '
+        'v1.4.69 düzeltmesinin kayıta aynen uygulanması).',
   ),
   ChangelogEntry(
     version: 'v1.4.103 beta',
