@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.104 beta',
+    date: '2026-09-06',
+    note:
+        'v1.4.103 derlemesi kırılmıştı: kayıt ekranında track_io '
+        'importu eksikti, web/APK çıkmadı. Import geri eklendi; '
+        'tüm izleri göster hızlandırması (paralel yükleme, bellek '
+        'önbelleği, tek seferde çizim) artık gerçekten dağıtılıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.103 beta',
     date: '2026-09-06',
     note:
