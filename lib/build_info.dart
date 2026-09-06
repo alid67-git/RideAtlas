@@ -1,14 +1,18 @@
 /// Bumped by hand on every push so the running build can be eyeballed on
 /// screen (Chrome tabs / dev servers can otherwise silently serve stale JS).
-const String kAppBuildLabel = 'v1.4.111 beta';
+const String kAppBuildLabel = 'v1.4.112 beta';
 
 /// Shown once, in a dialog, the first time this build label is seen.
 const String kAppBuildNote =
-    'Kayıt/konum beyaz ekranının gerçek nedeni bulundu ve düzeltildi: '
-    'v1.4.109/110\'daki harita karo zamanlama düzeltmeleri yanlış '
-    'teşhisti. Asıl sorun, kayıt ekranındaki "kesintiye uğramış kayıt '
-    'devam ediyor" bildirimini çizen kod, gösterilecek bir şey yokken '
-    'Stack içinde konumlandırılmamış (Positioned olmayan) boş bir widget '
-    'döndürüyordu - bu da o Stack\'teki HER ŞEYİN (harita dahil) hiç '
-    'çizilmemesine yol açıyordu. Artık her zaman konumlandırılmış bir '
-    'widget döndürülüyor.';
+    'GPX içe aktarma bazen sessizce hiçbir şey yapmıyordu: tarayıcının '
+    'dosya seçme penceresinde "cancel" olayı, gerçekten bir dosya '
+    'seçilmiş olsa bile "change" olayından önce (ve varsayılan '
+    'gecikmeden daha uzun bir farkla) tetiklenebiliyordu; bu da seçimi '
+    'sessizce "hiçbir şey seçilmedi" sayıp yutuyordu. Artık sabit bir '
+    'gecikme yerine, gerçek seçim gelene kadar (en fazla ~2sn) kontrol '
+    'tekrarlanıyor. Ayrıca kayıt ekranının gezinme akışı sadeleştirildi: '
+    'artık tek geri tuşu yok, üstteki geri oku kaldırıldı; yeni bir '
+    'kayıt başlatıldığında her zaman Veri sayfasında açılıyor, devam '
+    'eden bir kayda dönüldüğünde ise en son hangi sayfada kalındıysa '
+    'orada açılıyor; gösterilen referans izler de hatırlanıp bir sonraki '
+    'açılışta otomatik olarak geri getiriliyor.';
