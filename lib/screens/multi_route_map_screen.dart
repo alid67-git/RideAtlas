@@ -16,6 +16,7 @@ import '../services/daily_analysis.dart' show colorForDay;
 import '../services/map_camera_fit.dart';
 import '../services/track_display_loader.dart';
 import '../services/track_display_simplify.dart';
+import '../services/visible_track_prefs.dart';
 import '../widgets/route_photo_strip.dart' show PhotoViewerDialog;
 import 'map_screen.dart' show MapStylePickerDialog;
 
@@ -72,6 +73,9 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   void initState() {
     super.initState();
     _activeRouteIds = List<String>.from(widget.routeIds);
+    // Sticky show/hide: opening this screen with a selection is the rider's
+    // visible set (same Hive key as home/record overlays).
+    unawaited(saveVisibleTrackIds(_activeRouteIds));
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     _loadMapStyle();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
@@ -254,6 +258,21 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
       for (final r in routes)
         if (selected.contains(r.id)) r.id,
     ];
+    if (next.isEmpty) {
+      // Explicit "show none" — persist empty so restart stays hidden.
+      await saveVisibleTrackIds(const []);
+      if (!mounted) return;
+      setState(() {
+        _activeRouteIds = [];
+        _lines.clear();
+        _loading = false;
+        _error = null;
+        _labeledRouteId = null;
+        _labeledRouteName = null;
+        _labeledRoutePoint = null;
+      });
+      return;
+    }
     next = await _capRouteIds(next) ?? const <String>[];
     if (next.isEmpty || !mounted) return;
     final same = next.length == _activeRouteIds.length &&
@@ -261,6 +280,7 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     if (same) return;
 
     setState(() => _activeRouteIds = next);
+    await saveVisibleTrackIds(next);
     await _load();
   }
 

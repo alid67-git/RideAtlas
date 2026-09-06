@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.106 beta',
+    date: '2026-09-06',
+    note:
+        'iPhone kayıt tuşu boş beyaz ekran: ana haritadan konum aktarımı, '
+        'onMapReady + gecikmeli karo kick, soft arka plan; sticky overlay '
+        'fit kamerası ilk karo yükünden sonra. Kısmi iz göster/gizle Hive\'da '
+        'kalıcı (home/kayıt/çoklu-rota) — kapat-aç aynı seçim.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.105 beta',
     date: '2026-09-06',
     note:

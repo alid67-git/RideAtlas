@@ -22,6 +22,8 @@ import '../widgets/vehicle_marker.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 import 'record_screen.dart';
 import '../services/track_display_simplify.dart';
+import '../services/track_display_loader.dart';
+import '../services/visible_track_prefs.dart';
 import 'multi_route_map_screen.dart';
 import '../services/track_io.dart';
 import '../repositories/route_repository.dart';
@@ -61,6 +63,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   bool _hadGpsFix = false;
   bool _offlineHintShown = false;
 
+  /// Persisted show/hide overlays (see [kVisibleTrackIdsKey]). Partial
+  /// visibility must survive app restart.
+  List<Polyline> _homeOverlayPolylines = const [];
+
   static const _gpsFlashDuration = Duration(seconds: 4);
 
   @override
@@ -70,6 +76,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       // Ensure tiles fetch even if GPS never moves the camera (same center/
       // zoom as MapOptions → flutter_map may skip the first request).
       if (mounted) kickMapTileLayer(_mapController);
+      await _restoreHomeOverlays();
       await _maybeShowWhatsNew();
       // After what's-new: check once; offer a single "Güncelle" dialog. The
       // same banner also appears on the recording/info screens via
@@ -106,8 +113,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       if (!restored || !mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const RecordScreen(
+          builder: (_) => RecordScreen(
             showResumedBanner: true,
+            initialCenter: _currentLocation,
             // Restore last Data/Map page rather than always forcing map.
           ),
         ),
@@ -269,7 +277,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     if (!recorder.isIdle) {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const RecordScreen(initialShowMap: true, useSavedPagePreference: false),
+          builder: (_) => RecordScreen(
+            initialShowMap: true,
+            useSavedPagePreference: false,
+            initialCenter: _currentLocation,
+          ),
         ),
       );
       return;
@@ -442,7 +454,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                       foregroundColor: Colors.white,
                       tooltip: l10n.recordRideTooltip,
                       onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const RecordScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => RecordScreen(
+                            initialCenter: _currentLocation,
+                          ),
+                        ),
                       ),
                       child: const Icon(Icons.fiber_manual_record, size: 28),
                     ),
@@ -553,6 +569,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
             ],
           ),
+        if (_homeOverlayPolylines.isNotEmpty)
+          PolylineLayer(polylines: _homeOverlayPolylines),
         if (_currentLocation != null)
           MarkerLayer(
             markers: [
@@ -636,19 +654,25 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         }
         final ids = await _confirmShowAllRouteIds(allIds);
         if (ids == null || ids.isEmpty || !mounted) return;
+        await _setHomeOverlays(ids.toSet());
+        if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => MultiRouteMapScreen(routeIds: ids),
           ),
         );
+        if (mounted) await _restoreHomeOverlays();
       case _HomeTrackMenuAction.pick:
         final ids = await _pickRoutesForOverlay();
         if (ids == null || ids.isEmpty || !mounted) return;
+        await _setHomeOverlays(ids.toSet());
+        if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => MultiRouteMapScreen(routeIds: ids),
           ),
         );
+        if (mounted) await _restoreHomeOverlays();
       case _HomeTrackMenuAction.importFile:
         await _importTracksFromHome();
       case _HomeTrackMenuAction.routeList:
@@ -668,7 +692,14 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       );
       return null;
     }
-    final selected = <String>{};
+    // Seed from the sticky show/hide set so reopen matches last choice.
+    final saved = await loadVisibleTrackIds();
+    final existing = {for (final r in routes) r.id};
+    final selected = {
+      if (saved != null)
+        for (final id in saved)
+          if (existing.contains(id)) id,
+    };
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -788,6 +819,55 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       ),
     );
   }
+
+  /// Reloads [kVisibleTrackIdsKey] onto the landing map so show/hide survives
+  /// process death (product rule: partial visibility is sticky).
+  Future<void> _restoreHomeOverlays() async {
+    final saved = await loadVisibleTrackIds();
+    if (!mounted || saved == null) return;
+    await _setHomeOverlays(saved, persist: false);
+  }
+
+  Future<void> _setHomeOverlays(Set<String> ids, {bool persist = true}) async {
+    if (persist) await saveVisibleTrackIds(ids);
+    if (!mounted) return;
+    if (ids.isEmpty) {
+      setState(() {
+        _homeOverlayPolylines = const [];
+      });
+      return;
+    }
+    final repo = context.read<RouteRepository>();
+    final byId = {for (final r in repo.routes) r.id: r};
+    final routes = [for (final id in ids) if (byId[id] != null) byId[id]!];
+    if (routes.isEmpty) {
+      setState(() {
+        _homeOverlayPolylines = const [];
+      });
+      return;
+    }
+    final budget = mapDisplayBudget(routes.length);
+    final loaded = await loadTracksForMapDisplay(
+      repo: repo,
+      routes: routes,
+      maxPoints: budget.maxPoints,
+      minSpacingMeters: budget.minSpacingMeters,
+      isCancelled: () => !mounted,
+    );
+    if (!mounted) return;
+    setState(() {
+      _homeOverlayPolylines = [
+        for (final t in loaded)
+          Polyline(
+            points: t.points,
+            strokeWidth: 3,
+            color: Color(0xFF1565C0).withValues(alpha: 0.85),
+          ),
+      ];
+    });
+  }
+
+
 }
 
 enum _HomeTrackMenuAction { showAll, pick, importFile, routeList }

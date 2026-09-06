@@ -20,14 +20,25 @@ NetworkTileProvider createRideAtlasTileProvider() => NetworkTileProvider(
 /// move. flutter_map sometimes skips the initial fetch when [MapController.move]
 /// matches [MapOptions.initialCenter]/[MapOptions.initialZoom] (no MapEvent),
 /// leaving a blank map until the rider zooms by hand.
-void kickMapTileLayer(MapController controller) {
+///
+/// On a freshly pushed route (RecordScreen on iPhone) the controller is often
+/// not laid out on the first frame — a single kick silently no-ops and the
+/// map stays white. Retries with backoff until the camera is attached or
+/// [maxAttempts] is exhausted.
+void kickMapTileLayer(MapController controller, {int attempt = 0}) {
+  const maxAttempts = 10;
   WidgetsBinding.instance.addPostFrameCallback((_) {
     try {
       final camera = controller.camera;
+      // Tiny zoom nudge → MapEvent → TileLayer fetch; same-center move alone
+      // is a no-op in flutter_map.
       controller.move(camera.center, camera.zoom + 0.001);
       controller.move(camera.center, camera.zoom);
     } catch (_) {
-      // Controller not attached yet - ignore; a later kick will run.
+      if (attempt >= maxAttempts) return;
+      Future<void>.delayed(Duration(milliseconds: 40 * (attempt + 1)), () {
+        kickMapTileLayer(controller, attempt: attempt + 1);
+      });
     }
   });
 }
