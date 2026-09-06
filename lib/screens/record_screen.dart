@@ -2421,6 +2421,9 @@ class _RecordScreenState extends State<RecordScreen>
         // Lightweight photo pins (icons only) for overlay tracks.
         Builder(
           builder: (context) {
+            if (_overlayTracks.length > kMapPhotoPinRouteCap) {
+              return const SizedBox.shrink();
+            }
             final photos = context.read<PhotoRepository>();
             var remaining = kMapPhotoPinCap;
             final markers = <Marker>[];

@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.108 beta',
+    date: '2026-09-06',
+    note:
+        'Android’de ~20 izle “tüm izleri göster” kilitlenmesi: harita için '
+        'toplam köşe bütçesi (~6k), iz başına daha agresif sadeleştirme, '
+        'paralel parse 4→2, progress setState throttle, çok izde foto pin '
+        'yok, polyline daha ince. Soft/hard cap 10/24.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.105 beta',
     date: '2026-09-06',
     note:

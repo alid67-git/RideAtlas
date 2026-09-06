@@ -9,7 +9,9 @@ import 'track_display_simplify.dart';
 import 'track_io.dart';
 
 /// How many track XML→display jobs to run in parallel for "show all".
-const kTrackDisplayLoadConcurrency = 4;
+/// Keep low on purpose: each job holds a full GPX string + parsed points in
+/// an isolate; 4× large rides peaked RAM and ANR'd Android (~20 tracks).
+const kTrackDisplayLoadConcurrency = 2;
 
 /// Args for [parseXmlForMapDisplayCoords] (must be isolate-sendable).
 class MapDisplayParseRequest {
@@ -197,6 +199,9 @@ Future<List<LoadedDisplayTrack>> loadTracksForMapDisplay({
         // Skip unreadable routes; keep whatever else loaded.
       }
       bumpProgress();
+      // Let the UI thread paint progress between isolate jobs — without
+      // this, back-to-back compute() calls starved frames on Android.
+      await Future<void>.delayed(Duration.zero);
     }
   }
 
