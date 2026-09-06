@@ -57,6 +57,7 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   bool _bootstrapped = false;
   bool _loading = true;
   int _loadedCount = 0;
+  DateTime? _lastProgressUiAt;
   late List<String> _activeRouteIds;
   int _loadGeneration = 0;
   String? _labeledRouteId;
@@ -148,6 +149,16 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
         isCancelled: () => !mounted || gen != _loadGeneration,
         onProgress: (done, total) {
           if (!mounted || gen != _loadGeneration) return;
+          // Throttle UI: rebuilding FlutterMap on every track completion
+          // froze Android while ~20 GPX files were still parsing.
+          final now = DateTime.now();
+          final last = _lastProgressUiAt;
+          if (done < total &&
+              last != null &&
+              now.difference(last) < const Duration(milliseconds: 250)) {
+            return;
+          }
+          _lastProgressUiAt = now;
           setState(() => _loadedCount = done);
         },
       );
@@ -576,7 +587,9 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
                 if (line.points.length >= 2)
                   Polyline(
                     points: line.points,
-                    strokeWidth: 4,
+                    // Slightly thinner on multi-route maps: 20× strokeWidth 4
+                    // overdraw was a big part of the Android show-all stall.
+                    strokeWidth: 3,
                     color: line.color,
                   ),
             ],
@@ -585,6 +598,10 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
           builder: (context) {
             // Lightweight pins only — PhotoThumb decoded full images for
             // every geotagged photo on every route and OOM'd show-all.
+            // Skip entirely with many routes: even metadata scans stall Android.
+            if (_lines.length > kMapPhotoPinRouteCap) {
+              return const SizedBox.shrink();
+            }
             final photos = context.read<PhotoRepository>();
             var remaining = kMapPhotoPinCap;
             final markers = <Marker>[];

@@ -7,35 +7,70 @@ import 'package:latlong2/latlong.dart';
 const kMapDisplayMaxPoints = 8000;
 
 /// Soft warning before "show all" opens this many routes on one map.
-const kShowAllRoutesSoftCap = 12;
+const kShowAllRoutesSoftCap = 10;
 
 /// Hard refuse above this — even simplified geometry would thrash memory.
-const kShowAllRoutesHardCap = 40;
+/// (~20 long rides already stress low-RAM Androids; keep headroom small.)
+const kShowAllRoutesHardCap = 24;
+
+/// Cap total display vertices across every polyline on one map. Without this,
+/// 20 × 800-point overlays still freeze Android pan/pinch after load.
+const kMapDisplayTotalPointsBudget = 6000;
 
 /// Max GPS photo pins drawn on a multi-route / overlay map (icons only).
-const kMapPhotoPinCap = 40;
+const kMapPhotoPinCap = 24;
+
+/// Skip photo pins entirely once this many routes share the map — scanning
+/// PhotoRepository for every route during build was part of the show-all stall.
+const kMapPhotoPinRouteCap = 8;
 
 const _distance = Distance();
 
-/// Tighter display budget when many routes share one map.
+/// Per-route display budget when [routeCount] tracks share one map.
+///
+/// Uses a **global** vertex budget so ~20 Android tracks stay interactive
+/// (older code only capped per-route, so 20×800 still locked the UI).
 ({int maxPoints, double minSpacingMeters}) mapDisplayBudget(int routeCount) {
   if (routeCount <= 1) {
     return (maxPoints: kMapDisplayMaxPoints, minSpacingMeters: 15);
   }
+
+  final perRoute = math.max(
+    80,
+    kMapDisplayTotalPointsBudget ~/ routeCount,
+  );
+
   if (routeCount <= 5) {
-    return (maxPoints: 3000, minSpacingMeters: 20);
+    return (
+      maxPoints: math.min(3000, perRoute),
+      minSpacingMeters: 20,
+    );
   }
-  if (routeCount <= 12) {
-    return (maxPoints: 1500, minSpacingMeters: 30);
+  if (routeCount <= 10) {
+    return (
+      maxPoints: math.min(1200, perRoute),
+      minSpacingMeters: 35,
+    );
   }
-  if (routeCount <= 25) {
-    return (maxPoints: 800, minSpacingMeters: 40);
+  if (routeCount <= 16) {
+    return (
+      maxPoints: math.min(500, perRoute),
+      minSpacingMeters: 50,
+    );
   }
-  return (maxPoints: 400, minSpacingMeters: 50);
+  // ~20 tracks: ~250–300 pts each, aggressive spacing.
+  return (
+    maxPoints: math.min(300, perRoute),
+    minSpacingMeters: 70,
+  );
 }
 
 /// Drops redundant GPS vertices for **display only** (analysis/export keep
 /// the full list). Always keeps the first and last point.
+///
+/// Long rides are stride-sampled **before** the haversine spacing loop so
+/// isolate work stays O(display) instead of O(raw GPS) — critical when
+/// several large GPX files parse in parallel on Android.
 List<LatLng> latLngsForMapDisplay(
   List<LatLng> points, {
   int maxPoints = kMapDisplayMaxPoints,
@@ -46,14 +81,27 @@ List<LatLng> latLngsForMapDisplay(
     return List<LatLng>.from(points);
   }
 
-  final spaced = <LatLng>[points.first];
-  for (var i = 1; i < points.length - 1; i++) {
-    final p = points[i];
+  // Coarse stride first: 100k-point GPX × Distance() in 2–4 isolates ANRs.
+  var working = points;
+  final coarseTarget = math.max(maxPoints * 4, 400);
+  if (working.length > coarseTarget) {
+    final stride = math.max(1, working.length ~/ coarseTarget);
+    final sampled = <LatLng>[working.first];
+    for (var i = stride; i < working.length - 1; i += stride) {
+      sampled.add(working[i]);
+    }
+    if (sampled.last != working.last) sampled.add(working.last);
+    working = sampled;
+  }
+
+  final spaced = <LatLng>[working.first];
+  for (var i = 1; i < working.length - 1; i++) {
+    final p = working[i];
     if (_distance(spaced.last, p) >= minSpacingMeters) {
       spaced.add(p);
     }
   }
-  if (spaced.last != points.last) spaced.add(points.last);
+  if (spaced.last != working.last) spaced.add(working.last);
 
   if (spaced.length <= maxPoints) return spaced;
 
