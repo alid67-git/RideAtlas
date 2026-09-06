@@ -1557,9 +1557,21 @@ class _RecordScreenState extends State<RecordScreen>
     );
   }
 
-
+  /// This is the entire "beyaz ekran" (white/blank screen) bug: every other
+  /// child in [_buildMapPage]'s Stack is a [Positioned]. Returning a bare,
+  /// non-Positioned widget here (the old code returned a plain
+  /// `SizedBox.shrink()`) for the common case - not resumed, every fresh
+  /// recording/locate navigation - made the *entire* Stack fail to paint,
+  /// not just this one child: nothing else in it painted either, and the
+  /// route's own Scaffold background color was all that showed through.
+  /// Wrapping the empty case in [Positioned.fill] too, matching the other
+  /// branch, is the fix. (The many "fix white screen" attempts on top of
+  /// this before - tile-layer kicks, retry/epoch remounts - never touched
+  /// the actual cause and never worked.)
   Widget _buildResumedFlash(AppLocalizations l10n) {
-    if (!_showResumedFlash) return const SizedBox.shrink();
+    if (!_showResumedFlash) {
+      return Positioned.fill(child: const SizedBox.shrink());
+    }
     return Positioned.fill(
       child: IgnorePointer(
         child: Center(
