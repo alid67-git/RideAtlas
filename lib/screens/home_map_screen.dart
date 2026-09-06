@@ -719,20 +719,69 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final l10n = AppLocalizations.of(context)!;
     final result = await pickTrackFiles(allowMultiple: true);
     if (result == null || result.files.isEmpty || !mounted) return;
+
     final repo = context.read<RouteRepository>();
     final importedIds = <String>[];
+    var skipped = 0;
+    String? lastError;
+
     for (final file in result.files) {
+      if (!isSupportedTrackFileName(file.name)) {
+        skipped++;
+        lastError = l10n.unsupportedTrackFileType;
+        continue;
+      }
       final bytes = file.bytes;
-      if (bytes == null) continue;
+      if (bytes == null) {
+        skipped++;
+        lastError = l10n.fileNotReadable;
+        continue;
+      }
       try {
         final route = await repo.importFromBytes(
           bytes: bytes,
           suggestedFileName: file.name,
         );
         importedIds.add(route.id);
-      } catch (_) {}
+      } on DuplicateRouteException catch (e) {
+        // Already saved — still open it so the rider sees the track.
+        if (!importedIds.contains(e.existing.id)) {
+          importedIds.add(e.existing.id);
+        }
+        lastError = l10n.duplicateRouteMessage(e.existing.name);
+      } on FormatException {
+        skipped++;
+        lastError = l10n.trackHasNoPoints;
+      } catch (e) {
+        skipped++;
+        lastError = l10n.importFailedGeneric('$e');
+      }
     }
-    if (!mounted || importedIds.isEmpty) return;
+
+    if (!mounted) return;
+
+    if (importedIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(lastError ?? l10n.fileNotReadable)),
+      );
+      return;
+    }
+
+    final parts = <String>[l10n.importedRoutesCount(importedIds.length)];
+    if (skipped > 0) {
+      parts.add(l10n.importSkippedCount(skipped));
+    } else if (lastError != null &&
+        result.files.length == 1 &&
+        importedIds.length == 1) {
+      // Single file that was already saved: say so instead of "1 imported".
+      parts
+        ..clear()
+        ..add(lastError);
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(parts.join(' '))),
+    );
+
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MultiRouteMapScreen(routeIds: importedIds),

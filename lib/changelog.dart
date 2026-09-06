@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.105 beta',
+    date: '2026-09-06',
+    note:
+        'Ana ekran iz menüsünden GPX/KML/KMZ içe aktarma hataları (okunamayan '
+        'dosya, desteklenmeyen tür, yinelenen rota, parse hatası) sessizce '
+        'yutuluyordu — snackbar + mevcut rotayı açma eklendi. iPhone kayıt '
+        'ekranı boş beyaz kalma: harita karo kick (ana haritadaki gibi).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.104 beta',
     date: '2026-09-06',
     note:
