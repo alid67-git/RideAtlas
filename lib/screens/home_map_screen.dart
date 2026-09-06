@@ -731,7 +731,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         lastError = l10n.unsupportedTrackFileType;
         continue;
       }
-      final bytes = file.bytes;
+      final bytes = await readPickedTrackBytes(file);
       if (bytes == null) {
         skipped++;
         lastError = l10n.fileNotReadable;
