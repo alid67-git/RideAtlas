@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' show max, min, pi;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hive/hive.dart';
@@ -11,13 +10,12 @@ import 'package:provider/provider.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
-import '../models/track_point.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart' show colorForDay;
 import '../services/map_camera_fit.dart';
+import '../services/track_display_loader.dart';
 import '../services/track_display_simplify.dart';
-import '../services/track_io.dart';
 import '../widgets/route_photo_strip.dart' show PhotoViewerDialog;
 import 'map_screen.dart' show MapStylePickerDialog;
 
@@ -141,51 +139,34 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     _fitToRoutes(routes);
 
     try {
-      final many = routes.length > 3;
-      final pending = <_RouteLine>[];
-      for (var i = 0; i < routes.length; i++) {
-        if (!mounted || gen != _loadGeneration) return;
-        final route = routes[i];
-        final xml = await repo.readTrackContent(route);
-        if (!mounted || gen != _loadGeneration) return;
-        final parsed = await compute(parseAndFilterTrackXml, xml);
-        if (!mounted || gen != _loadGeneration) return;
-        final budget = mapDisplayBudget(routes.length);
-        final points = latLngsForMapDisplay(
-          [for (final p in parsed.points) p.latLng],
-          maxPoints: budget.maxPoints,
-          minSpacingMeters: budget.minSpacingMeters,
-        );
-        if (points.length < 2) {
+      final budget = mapDisplayBudget(routes.length);
+      final loaded = await loadTracksForMapDisplay(
+        repo: repo,
+        routes: routes,
+        maxPoints: budget.maxPoints,
+        minSpacingMeters: budget.minSpacingMeters,
+        isCancelled: () => !mounted || gen != _loadGeneration,
+        onProgress: (done, total) {
           if (!mounted || gen != _loadGeneration) return;
-          setState(() => _loadedCount = i + 1);
-          continue;
-        }
-        final line = _RouteLine(
-          route: route,
-          points: points,
-          color: colorForDay(i),
-        );
-        if (many) {
-          // One-shot paint: per-route setState rebuilt every polyline and
-          // ballooned intermediate lists on show-all.
-          pending.add(line);
-          if (!mounted || gen != _loadGeneration) return;
-          setState(() => _loadedCount = i + 1);
-        } else {
-          await _revealRoute(route, parsed.points, colorForDay(i), gen);
-          if (!mounted || gen != _loadGeneration) return;
-          setState(() => _loadedCount = i + 1);
-        }
-      }
+          setState(() => _loadedCount = done);
+        },
+      );
       if (!mounted || gen != _loadGeneration) return;
+
+      // Paint once after everything is in memory (cache or fresh parse).
       setState(() {
-        if (pending.isNotEmpty) {
-          _lines
-            ..clear()
-            ..addAll(pending);
-        }
+        _lines
+          ..clear()
+          ..addAll([
+            for (final track in loaded)
+              _RouteLine(
+                route: track.route,
+                points: track.points,
+                color: colorForDay(track.index),
+              ),
+          ]);
         _loading = false;
+        _loadedCount = routes.length;
       });
     } catch (e) {
       if (!mounted || gen != _loadGeneration) return;
@@ -333,27 +314,6 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
       if (ok != true) return null;
     }
     return ids;
-  }
-
-  Future<void> _revealRoute(
-    GpxRoute route,
-    List<TrackPoint> trackPoints,
-    Color color,
-    int gen,
-  ) async {
-    final budget = mapDisplayBudget(_activeRouteIds.length);
-    final points = latLngsForMapDisplay(
-      [for (final p in trackPoints) p.latLng],
-      maxPoints: budget.maxPoints,
-      minSpacingMeters: budget.minSpacingMeters,
-    );
-    if (points.length < 2) return;
-    if (!mounted || gen != _loadGeneration) return;
-
-    // Many routes: skip progressive reveal — each setState rebuilt every
-    // polyline and froze the UI / ballooned memory with intermediate lists.
-    final line = _RouteLine(route: route, points: points, color: color);
-    setState(() => _lines.add(line));
   }
 
   LatLngBounds _boundsFor(GpxRoute route) =>

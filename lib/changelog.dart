@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.103 beta',
+    date: '2026-09-06',
+    note:
+        'Tüm izleri göster artık önce belleğe alıp paralel parse ediyor, '
+        'hazır olunca tek seferde çiziyor; sadeleştirilmiş geometri önbellekte '
+        'kalıyor böylece ikinci açılış neredeyse anında. Kayıt ekranı overlay '
+        'izleri de aynı hızlı yolu kullanıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.102 beta',
     date: '2026-09-05',
     note:

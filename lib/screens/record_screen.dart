@@ -32,8 +32,8 @@ import '../services/gpx_parser.dart';
 import '../services/app_update_controller.dart';
 import '../services/map_camera_fit.dart';
 import '../services/track_heading.dart';
+import '../services/track_display_loader.dart';
 import '../services/track_display_simplify.dart';
-import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';
 import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
@@ -151,7 +151,6 @@ class _RecordScreenState extends State<RecordScreen>
   /// Optional saved GPX routes drawn under the live track so the rider can
   /// follow / compare against a previous ride. Empty until they pick some.
   Set<String> _referenceRouteIds = {};
-  Timer? _overlayRevealTimer;
 
   GpsRecorder get _recorder => context.read<GpsRecorder>();
 
@@ -644,7 +643,6 @@ class _RecordScreenState extends State<RecordScreen>
   /// one selected track fills the window; several zoom out to cover all
   /// (plus any live recording points already on the map).
   Future<void> _applyReferenceRoutes(Set<String> ids) async {
-    _overlayRevealTimer?.cancel();
     if (ids.isEmpty) {
       setState(() {
         _referenceRouteIds = {};
@@ -672,51 +670,38 @@ class _RecordScreenState extends State<RecordScreen>
       for (final id in ids)
         if (byId[id] != null) byId[id]!,
     ];
-    // Fit as soon as metadata is known - don't wait for XML parse/reveal.
+    // Fit as soon as metadata is known - don't wait for XML parse.
     _fitLoadedTracks(selectedRoutes);
 
-    var colorIndex = 1; // skip red - reserved for the live track
-    final built = <Polyline>[];
+    final budget = mapDisplayBudget(selectedRoutes.length);
+    final loaded = await loadTracksForMapDisplay(
+      repo: repo,
+      routes: selectedRoutes,
+      maxPoints: budget.maxPoints,
+      minSpacingMeters: budget.minSpacingMeters,
+      isCancelled: () => !mounted,
+    );
+    if (!mounted) return;
 
-    for (final id in ids) {
-      if (!mounted) return;
-      final route = byId[id];
-      if (route == null) continue;
-      try {
-        final xml = await repo.readTrackContent(route);
-        if (!mounted) return;
-        final parsed = await compute(parseAndFilterTrackXml, xml);
-        if (!mounted) return;
-        final budget = mapDisplayBudget(ids.length);
-        final points = latLngsForMapDisplay(
-          [for (final p in parsed.points) p.latLng],
-          maxPoints: budget.maxPoints,
-          minSpacingMeters: budget.minSpacingMeters,
-        );
-        if (points.length < 2) continue;
-        final color = colorForDay(colorIndex);
-        colorIndex++;
-        _overlayTracks.add(
-          _OverlayTrack(
-            id: route.id,
-            name: route.name,
-            points: points,
-            color: color,
-          ),
-        );
-        // One-shot draw when many overlays — progressive reveal + full
-        // vertex lists was freezing show-all.
-        if (ids.length > 3 || points.length >= 400) {
-          built.add(Polyline(points: points, strokeWidth: 4, color: color));
-          _overlayPolylines.value = List<Polyline>.from(built);
-        } else {
-          await _revealOverlayPolyline(built, points, color);
-        }
-      } catch (_) {
-        // Skip unreadable routes; keep whatever else loaded.
-      }
+    final built = <Polyline>[];
+    _overlayTracks.clear();
+    for (final track in loaded) {
+      // skip red (0) — reserved for the live track
+      final color = colorForDay(track.index + 1);
+      _overlayTracks.add(
+        _OverlayTrack(
+          id: track.route.id,
+          name: track.route.name,
+          points: track.points,
+          color: color,
+        ),
+      );
+      built.add(
+        Polyline(points: track.points, strokeWidth: 4, color: color),
+      );
     }
-    if (mounted) setState(() {});
+    _overlayPolylines.value = built;
+    setState(() {});
   }
 
   /// MediaAtlas-style: frame [routes] (1 → that track, N → union). When a
@@ -737,49 +722,6 @@ class _RecordScreenState extends State<RecordScreen>
       bounds: bounds,
       padding: const EdgeInsets.fromLTRB(48, 240, 48, 170),
     );
-  }
-
-  Future<void> _revealOverlayPolyline(
-    List<Polyline> built,
-    List<LatLng> points,
-    Color color,
-  ) async {
-    if (points.length < 150) {
-      built.add(Polyline(points: points, strokeWidth: 4, color: color));
-      if (!mounted) return;
-      _overlayPolylines.value = List<Polyline>.from(built);
-      return;
-    }
-
-    final total = points.length;
-    final batch = max(30, min(800, (total / 60).ceil()));
-    final done = Completer<void>();
-    var shown = 0;
-    final slot = built.length;
-    built.add(Polyline(points: [points.first], strokeWidth: 4, color: color));
-
-    _overlayRevealTimer?.cancel();
-    _overlayRevealTimer = Timer.periodic(const Duration(milliseconds: 16), (
-      timer,
-    ) {
-      if (!mounted) {
-        timer.cancel();
-        if (!done.isCompleted) done.complete();
-        return;
-      }
-      shown = min(total, shown + batch);
-      built[slot] = Polyline(
-        points: points.sublist(0, shown),
-        strokeWidth: 4,
-        color: color,
-      );
-      _overlayPolylines.value = List<Polyline>.from(built);
-      if (shown >= total) {
-        timer.cancel();
-        if (!done.isCompleted) done.complete();
-      }
-    });
-    await done.future;
   }
 
   /// Switches from the info page to the map and re-enables course-up follow.
@@ -1120,7 +1062,6 @@ class _RecordScreenState extends State<RecordScreen>
     recordScreenVisible.value = false;
     _recorderListened?.removeListener(_onRecorderChanged);
     _tickTimer?.cancel();
-    _overlayRevealTimer?.cancel();
     _liveLocationSub?.cancel();
     _mapEventSub.cancel();
     _cancelCameraAnimation();
