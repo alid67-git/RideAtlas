@@ -34,6 +34,7 @@ import '../services/map_camera_fit.dart';
 import '../services/track_heading.dart';
 import '../services/track_display_loader.dart';
 import '../services/track_display_simplify.dart';
+import '../services/visible_track_prefs.dart';
 import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';
 import '../widgets/heading_cone.dart';
@@ -73,6 +74,7 @@ class RecordScreen extends StatefulWidget {
     this.initialShowMap = false,
     this.showResumedBanner = false,
     this.useSavedPagePreference = true,
+    this.initialCenter,
   });
 
   /// When returning from home/list while a ride is already running: `true`
@@ -87,6 +89,11 @@ class RecordScreen extends StatefulWidget {
   /// When true (default), the last Data/Map page is restored from Hive.
   /// [initialShowMap] still wins when this is false (e.g. home locate).
   final bool useSavedPagePreference;
+
+  /// Seed camera from the home map's last GPS fix so the record screen does
+  /// not open on the ocean fallback (blank white look on iPhone) while the
+  /// live stream catches up.
+  final LatLng? initialCenter;
 
   @override
   State<RecordScreen> createState() => _RecordScreenState();
@@ -255,6 +262,10 @@ class _RecordScreenState extends State<RecordScreen>
     // with the live track instead of the info page. Preference load may
     // still override this when [useSavedPagePreference] is true.
     _showMap = widget.initialShowMap;
+    _currentLocation = widget.initialCenter;
+    if (_currentLocation != null) {
+      _markerLocation.value = _currentLocation;
+    }
     _showResumedFlash = widget.showResumedBanner;
     if (_showResumedFlash) {
       _resumedFlashTimer = Timer(const Duration(seconds: 2), () {
@@ -275,12 +286,23 @@ class _RecordScreenState extends State<RecordScreen>
     )..repeat(reverse: true);
     _startLiveLocation();
     _loadMapStyle();
-    // Same first-frame tile kick as the home map: flutter_map can skip the
-    // initial request when center/zoom match MapOptions, which left the
-    // record screen as a blank white plane on iPhone (GPS kick arrives late
-    // or never if permission is slow/denied).
+    // Tile kicks: first frame often races the route push on iPhone (map
+    // size still 0 → kick no-ops). Retry via kickMapTileLayer backoff and
+    // schedule delayed kicks after the transition settles. Overlay restore
+    // waits so a fitCamera from sticky tracks cannot re-blank tiles before
+    // the first fetch (flutter_map move-before-ready bug).
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      kickMapTileLayer(_mapController);
+    });
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
       if (mounted) kickMapTileLayer(_mapController);
+    });
+    Future<void>.delayed(const Duration(milliseconds: 900), () {
+      if (mounted) kickMapTileLayer(_mapController);
+    });
+    Future<void>.delayed(const Duration(milliseconds: 1100), () {
+      if (mounted) _restoreVisibleOverlays();
     });
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       if (_isUserMapGesture(event.source) && _followMe) {
@@ -651,6 +673,19 @@ class _RecordScreenState extends State<RecordScreen>
     await _applyReferenceRoutes(capped.toSet());
   }
 
+  /// Restores the rider's last show/hide overlay set (see
+  /// [saveVisibleTrackIds] / [kVisibleTrackIdsKey]). Deleted routes are
+  /// dropped; an explicit empty save stays empty.
+  Future<void> _restoreVisibleOverlays() async {
+    final saved = await loadVisibleTrackIds();
+    if (!mounted || saved == null || saved.isEmpty) return;
+    final repo = context.read<RouteRepository>();
+    final existing = {for (final r in repo.routes) r.id};
+    final ids = {for (final id in saved) if (existing.contains(id)) id};
+    if (ids.isEmpty) return;
+    await _applyReferenceRoutes(ids, persist: false);
+  }
+
   /// Clears overlays immediately, then parses each selected GPX off the UI
   /// isolate and grows the polyline in batches so selecting many long
   /// tracks never freezes the recording screen.
@@ -658,7 +693,10 @@ class _RecordScreenState extends State<RecordScreen>
   /// After the first readable route is known, frames the map MediaAtlas-style:
   /// one selected track fills the window; several zoom out to cover all
   /// (plus any live recording points already on the map).
-  Future<void> _applyReferenceRoutes(Set<String> ids) async {
+  ///
+  /// Visible IDs are persisted (unless [persist] is false) so show/hide
+  /// survives app restart — see [kVisibleTrackIdsKey].
+  Future<void> _applyReferenceRoutes(Set<String> ids, {bool persist = true}) async {
     if (ids.isEmpty) {
       setState(() {
         _referenceRouteIds = {};
@@ -671,6 +709,7 @@ class _RecordScreenState extends State<RecordScreen>
         }
       });
       _overlayPolylines.value = const [];
+      if (persist) await saveVisibleTrackIds(const []);
       return;
     }
 
@@ -718,6 +757,7 @@ class _RecordScreenState extends State<RecordScreen>
     }
     _overlayPolylines.value = built;
     setState(() {});
+    if (persist) await saveVisibleTrackIds(ids);
   }
 
   /// MediaAtlas-style: frame [routes] (1 → that track, N → union). When a
@@ -738,6 +778,8 @@ class _RecordScreenState extends State<RecordScreen>
       bounds: bounds,
       padding: const EdgeInsets.fromLTRB(48, 240, 48, 170),
     );
+    // Programmatic fit can skip the next tile fetch on iPhone — nudge again.
+    kickMapTileLayer(_mapController);
   }
 
   /// Switches from the info page to the map and re-enables course-up follow.
@@ -1556,6 +1598,7 @@ class _RecordScreenState extends State<RecordScreen>
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFE8EEF2),
       body: Stack(
         children: [
           Positioned.fill(child: _buildMap()),
@@ -2329,8 +2372,15 @@ class _RecordScreenState extends State<RecordScreen>
       mapController: _mapController,
       options: MapOptions(
         initialCenter: _currentLocation ?? kUnknownLocationMapCenter,
-        initialZoom: 16,
+        // Wide zoom until the first GPS fix — zoom 16 on the ocean fallback
+        // looked like a blank white plane on iPhone before tiles/kick caught up.
+        initialZoom: _currentLocation == null ? 5 : 16,
+        backgroundColor: const Color(0xFFE8EEF2),
         onTap: _onMapTap,
+        onMapReady: () {
+          if (!mounted) return;
+          kickMapTileLayer(_mapController);
+        },
       ),
       children: [
         TileLayer(
@@ -2340,6 +2390,11 @@ class _RecordScreenState extends State<RecordScreen>
           tileProvider: createRideAtlasTileProvider(),
           maxNativeZoom: style.maxNativeZoom,
           evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
+          // Soft fill while tiles load — pure white read as a frozen blank screen.
+          tileBuilder: (context, widget, tile) => ColoredBox(
+            color: const Color(0xFFE8EEF2),
+            child: widget,
+          ),
         ),
         ListenableBuilder(
           listenable: Listenable.merge([recorder, _overlayPolylines]),
