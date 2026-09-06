@@ -1493,7 +1493,7 @@ class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
       );
       return;
     }
-    final bytes = file.bytes;
+    final bytes = await readPickedTrackBytes(file);
     if (bytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.fileNotReadable)),
@@ -1562,17 +1562,21 @@ class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
       final repo = context.read<RouteRepository>();
       for (final file in files) {
         if (!mounted) return;
-        final bytes = file.bytes;
-        if (!isSupportedTrackFileName(file.name) || bytes == null) {
+        if (!isSupportedTrackFileName(file.name)) {
+          skipped++;
+          continue;
+        }
+        final bytes = await readPickedTrackBytes(file);
+        if (bytes == null) {
           skipped++;
           continue;
         }
         try {
           await repo.importFromBytes(bytes: bytes, suggestedFileName: file.name);
           imported++;
+        } on DuplicateRouteException {
+          imported++;
         } catch (_) {
-          // DuplicateRouteException or a bad file - either way this file
-          // just doesn't add a new route; the rest of the batch continues.
           skipped++;
         }
       }

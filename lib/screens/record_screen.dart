@@ -531,7 +531,7 @@ class _RecordScreenState extends State<RecordScreen>
       ).showSnackBar(SnackBar(content: Text(l10n.unsupportedTrackFileType)));
       return;
     }
-    final bytes = file.bytes;
+    final bytes = await readPickedTrackBytes(file);
     if (bytes == null) {
       ScaffoldMessenger.of(
         context,
