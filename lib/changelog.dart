@@ -20,6 +20,26 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.111 beta',
+    date: '2026-09-06',
+    note:
+        'Kayıt / konum beyaz ekranının gerçek kök nedeni bulundu. '
+        'v1.4.109 ve v1.4.110 harita karolarının yüklenme zamanlamasını '
+        'düzeltmeye çalışmıştı ama bu yanlış teşhisti - ekran hâlâ bomboş '
+        'kalıyordu. Uygulama yerel olarak derlenip gerçek bir tarayıcıda '
+        'adım adım test edilerek asıl neden bulundu: kayıt ekranının '
+        'Stack\'i içindeki "kesintiye uğramış kayıt devam ediyor" '
+        'bildirimini çizen _buildResumedFlash metodu, bildirim '
+        'gösterilmeyecekse (kayıtların büyük çoğunluğunda böyle) '
+        'konumlandırılmamış (Positioned olmayan) boş bir widget '
+        'döndürüyordu. Stack\'in diğer tüm elemanları Positioned iken '
+        'aralarına Positioned olmayan bir eleman girince Flutter o '
+        'Stack\'in TAMAMINI (harita, tüm tuşlar, her şey) çizmeyi '
+        'bırakıyordu - sadece o küçük bildirim widget\'ı değil. Düzeltme '
+        'tek satır: boş durumda da Positioned.fill ile sarmalanmış bir '
+        'widget döndürülüyor artık.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.110 beta',
     date: '2026-09-06',
     note:
