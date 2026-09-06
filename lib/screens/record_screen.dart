@@ -73,6 +73,7 @@ class RecordScreen extends StatefulWidget {
     this.initialShowMap = false,
     this.showResumedBanner = false,
     this.useSavedPagePreference = true,
+    this.initialCenter,
   });
 
   /// When returning from home/list while a ride is already running: `true`
@@ -87,6 +88,10 @@ class RecordScreen extends StatefulWidget {
   /// When true (default), the last Data/Map page is restored from Hive.
   /// [initialShowMap] still wins when this is false (e.g. home locate).
   final bool useSavedPagePreference;
+
+  /// Seed camera from the home map's last GPS fix so the record screen does
+  /// not open on the ocean fallback (blank white look) while live GPS catches up.
+  final LatLng? initialCenter;
 
   @override
   State<RecordScreen> createState() => _RecordScreenState();
@@ -255,6 +260,10 @@ class _RecordScreenState extends State<RecordScreen>
     // with the live track instead of the info page. Preference load may
     // still override this when [useSavedPagePreference] is true.
     _showMap = widget.initialShowMap;
+    _currentLocation = widget.initialCenter;
+    if (_currentLocation != null) {
+      _markerLocation.value = _currentLocation;
+    }
     _showResumedFlash = widget.showResumedBanner;
     if (_showResumedFlash) {
       _resumedFlashTimer = Timer(const Duration(seconds: 2), () {
@@ -275,12 +284,22 @@ class _RecordScreenState extends State<RecordScreen>
     )..repeat(reverse: true);
     _startLiveLocation();
     _loadMapStyle();
-    // Same first-frame tile kick as the home map: flutter_map can skip the
-    // initial request when center/zoom match MapOptions, which left the
-    // record screen as a blank white plane on iPhone (GPS kick arrives late
-    // or never if permission is slow/denied).
+    // Tile kicks: first frame often races the route push from home record /
+    // locate (map size still 0 → kick no-ops). Retry via kickMapTileLayer
+    // backoff and schedule delayed kicks after the transition settles.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) kickMapTileLayer(_mapController);
+    });
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      if (mounted) kickMapTileLayer(_mapController);
+    });
+    Future<void>.delayed(const Duration(milliseconds: 900), () {
+      if (mounted) kickMapTileLayer(_mapController);
+    });
+    Future<void>.delayed(const Duration(milliseconds: 1600), () {
+      if (!mounted) return;
+      setState(() => _tileLayerEpoch++);
+      kickMapTileLayer(_mapController);
     });
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       if (_isUserMapGesture(event.source) && _followMe) {
@@ -421,7 +440,13 @@ class _RecordScreenState extends State<RecordScreen>
     _persistRecordPagePreference(showMap);
     if (showMap) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) kickMapTileLayer(_mapController);
+        if (!mounted) return;
+        kickMapTileLayer(_mapController);
+      });
+      Future<void>.delayed(const Duration(milliseconds: 400), () {
+        if (!mounted) return;
+        setState(() => _tileLayerEpoch++);
+        kickMapTileLayer(_mapController);
       });
     }
   }
@@ -815,6 +840,13 @@ class _RecordScreenState extends State<RecordScreen>
       _mapController.move(location, 15);
       _markerLocation.value = location;
       kickMapTileLayer(_mapController);
+      // Locate after a long overview / style change can still leave a white
+      // plane — remount tiles once the move has been laid out.
+      Future<void>.delayed(const Duration(milliseconds: 300), () {
+        if (!mounted) return;
+        setState(() => _tileLayerEpoch++);
+        kickMapTileLayer(_mapController);
+      });
     }
     _applyRotation();
   }
@@ -1556,6 +1588,7 @@ class _RecordScreenState extends State<RecordScreen>
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFE8EEF2),
       body: Stack(
         children: [
           Positioned.fill(child: _buildMap()),
@@ -2329,17 +2362,29 @@ class _RecordScreenState extends State<RecordScreen>
       mapController: _mapController,
       options: MapOptions(
         initialCenter: _currentLocation ?? kUnknownLocationMapCenter,
-        initialZoom: 16,
+        // Wide zoom until GPS — zoom 16 on the ocean fallback looked like a
+        // blank white plane before tiles/kick caught up.
+        initialZoom: _currentLocation == null ? 5 : 16,
+        backgroundColor: const Color(0xFFE8EEF2),
         onTap: _onMapTap,
+        onMapReady: () {
+          if (!mounted) return;
+          kickMapTileLayer(_mapController);
+        },
       ),
       children: [
         TileLayer(
-          key: ValueKey(style.id),
+          key: ValueKey('${style.id}-$_tileLayerEpoch'),
           urlTemplate: style.urlTemplate,
           subdomains: style.subdomains,
           tileProvider: createRideAtlasTileProvider(),
           maxNativeZoom: style.maxNativeZoom,
           evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
+          // Soft fill while tiles load — pure white read as a frozen blank.
+          tileBuilder: (context, widget, tile) => ColoredBox(
+            color: const Color(0xFFE8EEF2),
+            child: widget,
+          ),
         ),
         ListenableBuilder(
           listenable: Listenable.merge([recorder, _overlayPolylines]),

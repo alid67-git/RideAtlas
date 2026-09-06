@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.109 beta',
+    date: '2026-09-06',
+    note:
+        'Ana ekran kayıt / konum (ve kayıt sırasında konuma git) beyaz '
+        'ekran: RecordScreen’e son GPS merkezi aktarılıyor; onMapReady + '
+        'geniş zoom + soft karo zemini; gecikmeli TileLayer remount + kick. '
+        'Konuma git / Data→Harita geçişinde de aynı güçlendirme.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.108 beta',
     date: '2026-09-06',
     note:
