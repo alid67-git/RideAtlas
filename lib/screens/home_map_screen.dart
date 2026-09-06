@@ -833,7 +833,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     if (!mounted) return;
     if (ids.isEmpty) {
       setState(() {
-        _homeOverlayRouteIds = {};
         _homeOverlayPolylines = const [];
       });
       return;
@@ -843,7 +842,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final routes = [for (final id in ids) if (byId[id] != null) byId[id]!];
     if (routes.isEmpty) {
       setState(() {
-        _homeOverlayRouteIds = {};
         _homeOverlayPolylines = const [];
       });
       return;
@@ -858,7 +856,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     );
     if (!mounted) return;
     setState(() {
-      _homeOverlayRouteIds = {for (final t in loaded) t.route.id};
       _homeOverlayPolylines = [
         for (final t in loaded)
           Polyline(
