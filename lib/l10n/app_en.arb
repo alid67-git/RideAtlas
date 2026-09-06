@@ -241,5 +241,12 @@
   "@ridePhotoPickerMessage": {"placeholders": {"count": {"type": "int"}}},
   "ridePhotoPickerAddButton": "Add selected ({count})",
   "@ridePhotoPickerAddButton": {"placeholders": {"count": {"type": "int"}}},
-  "ridePhotoPickerSkipButton": "Skip"
+  "ridePhotoPickerSkipButton": "Skip",
+  "showAllTracksTooManyTitle": "Too many tracks",
+  "showAllTracksTooManyMessage": "Showing all {count} tracks at once can freeze the app. Only the first {limit} will be opened.",
+  "@showAllTracksTooManyMessage": {"placeholders": {"count": {"type": "int"}, "limit": {"type": "int"}}},
+  "showAllTracksLimitButton": "Open limited set",
+  "showAllTracksHeavyTitle": "Many tracks",
+  "showAllTracksHeavyMessage": "You are about to show {count} tracks on one map. The app may slow down on long rides.",
+  "@showAllTracksHeavyMessage": {"placeholders": {"count": {"type": "int"}}}
 }

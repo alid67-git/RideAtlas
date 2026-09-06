@@ -21,6 +21,7 @@ import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 import 'record_screen.dart';
+import '../services/track_display_simplify.dart';
 import 'multi_route_map_screen.dart';
 import '../services/track_io.dart';
 import '../repositories/route_repository.dart';
@@ -569,21 +570,72 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       ],
     );
   }
-}
+
+  Future<List<String>?> _confirmShowAllRouteIds(List<String> allIds) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (allIds.length > kShowAllRoutesHardCap) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.showAllTracksTooManyTitle),
+          content: Text(
+            l10n.showAllTracksTooManyMessage(
+              allIds.length,
+              kShowAllRoutesHardCap,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l10n.showAllTracksLimitButton),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return null;
+      return allIds.take(kShowAllRoutesHardCap).toList();
+    }
+    if (allIds.length > kShowAllRoutesSoftCap) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.showAllTracksHeavyTitle),
+          content: Text(l10n.showAllTracksHeavyMessage(allIds.length)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l10n.recordOverlayShow),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return null;
+    }
+    return allIds;
+  }
 
   Future<void> _onHomeTrackMenuAction(_HomeTrackMenuAction action) async {
     final l10n = AppLocalizations.of(context)!;
     final repo = context.read<RouteRepository>();
     switch (action) {
       case _HomeTrackMenuAction.showAll:
-        final ids = [for (final r in repo.routes) r.id];
-        if (ids.isEmpty) {
+        final allIds = [for (final r in repo.routes) r.id];
+        if (allIds.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(l10n.recordOverlayNoRoutes)),
           );
           return;
         }
-        if (!mounted) return;
+        final ids = await _confirmShowAllRouteIds(allIds);
+        if (ids == null || ids.isEmpty || !mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => MultiRouteMapScreen(routeIds: ids),
@@ -660,7 +712,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       },
     );
     if (confirmed != true) return null;
-    return selected.toList();
+    return _confirmShowAllRouteIds(selected.toList());
   }
 
   Future<void> _importTracksFromHome() async {
@@ -687,7 +739,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       ),
     );
   }
-
+}
 
 enum _HomeTrackMenuAction { showAll, pick, importFile, routeList }
 
