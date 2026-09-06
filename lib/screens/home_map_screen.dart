@@ -106,8 +106,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       if (!restored || !mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const RecordScreen(
+          builder: (_) => RecordScreen(
             showResumedBanner: true,
+            initialCenter: _currentLocation,
             // Restore last Data/Map page rather than always forcing map.
           ),
         ),
@@ -269,7 +270,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     if (!recorder.isIdle) {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const RecordScreen(initialShowMap: true, useSavedPagePreference: false),
+          builder: (_) => RecordScreen(
+            initialShowMap: true,
+            useSavedPagePreference: false,
+            initialCenter: _currentLocation,
+          ),
         ),
       );
       return;
@@ -287,6 +292,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       });
       _mapController.move(location, 15);
       kickMapTileLayer(_mapController);
+      Future<void>.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) kickMapTileLayer(_mapController);
+      });
     }
   }
 
@@ -442,7 +450,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                       foregroundColor: Colors.white,
                       tooltip: l10n.recordRideTooltip,
                       onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const RecordScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => RecordScreen(
+                            initialCenter: _currentLocation,
+                          ),
+                        ),
                       ),
                       child: const Icon(Icons.fiber_manual_record, size: 28),
                     ),
