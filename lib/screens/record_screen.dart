@@ -104,6 +104,11 @@ class _RecordScreenState extends State<RecordScreen>
   static const _coneMarkerScale = 2.3;
 
   final _mapController = MapController();
+
+  /// Bumped to remount [TileLayer] after delayed kicks if the first attach
+  /// still left a blank white map (common after home record / locate push).
+  int _tileLayerEpoch = 0;
+
   late final AnimationController _rotationController;
 
   /// Drives the info page's slowly-breathing background gradient/glow - a
