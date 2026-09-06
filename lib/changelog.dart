@@ -20,6 +20,31 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.112 beta',
+    date: '2026-09-06',
+    note:
+        'GPX içe aktarmadaki "sessizce hiçbir şey olmuyor" hatasının kök '
+        'nedeni bulundu: web dosya seçicisinde tarayıcı, gerçekten bir '
+        'dosya seçilmiş olsa bile "cancel" DOM olayını "change" '
+        'olayından önce tetikleyebiliyordu - önceki düzeltmedeki sabit '
+        '400ms gecikme bile bu farkı her zaman kapatamıyordu, canlı '
+        'testte 4/4 denemede içe aktarma hâlâ başarısız oluyordu. '
+        'Şimdi sabit bir gecikme yerine, gerçek "change" olayı gelene '
+        'ya da okuma başlayana kadar (en fazla ~2 saniye) tekrar tekrar '
+        'kontrol ediliyor; canlı testte art arda 4/4 çalıştı. Ayrıca '
+        'kayıt ekranının gezinme modeli sadeleştirildi: artık yalnızca '
+        'iki sayfa var (Harita, Veri), üstteki geri oku tuşu tamamen '
+        'kaldırıldı (sistem geri tuşu/hareketi zaten aynı işi görüyor - '
+        'boştayken ekrandan çıkar, kayıt sırasında Veri sayfasındayken '
+        'önce Haritaya döner). Yeni bir kayıt başlatıldığında (henüz '
+        'kayıt yokken) her zaman Veri sayfasında açılıyor; devam eden '
+        'bir kayıt yeniden açıldığında ise en son hangi sayfada '
+        'kalındıysa (Harita ya da Veri) orada açılıyor. Kayıt '
+        'ekranında gösterilen referans izler de artık hatırlanıyor: '
+        'seçilen izler bir sonraki kayıt ekranı açılışında otomatik '
+        'olarak yeniden gösteriliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.111 beta',
     date: '2026-09-06',
     note:

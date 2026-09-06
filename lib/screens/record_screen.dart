@@ -50,6 +50,7 @@ import 'settings_screen.dart';
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
 const _recordShowMapKey = 'record_show_map';
+const _recordOverlayRouteIdsKey = 'record_overlay_route_ids';
 
 /// True on a native Android build, where [GpsRecorder] runs a foreground
 /// service and recording survives the app being minimized. Everywhere else
@@ -276,6 +277,7 @@ class _RecordScreenState extends State<RecordScreen>
       });
     }
     _loadRecordPagePreference();
+    _loadOverlayRoutePreference();
     _rotationController = AnimationController(
       vsync: this,
       // Match the ~2s native GPS cadence so one camera glide is still
@@ -429,6 +431,12 @@ class _RecordScreenState extends State<RecordScreen>
     final box = await Hive.openBox<String>(_metaBoxName);
     final saved = box.get(_recordShowMapKey);
     if (!mounted || saved == null) return;
+    // A fresh "Kayıt" tap (nothing recording yet) always opens on the Data
+    // page regardless of what the last *previous* ride ended up on - the
+    // remembered page is only meaningful for reopening a ride already in
+    // progress (locate-while-recording, the blinking REC pill, a recovered
+    // interrupted session).
+    if (_recorder.isIdle) return;
     final wantMap = saved == '1';
     if (wantMap != _showMap) {
       setState(() => _showMap = wantMap);
@@ -438,6 +446,30 @@ class _RecordScreenState extends State<RecordScreen>
   Future<void> _persistRecordPagePreference(bool showMap) async {
     final box = await Hive.openBox<String>(_metaBoxName);
     await box.put(_recordShowMapKey, showMap ? '1' : '0');
+  }
+
+  /// Restores whichever reference routes were last shown as an overlay -
+  /// selecting them once shouldn't need to be repeated on every new
+  /// recording. Silently drops ids for routes that no longer exist (deleted
+  /// since); applies nothing if the saved set is now empty.
+  Future<void> _loadOverlayRoutePreference() async {
+    final box = await Hive.openBox<String>(_metaBoxName);
+    final saved = box.get(_recordOverlayRouteIdsKey);
+    if (!mounted || saved == null || saved.isEmpty) return;
+    final savedIds = saved.split(',').toSet();
+    final availableIds = context
+        .read<RouteRepository>()
+        .routes
+        .map((r) => r.id)
+        .toSet();
+    final idsToShow = savedIds.intersection(availableIds);
+    if (idsToShow.isEmpty) return;
+    await _applyReferenceRoutes(idsToShow);
+  }
+
+  Future<void> _persistOverlayRouteIds(Set<String> ids) async {
+    final box = await Hive.openBox<String>(_metaBoxName);
+    await box.put(_recordOverlayRouteIdsKey, ids.join(','));
   }
 
   void _setShowMap(bool showMap) {
@@ -595,6 +627,15 @@ class _RecordScreenState extends State<RecordScreen>
     }
     if (!mounted) return;
     await _applyReferenceRoutes({..._referenceRouteIds, route.id});
+    if (!mounted) return;
+    // Without this, importing while looking at the Data page had no
+    // visible effect at all - the file *was* saved and added as an
+    // overlay, just nowhere the rider could see it, which read as the
+    // import silently doing nothing.
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.importedRoutesCount(1))));
+    _setShowMap(true);
   }
 
   /// Lets the rider optionally overlay one or more saved GPX tracks under
@@ -689,6 +730,7 @@ class _RecordScreenState extends State<RecordScreen>
   /// one selected track fills the window; several zoom out to cover all
   /// (plus any live recording points already on the map).
   Future<void> _applyReferenceRoutes(Set<String> ids) async {
+    unawaited(_persistOverlayRouteIds(ids));
     if (ids.isEmpty) {
       setState(() {
         _referenceRouteIds = {};
@@ -1162,17 +1204,18 @@ class _RecordScreenState extends State<RecordScreen>
       ).showSnackBar(SnackBar(content: Text(message)));
       return;
     }
-    // Restore the rider's last Data/Map page (default Data).
-    final box = await Hive.openBox<String>(_metaBoxName);
-    final wantMap = box.get(_recordShowMapKey) == '1';
+    // Starting a fresh recording stays on whichever page (Data by default,
+    // or Map if the rider had already switched to it) they were already
+    // looking at - it doesn't jump to whatever page a *previous* ride
+    // happened to end on. See _loadRecordPagePreference for why that saved
+    // choice only applies to reopening a ride already in progress.
     setState(() {
       _followMe = true;
       _savedPointCount = -1;
-      _showMap = wantMap;
     });
     // Starting remounts the map into the Offstage stack; kick tiles when
-    // the map page is the one being shown.
-    if (wantMap) {
+    // the map page is the one already being shown.
+    if (_showMap) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) kickMapTileLayer(_mapController);
       });
@@ -1475,19 +1518,21 @@ class _RecordScreenState extends State<RecordScreen>
     // GPS point. Watching GpsRecorder here used to remount FlutterMap
     // (tiles + full polyline) every fix / every clock tick.
     final isIdle = context.select<GpsRecorder, bool>((r) => r.isIdle);
-    if (isIdle) {
-      return _buildMapPage(context);
-    }
     // Keep FlutterMap mounted while the info page is visible so
     // MapController stays attached - tearing it down broke course-up
     // (rotate/move threw or no-oped until the next full remap).
     //
-    // No toolbar back while recording: top-left is track management only,
-    // Data ↔ Map is only the bottom-left toggle. System back on the data
-    // page still switches to the map; on the map page it leaves the screen
-    // (recording continues via [RecordingIndicatorOverlay]).
+    // No toolbar back anywhere: top-left is track management only, Data ↔
+    // Map is only the bottom-left toggle, on both the idle and the
+    // recording page alike - a fresh "Kayıt" and an already-running
+    // recording being reopened both land on the same two pages, just with
+    // different defaults (see initState/_loadRecordPagePreference). System
+    // back leaves the screen straight away while idle (nothing to protect);
+    // while recording it switches Data → Map first, and only actually
+    // leaves from the map page (recording continues via
+    // [RecordingIndicatorOverlay]).
     return PopScope(
-      canPop: _showMap,
+      canPop: _showMap || isIdle,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         _switchToMap();
@@ -1627,16 +1672,11 @@ class _RecordScreenState extends State<RecordScreen>
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Idle: back leaves before start. Recording: no back
-                        // (avoids a second "go to map" control) — top-left is
-                        // track management only; Data ↔ Map is bottom-left.
-                        if (recorder.isIdle) ...[
-                          _RoundIconButton(
-                            icon: Icons.arrow_back,
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
+                        // No back arrow, idle or recording alike - top-left
+                        // is track management only; Data ↔ Map is the
+                        // bottom-left toggle, and the system back
+                        // button/gesture leaves the screen (see build's
+                        // PopScope).
                         _buildOverlayMenuButton(l10n),
                         const SizedBox(width: 8),
                         // Not wrapped in Expanded while recording: the speed
@@ -1765,13 +1805,14 @@ class _RecordScreenState extends State<RecordScreen>
                     children: [
                       SizedBox(
                         width: 48,
-                        child: recorder.isIdle
-                            ? null
-                            : _RoundIconButton(
-                                icon: Icons.dashboard_outlined,
-                                tooltip: l10n.recordInfoTabTooltip,
-                                onPressed: () => _setShowMap(false),
-                              ),
+                        // Always available, idle or recording - Map ⟷ Data
+                        // stays a two-way toggle regardless of whether a
+                        // ride is actually running yet.
+                        child: _RoundIconButton(
+                          icon: Icons.dashboard_outlined,
+                          tooltip: l10n.recordInfoTabTooltip,
+                          onPressed: () => _setShowMap(false),
+                        ),
                       ),
                       Expanded(
                         child: Center(child: _buildControls(l10n, recorder)),
