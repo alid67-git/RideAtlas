@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' show max, min, pi;
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show compute, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -32,7 +31,6 @@ import '../widgets/recording_indicator.dart';
 import '../widgets/route_photo_strip.dart';
 import 'analysis_sheet.dart';
 import 'location_picker_screen.dart';
-import 'multi_route_map_screen.dart';
 import 'route_anomaly_editor_screen.dart';
 import 'settings_screen.dart';
 
@@ -548,13 +546,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     });
   }
 
-  void _showList(GpxRoute currentRoute) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => _RouteSwitcherDialog(currentRouteId: currentRoute.id),
-    );
-  }
-
   void _zoomIn() {
     final camera = _mapController.camera;
     _mapController.move(camera.center, camera.zoom + 1);
@@ -572,6 +563,18 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       context: context,
       builder: (_) => AnalysisSheet(route: route, points: points),
     );
+  }
+
+  Future<void> _editRouteAnomalies(BuildContext context, GpxRoute route) async {
+    final l10n = AppLocalizations.of(context)!;
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => RouteAnomalyEditorScreen(route: route)),
+    );
+    if (changed == true && context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.anomalyEditorSaved)));
+    }
   }
 
   Future<void> _share(GpxRoute route) async {
@@ -1171,11 +1174,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                   icon: Icons.arrow_back,
                   onPressed: () => Navigator.of(context).pop(),
                 ),
-                const SizedBox(width: 8),
-                _RoundIconButton(
-                  icon: Icons.list,
-                  onPressed: () => _showList(route),
-                ),
                 const Spacer(),
                 _RoundIconButton(
                   icon: Icons.insights,
@@ -1187,6 +1185,26 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 _RoundIconButton(
                   icon: Icons.ios_share,
                   onPressed: () => _share(route),
+                ),
+                const SizedBox(width: 8),
+                Material(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surface.withValues(alpha: 0.92),
+                  shape: const CircleBorder(),
+                  elevation: 2,
+                  child: PopupMenuButton<VoidCallback>(
+                    icon: const Icon(Icons.more_vert),
+                    onSelected: (action) => action(),
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: () => _editRouteAnomalies(context, route),
+                        child: Text(
+                          AppLocalizations.of(context)!.anomalyEditorMenuItem,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(width: 8),
                 _RoundIconButton(
@@ -1434,393 +1452,6 @@ class _DayFilterDialogState extends State<_DayFilterDialog> {
         ),
       ),
     );
-  }
-}
-
-/// Centered "switch route" window opened from the map screen's list button.
-/// The current map stays underneath; picking another route swaps to it,
-/// while dismissing (X, tap outside, or Esc) returns to the same map.
-class _RouteSwitcherDialog extends StatefulWidget {
-  const _RouteSwitcherDialog({required this.currentRouteId});
-
-  final String currentRouteId;
-
-  @override
-  State<_RouteSwitcherDialog> createState() => _RouteSwitcherDialogState();
-}
-
-class _RouteSwitcherDialogState extends State<_RouteSwitcherDialog> {
-  bool _importing = false;
-  bool _selectionMode = false;
-  final Set<String> _selectedIds = {};
-
-  void _toggleSelectionMode() {
-    setState(() {
-      _selectionMode = !_selectionMode;
-      _selectedIds.clear();
-    });
-  }
-
-  void _showSelectedOnMap() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => MultiRouteMapScreen(routeIds: _selectedIds.toList()),
-      ),
-    );
-  }
-
-  Future<void> _importTrack() async {
-    final result = await pickTrackFiles(allowMultiple: true);
-    if (result == null || result.files.isEmpty) return;
-    if (!mounted) return;
-
-    final files = result.files;
-    if (files.length == 1) {
-      await _importSingleFile(files.single);
-      return;
-    }
-    await _importMultipleFiles(files);
-  }
-
-  /// A single picked file closes this dialog and opens straight into its
-  /// map, same as before multi-select import existed.
-  Future<void> _importSingleFile(PlatformFile file) async {
-    if (!isSupportedTrackFileName(file.name)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.unsupportedTrackFileType),
-        ),
-      );
-      return;
-    }
-    final bytes = file.bytes;
-    if (bytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.fileNotReadable)),
-      );
-      return;
-    }
-
-    setState(() => _importing = true);
-    try {
-      final repo = context.read<RouteRepository>();
-      final route = await repo.importFromBytes(
-        bytes: bytes,
-        suggestedFileName: file.name,
-      );
-      if (!mounted) return;
-      final navigator = Navigator.of(context);
-      navigator.pop();
-      navigator.pushReplacement(
-        MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: route.id)),
-      );
-    } on DuplicateRouteException catch (e) {
-      if (!mounted) return;
-      final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.duplicateRouteMessage(e.existing.name))),
-      );
-      final navigator = Navigator.of(context);
-      navigator.pop();
-      navigator.pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => RouteMapScreen(routeId: e.existing.id),
-        ),
-      );
-    } on FormatException catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.trackHasNoPoints),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.importFailedGeneric('$e'),
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _importing = false);
-    }
-  }
-
-  /// Several picked files import one after another; unlike the single-file
-  /// path this keeps the dialog open (there is no one route to jump into,
-  /// and the list inside it already updates live) and reports a summary
-  /// count instead of a per-file message.
-  Future<void> _importMultipleFiles(List<PlatformFile> files) async {
-    setState(() => _importing = true);
-    var imported = 0;
-    var skipped = 0;
-    try {
-      final repo = context.read<RouteRepository>();
-      for (final file in files) {
-        if (!mounted) return;
-        final bytes = file.bytes;
-        if (!isSupportedTrackFileName(file.name) || bytes == null) {
-          skipped++;
-          continue;
-        }
-        try {
-          await repo.importFromBytes(bytes: bytes, suggestedFileName: file.name);
-          imported++;
-        } catch (_) {
-          // DuplicateRouteException or a bad file - either way this file
-          // just doesn't add a new route; the rest of the batch continues.
-          skipped++;
-        }
-      }
-    } finally {
-      if (mounted) setState(() => _importing = false);
-    }
-    if (!mounted) return;
-    final l10n = AppLocalizations.of(context)!;
-    final message = skipped > 0
-        ? '${l10n.importedRoutesCount(imported)} ${l10n.importSkippedCount(skipped)}'
-        : l10n.importedRoutesCount(imported);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    final routes = context.watch<RouteRepository>().routes;
-
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 560),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  if (_selectionMode)
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      tooltip: l10n.exitSelectionTooltip,
-                      onPressed: _toggleSelectionMode,
-                    ),
-                  Expanded(
-                    child: Text(
-                      _selectionMode
-                          ? l10n.selectedCountTitle(_selectedIds.length)
-                          : l10n.routesDialogTitle,
-                      style: theme.textTheme.headlineSmall,
-                    ),
-                  ),
-                  if (!_selectionMode && routes.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(Icons.checklist),
-                      tooltip: l10n.selectRoutesTooltip,
-                      onPressed: _toggleSelectionMode,
-                    ),
-                  if (!_selectionMode)
-                    IconButton(
-                      icon: _importing
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.add),
-                      tooltip: l10n.importTooltip,
-                      onPressed: _importing ? null : _importTrack,
-                    ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: l10n.close,
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: routes.length,
-                  itemBuilder: (context, i) {
-                    final r = routes[i];
-                    final isCurrent = r.id == widget.currentRouteId;
-                    final isChecked = _selectedIds.contains(r.id);
-                    return ListTile(
-                      leading: _selectionMode
-                          ? Checkbox(
-                              value: isChecked,
-                              onChanged: (v) => setState(() {
-                                if (v ?? false) {
-                                  _selectedIds.add(r.id);
-                                } else {
-                                  _selectedIds.remove(r.id);
-                                }
-                              }),
-                            )
-                          : Icon(
-                              Icons.route,
-                              color: isCurrent
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.outline,
-                            ),
-                      title: Text(
-                        r.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text('${r.distanceKm.toStringAsFixed(1)} km'),
-                      selected: _selectionMode ? isChecked : isCurrent,
-                      trailing: _selectionMode
-                          ? null
-                          : PopupMenuButton<String>(
-                              onSelected: (value) {
-                                if (value == 'rename') {
-                                  _renameRoute(context, r);
-                                }
-                                if (value == 'editAnomalies') {
-                                  _editRouteAnomalies(context, r);
-                                }
-                                if (value == 'delete') {
-                                  _deleteRoute(context, r, isCurrent);
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                PopupMenuItem(
-                                  value: 'rename',
-                                  child: Text(l10n.rename),
-                                ),
-                                PopupMenuItem(
-                                  value: 'editAnomalies',
-                                  child: Text(l10n.anomalyEditorMenuItem),
-                                ),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: Text(l10n.delete),
-                                ),
-                              ],
-                            ),
-                      onTap: _selectionMode
-                          ? () => setState(() {
-                              if (isChecked) {
-                                _selectedIds.remove(r.id);
-                              } else {
-                                _selectedIds.add(r.id);
-                              }
-                            })
-                          : () {
-                              Navigator.pop(context);
-                              if (!isCurrent) {
-                                Navigator.of(context).pushReplacement(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        RouteMapScreen(routeId: r.id),
-                                  ),
-                                );
-                              }
-                            },
-                    );
-                  },
-                ),
-              ),
-              if (_selectionMode && _selectedIds.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8, right: 12),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.icon(
-                      onPressed: _showSelectedOnMap,
-                      icon: const Icon(Icons.map),
-                      label: Text(l10n.showOnMapButton(_selectedIds.length)),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-Future<void> _renameRoute(BuildContext context, GpxRoute route) async {
-  final l10n = AppLocalizations.of(context)!;
-  final controller = TextEditingController(text: route.name);
-  final newName = await showDialog<String>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(l10n.renameRouteTitle),
-      content: TextField(controller: controller, autofocus: true),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(l10n.cancel),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, controller.text.trim()),
-          child: Text(l10n.save),
-        ),
-      ],
-    ),
-  );
-  if (newName != null && newName.isNotEmpty && context.mounted) {
-    await context.read<RouteRepository>().rename(route.id, newName);
-  }
-}
-
-Future<void> _editRouteAnomalies(BuildContext context, GpxRoute route) async {
-  final l10n = AppLocalizations.of(context)!;
-  final changed = await Navigator.of(context).push<bool>(
-    MaterialPageRoute(
-      builder: (_) => RouteAnomalyEditorScreen(route: route),
-    ),
-  );
-  if (changed == true && context.mounted) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(l10n.anomalyEditorSaved)));
-  }
-}
-
-Future<void> _deleteRoute(
-  BuildContext context,
-  GpxRoute route,
-  bool isCurrentlyOpen,
-) async {
-  final l10n = AppLocalizations.of(context)!;
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(l10n.deleteRouteTitle),
-      content: Text(l10n.deleteRouteConfirm(route.name)),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text(l10n.cancel),
-        ),
-        FilledButton.tonal(
-          onPressed: () => Navigator.pop(context, true),
-          child: Text(l10n.delete),
-        ),
-      ],
-    ),
-  );
-  if (confirmed != true || !context.mounted) return;
-
-  await context.read<RouteRepository>().delete(route.id);
-  if (!context.mounted) return;
-  await context.read<PhotoRepository>().deleteForRoute(route.id);
-  if (!context.mounted) return;
-
-  if (isCurrentlyOpen) {
-    // The map this dialog was opened over no longer has a route to show.
-    Navigator.of(context).popUntil((r) => r.isFirst);
   }
 }
 

@@ -558,17 +558,6 @@ class _RecordScreenState extends State<RecordScreen>
 
   Future<void> _handleOverlayMenuAction(_OverlayMenuAction action) async {
     switch (action) {
-      case _OverlayMenuAction.showAll:
-        final allIds = context
-            .read<RouteRepository>()
-            .routes
-            .map((r) => r.id)
-            .toList();
-        final ids = await _confirmShowAllRouteIds(allIds);
-        if (ids == null || ids.isEmpty) return;
-        await _applyReferenceRoutes(ids.toSet());
-      case _OverlayMenuAction.hideAll:
-        await _applyReferenceRoutes(const {});
       case _OverlayMenuAction.pick:
         await _pickReferenceRoutes();
       case _OverlayMenuAction.importFile:
@@ -1521,15 +1510,6 @@ class _RecordScreenState extends State<RecordScreen>
             onSelected: _handleOverlayMenuAction,
             itemBuilder: (context) => [
               PopupMenuItem(
-                value: _OverlayMenuAction.showAll,
-                child: Text(l10n.recordOverlayShowAllMenuItem),
-              ),
-              PopupMenuItem(
-                value: _OverlayMenuAction.hideAll,
-                enabled: active,
-                child: Text(l10n.recordOverlayHideAllMenuItem),
-              ),
-              PopupMenuItem(
                 value: _OverlayMenuAction.pick,
                 child: Text(l10n.recordOverlaySelectMenuItem),
               ),
@@ -1629,19 +1609,25 @@ class _RecordScreenState extends State<RecordScreen>
                         const SizedBox(width: 8),
                         _buildOverlayMenuButton(l10n),
                         const SizedBox(width: 8),
-                        // Not wrapped in Expanded while recording: the speed
-                        // box below sizes itself to its own digits (2 vs 3
-                        // figures), and used to sit in a Row alongside the
-                        // Süre/Mesafe/Yükseklik box, so a wider speed number
-                        // squeezed that box's Expanded share down to an
-                        // unreadable sliver. Idle still needs Expanded so
-                        // the notice text gets the remaining width to wrap
-                        // into.
+                        // Recording: Expanded reserves the space between the
+                        // icons on either side, Center keeps the speed box
+                        // centered in it - the box itself still sizes to its
+                        // own digits (mainAxisSize.min in _buildStats), so it
+                        // grows symmetrically outward as the number goes from
+                        // 1 to 3 figures instead of staying left-anchored
+                        // right after the menu button and only growing
+                        // rightward. Idle's Expanded (no Center) is
+                        // unchanged - that's a notice text that should fill
+                        // and wrap, not a number that should stay centered.
                         recorder.isIdle
                             ? Expanded(
                                 child: _buildStats(context, l10n, recorder),
                               )
-                            : _buildStats(context, l10n, recorder),
+                            : Expanded(
+                                child: Center(
+                                  child: _buildStats(context, l10n, recorder),
+                                ),
+                              ),
                         const Spacer(),
                         const Padding(
                           padding: EdgeInsets.only(top: 4),
@@ -1953,7 +1939,16 @@ class _RecordScreenState extends State<RecordScreen>
                   ),
                   child: Row(
                     children: [
-                      // Track management only — Data ↔ Map is bottom-left.
+                      // Same PopScope-respecting pop as the map page's back
+                      // button - while recording this switches to the map
+                      // page first (canPop is false here), a second tap
+                      // from there actually leaves to Home.
+                      _RoundIconButton(
+                        icon: Icons.arrow_back,
+                        tooltip: l10n.backToHomeTooltip,
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                      const SizedBox(width: 8),
                       _buildOverlayMenuButton(l10n),
                       const Spacer(),
                       const SatelliteCountBadge(),
@@ -2586,7 +2581,7 @@ class _OverlayTrack {
   final Color color;
 }
 
-enum _OverlayMenuAction { showAll, hideAll, pick, importFile }
+enum _OverlayMenuAction { pick, importFile }
 
 /// One row of the map page's stacked duration/distance/altitude box - label
 /// on the left, value on the right, both on one line.

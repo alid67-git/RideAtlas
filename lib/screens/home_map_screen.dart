@@ -898,15 +898,18 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       case _HomeTrackMenuAction.pick:
         final ids = await _pickRoutesForOverlay();
         if (ids == null || !mounted) return;
-        // Exactly one route: that's a request to inspect *that* ride in
-        // detail (day analysis, elevation, weather, full resolution), not
-        // to set what's overlaid on Home - leaves the existing overlay,
-        // if any, untouched.
+        // Selection always becomes the overlay (even a single route) - so
+        // coming back from the detail page below still shows it on Home,
+        // and reopening "Rota seç..." shows it checked, same as any other
+        // selection. Exactly one route additionally jumps straight to that
+        // ride's full detail (day analysis, elevation, weather, full
+        // resolution) instead of just a plain line on Home's map - applying
+        // the overlay isn't awaited first so that jump stays instant, same
+        // as before this always touched the overlay too.
+        unawaited(_applyOverlayRoutes(ids.toSet()));
         if (ids.length == 1) {
           _openRouteDetail(ids.first);
-          return;
         }
-        await _applyOverlayRoutes(ids.toSet());
       case _HomeTrackMenuAction.importFile:
         await _importTracksFromHome();
     }
@@ -1001,14 +1004,13 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       SnackBar(content: Text(parts.join(' '))),
     );
 
-    // A single imported file goes to its own detail page (day analysis,
-    // full resolution); several go straight onto Home's overlay alongside
-    // whatever was already shown, same as picking multiple via "Rota seç...".
+    // Imported routes always join Home's overlay (even a single one) - see
+    // the matching comment in _onHomeTrackMenuAction for why. A single file
+    // additionally jumps straight to that ride's full detail page.
+    unawaited(_applyOverlayRoutes({..._overlayRouteIds, ...importedIds}));
     if (importedIds.length == 1) {
       _openRouteDetail(importedIds.first);
-      return;
     }
-    await _applyOverlayRoutes({..._overlayRouteIds, ...importedIds});
   }
 }
 

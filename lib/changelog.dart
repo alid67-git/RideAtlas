@@ -20,6 +20,32 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.117 beta',
+    date: '2026-09-07',
+    note:
+        'Canlı testte bulunan bir dizi küçük ama gerçek sorun düzeltildi. '
+        '(1) Kayıt ekranının rota menüsü ("Tümünü göster"/"Tümünü gizle" '
+        'kaldırıldı) artık ana ekranınkiyle tutarlı: sadece "Rota seç..." '
+        've "İçe aktar...". (2) Veri sayfasına da (kayıt sürerken bile) '
+        'geri tuşu eklendi - PopScope zaten izin verdiği için kayıt '
+        'sürerken önce Harita sayfasına geçiyor, oradan bir daha basınca '
+        'Ana ekrana çıkıyor. (3) Ana ekranda tek rota seçmek (Rota seç... '
+        'ile veya tek dosya içe aktararak) artık o rotayı da overlay\'e '
+        'ekliyor - önceden sadece detay sayfasına gidip overlay\'i hiç '
+        'dokunmuyordu; şimdi geri dönüldüğünde o tek rota haritada '
+        'görünüyor ve "Rota seç..." tekrar açıldığında işaretli geliyor, '
+        'çoklu seçimde olduğu gibi. (4) Rota detay ekranındaki (tek rota '
+        'haritası) "rota değiştir" listesi düğmesi kaldırıldı - artık '
+        'gereksiz, rota seçimi tamamen ana ekrandan yönetiliyor; o '
+        'düğmenin altındaki anormal-nokta-düzenleme özelliği kaybolmadı, '
+        'sağ üstteki yeni bir menüye taşındı. (5) Rota seçim penceresine '
+        'sağ üstte bir sıralama düğmesi eklendi: tarihe (kayıt tarihi), '
+        'isme, veya uzunluğa göre. (6) Kayıt ekranındaki hız göstergesi '
+        'artık ekranın ortasında; hane sayısı (1/2/3 haneli hız) arttıkça '
+        'sağdan sola tek yönlü büyümek yerine iki yandan simetrik '
+        'genişliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.116 beta',
     date: '2026-09-07',
     note:
