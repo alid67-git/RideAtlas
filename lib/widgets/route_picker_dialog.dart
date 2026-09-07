@@ -132,11 +132,18 @@ Future<Set<String>?> showRoutePickerDialog({
                         const SizedBox(width: 12),
                         Expanded(
                           child: FilledButton(
-                            onPressed: selected.isEmpty
-                                ? null
-                                : () => Navigator.pop(context, selected),
+                            // Confirming with nothing checked is a deliberate
+                            // "hide everything" - not disabled, so a rider
+                            // can actually clear a previous selection instead
+                            // of being stuck re-showing whatever was checked
+                            // last time this opened.
+                            onPressed: () => Navigator.pop(context, selected),
                             child: Text(
-                              l10n.recordOverlayShowCount(selected.length),
+                              selected.isEmpty
+                                  ? l10n.recordOverlayHideButton
+                                  : l10n.recordOverlayShowCount(
+                                      selected.length,
+                                    ),
                             ),
                           ),
                         ),
