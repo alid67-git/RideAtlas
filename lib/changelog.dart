@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.118 beta',
+    date: '2026-09-07',
+    note:
+        'Ana ekranın "Rota seç..." penceresindeki 10/24 rota sınırı '
+        'kaldırıldı - Home\'un amacı zaten rotaları yükleyip görmek, '
+        'sınırlama orada mantıksızdı. Aynı sınır, aynı gerekçeyle route '
+        'list\'ten çoklu rota haritasına (multi_route_map_screen) girerken '
+        'de kaldırıldı. Kayıt ekranındaki overlay seçimi (canlı GPS kaydı '
+        'sırasında, performans için) eskisi gibi 10/24 sınırlı kaldı - '
+        'harita zaten Android\'de ~20+ rotada donma riski taşıyor olduğu '
+        'için orada kısıtlama hâlâ gerekli.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.117 beta',
     date: '2026-09-07',
     note:

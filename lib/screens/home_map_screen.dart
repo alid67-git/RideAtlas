@@ -842,57 +842,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     );
   }
 
-  Future<List<String>?> _confirmShowAllRouteIds(List<String> allIds) async {
-    final l10n = AppLocalizations.of(context)!;
-    if (allIds.length > kShowAllRoutesHardCap) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(l10n.showAllTracksTooManyTitle),
-          content: Text(
-            l10n.showAllTracksTooManyMessage(
-              allIds.length,
-              kShowAllRoutesHardCap,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(l10n.showAllTracksLimitButton),
-            ),
-          ],
-        ),
-      );
-      if (ok != true) return null;
-      return allIds.take(kShowAllRoutesHardCap).toList();
-    }
-    if (allIds.length > kShowAllRoutesSoftCap) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(l10n.showAllTracksHeavyTitle),
-          content: Text(l10n.showAllTracksHeavyMessage(allIds.length)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(l10n.recordOverlayShow),
-            ),
-          ],
-        ),
-      );
-      if (ok != true) return null;
-    }
-    return allIds;
-  }
-
   Future<void> _onHomeTrackMenuAction(_HomeTrackMenuAction action) async {
     switch (action) {
       case _HomeTrackMenuAction.pick:
@@ -933,8 +882,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       routes: routes,
       initiallySelected: _overlayRouteIds,
     );
-    if (selected == null || selected.isEmpty) return selected?.toList();
-    return _confirmShowAllRouteIds(selected.toList());
+    // No cap here: viewing routes is the whole point of Home's map, unlike
+    // the recording overlay (which stays capped - a live GPS session is
+    // already CPU/battery constrained).
+    return selected?.toList();
   }
 
   Future<void> _importTracksFromHome() async {
