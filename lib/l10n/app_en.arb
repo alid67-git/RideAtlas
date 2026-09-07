@@ -185,6 +185,8 @@
   "@recordOverlayShowCount": {"placeholders": {"count": {"type": "int"}}},
   "recordOverlayHideButton": "Hide",
   "routeDetailedAnalysisButton": "Detailed analysis",
+  "backToHomeTooltip": "Back to home",
+  "fitOverlayRoutesTooltip": "Fit shown routes",
   "recordOverlaySelectAll": "All",
   "recordOverlayNoRoutes": "No saved routes yet. Import a GPX first or finish a recording.",
   "recordOverlayShowAllMenuItem": "Show all",

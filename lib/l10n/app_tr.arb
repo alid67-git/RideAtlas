@@ -207,6 +207,8 @@
   "@recordOverlayShowCount": {"placeholders": {"count": {"type": "int"}}},
   "recordOverlayHideButton": "Gizle",
   "routeDetailedAnalysisButton": "Detaylı analiz",
+  "backToHomeTooltip": "Ana ekrana dön",
+  "fitOverlayRoutesTooltip": "Gösterilen izlere sığdır",
   "recordOverlaySelectAll": "Hepsi",
   "recordOverlayNoRoutes": "Henüz kayıtlı rota yok. Önce bir GPX içe aktarın veya bir sürüş kaydedin.",
   "recordOverlayShowAllMenuItem": "Tümünü göster",

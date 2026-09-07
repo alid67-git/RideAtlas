@@ -185,6 +185,8 @@
   "@recordOverlayShowCount": {"placeholders": {"count": {"type": "int"}}},
   "recordOverlayHideButton": "Ausblenden",
   "routeDetailedAnalysisButton": "Detaillierte Analyse",
+  "backToHomeTooltip": "Zurück zur Startseite",
+  "fitOverlayRoutesTooltip": "Angezeigte Routen einpassen",
   "recordOverlaySelectAll": "Alle",
   "recordOverlayNoRoutes": "Noch keine gespeicherten Strecken. Zuerst eine GPX importieren oder eine Aufzeichnung speichern.",
   "recordOverlayShowAllMenuItem": "Alle anzeigen",
