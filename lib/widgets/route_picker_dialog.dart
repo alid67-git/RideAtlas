@@ -4,6 +4,27 @@ import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
 import '../services/daily_analysis.dart' show colorForDay;
 
+/// Sort orders offered by the picker's sort menu. [original] keeps whatever
+/// order the caller passed in (the repository's own default order).
+enum _RouteSortMode { original, dateDesc, nameAsc, distanceDesc }
+
+List<GpxRoute> _sorted(List<GpxRoute> routes, _RouteSortMode mode) {
+  final list = List<GpxRoute>.from(routes);
+  switch (mode) {
+    case _RouteSortMode.original:
+      break;
+    case _RouteSortMode.dateDesc:
+      list.sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
+    case _RouteSortMode.nameAsc:
+      list.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+    case _RouteSortMode.distanceDesc:
+      list.sort((a, b) => b.distanceMeters.compareTo(a.distanceMeters));
+  }
+  return list;
+}
+
 /// Shared route picker, used everywhere a rider chooses which saved routes
 /// to show on a map (recording overlay, the multi-route viewer's reselect
 /// pill, and the home map's "Rota seç..."). Kept in one place so the three
@@ -20,6 +41,7 @@ Future<Set<String>?> showRoutePickerDialog({
 }) {
   final l10n = AppLocalizations.of(context)!;
   final selected = Set<String>.from(initiallySelected);
+  var sortMode = _RouteSortMode.original;
   return showModalBottomSheet<Set<String>>(
     context: context,
     isScrollControlled: true,
@@ -32,6 +54,7 @@ Future<Set<String>?> showRoutePickerDialog({
         builder: (context, setLocal) {
           final allSelected =
               routes.isNotEmpty && selected.length == routes.length;
+          final sortedRoutes = _sorted(routes, sortMode);
           return FractionallySizedBox(
             heightFactor: 0.85,
             child: Column(
@@ -55,6 +78,25 @@ Future<Set<String>?> showRoutePickerDialog({
                           l10n.recordOverlayTitle,
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
+                      ),
+                      PopupMenuButton<_RouteSortMode>(
+                        tooltip: l10n.sortRoutesTooltip,
+                        icon: const Icon(Icons.sort),
+                        onSelected: (mode) => setLocal(() => sortMode = mode),
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: _RouteSortMode.dateDesc,
+                            child: Text(l10n.sortByDateMenuItem),
+                          ),
+                          PopupMenuItem(
+                            value: _RouteSortMode.nameAsc,
+                            child: Text(l10n.sortByNameMenuItem),
+                          ),
+                          PopupMenuItem(
+                            value: _RouteSortMode.distanceDesc,
+                            child: Text(l10n.sortByDistanceMenuItem),
+                          ),
+                        ],
                       ),
                       IconButton(
                         icon: const Icon(Icons.close),
@@ -93,9 +135,9 @@ Future<Set<String>?> showRoutePickerDialog({
                 const Divider(height: 1),
                 Expanded(
                   child: ListView.builder(
-                    itemCount: routes.length,
+                    itemCount: sortedRoutes.length,
                     itemBuilder: (context, i) {
-                      final route = routes[i];
+                      final route = sortedRoutes[i];
                       return CheckboxListTile(
                         value: selected.contains(route.id),
                         title: Text(route.name),
