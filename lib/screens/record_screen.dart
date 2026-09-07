@@ -1614,11 +1614,19 @@ class _RecordScreenState extends State<RecordScreen>
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // No back arrow, idle or recording alike - top-left
-                        // is track management only; Data ↔ Map is the
-                        // bottom-left toggle, and the system back
-                        // button/gesture leaves the screen (see build's
-                        // PopScope).
+                        // The system back button/gesture already leaves
+                        // from here (see build's PopScope), but on iOS web
+                        // there's often no reliable equivalent gesture -
+                        // riders had no way at all back to the home map
+                        // while recording. An explicit button, only on the
+                        // map page (idle or recording), matches exactly
+                        // what PopScope already allows from here.
+                        _RoundIconButton(
+                          icon: Icons.arrow_back,
+                          tooltip: l10n.backToHomeTooltip,
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                        const SizedBox(width: 8),
                         _buildOverlayMenuButton(l10n),
                         const SizedBox(width: 8),
                         // Not wrapped in Expanded while recording: the speed

@@ -20,6 +20,25 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.116 beta',
+    date: '2026-09-07',
+    note:
+        'İki eksiklik canlı testte bulundu ve düzeltildi. (1) Kayıt '
+        'ekranından ana harita ekranına dönecek görünür bir tuş yoktu - '
+        'v1.4.112\'de üstteki geri oku kaldırılıp sistem geri tuşu/'
+        'hareketine bırakılmıştı, ama iOS web\'de bunun güvenilir bir '
+        'karşılığı yok; kayıt sürerken kullanıcının Ana ekrana dönecek '
+        'hiçbir yolu kalmamıştı. Harita sayfasının sol üstüne (hem boşta '
+        'hem kayıt sırasında) bir geri oku eklendi - PopScope\'un zaten '
+        'izin verdiği tam olarak aynı davranışı tetikliyor, kayıt arka '
+        'planda devam ediyor. (2) Ana ekranda birden fazla iz overlay '
+        'olarak gösterildiğinde (v1.4.115), o izlere yeniden sığdıracak '
+        'bir tuş yoktu - haritada uzaklaşıp/yakınlaştıktan sonra manuel '
+        'olarak eski konuma dönmek gerekiyordu. Sağ alttaki zoom '
+        'tuşlarının arasına, izler gösteriliyorken çıkan bir "sığdır" '
+        'tuşu eklendi.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.115 beta',
     date: '2026-09-07',
     note:

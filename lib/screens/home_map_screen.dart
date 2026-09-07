@@ -415,6 +415,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       built.add(Polyline(points: track.points, strokeWidth: 4, color: color));
     }
     _overlayPolylines.value = built;
+    // _overlayTracks itself isn't a ValueNotifier (only the polylines are,
+    // for the map layer) - without this, the "fit to overlay" FAB's
+    // isNotEmpty check wouldn't see the newly loaded tracks until some
+    // unrelated rebuild (e.g. the next GPS fix) happened to sweep through.
+    if (mounted) setState(() {});
     _fitOverlayTracks(selectedRoutes);
   }
 
@@ -429,6 +434,23 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     fitMapToBounds(
       _mapController,
       bounds: bounds,
+      padding: const EdgeInsets.fromLTRB(48, 140, 48, 170),
+    );
+  }
+
+  /// Manual re-fit for the FAB - the automatic fit only runs once, right
+  /// after the overlay is (re)loaded, so panning/zooming away from it
+  /// otherwise had no way back short of reselecting the same routes.
+  void _fitToCurrentOverlay() {
+    if (_overlayTracks.isEmpty) return;
+    final points = [
+      for (final track in _overlayTracks) ...track.points,
+      ?_currentLocation,
+    ];
+    if (points.isEmpty) return;
+    fitMapToBounds(
+      _mapController,
+      bounds: LatLngBounds.fromPoints(points),
       padding: const EdgeInsets.fromLTRB(48, 140, 48, 170),
     );
   }
@@ -682,6 +704,15 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   onPressed: _zoomOut,
                   child: const Icon(Icons.remove),
                 ),
+                if (_overlayTracks.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  FloatingActionButton.small(
+                    heroTag: 'homeFitOverlay',
+                    tooltip: l10n.fitOverlayRoutesTooltip,
+                    onPressed: _fitToCurrentOverlay,
+                    child: const Icon(Icons.zoom_out_map),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 FloatingActionButton(
                   heroTag: 'homeLocate',
