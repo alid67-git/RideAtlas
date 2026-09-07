@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.119 beta',
+    date: '2026-09-07',
+    note:
+        'Otomatik güncelleme kontrolü artık tamamen sessiz: ana ekran '
+        'açılışında yeni bir sürüm bulunursa "güncelle ister misin?" diye '
+        'sormadan direkt indirmeye başlıyor (ilerleme durumu yine banner\'da '
+        'görünüyor). Kurulum anında Android\'in kendi kurulum onay ekranı '
+        'yine de çıkar - bunu hiçbir uygulama atlayamaz, tek "onay" adımı '
+        'artık bu.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.118 beta',
     date: '2026-09-07',
     note:

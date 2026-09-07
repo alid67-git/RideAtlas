@@ -86,14 +86,17 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       // zoom as MapOptions → flutter_map may skip the first request).
       if (mounted) kickMapTileLayer(_mapController);
       await _maybeShowWhatsNew();
-      // After what's-new: check once; offer a single "Güncelle" dialog. The
-      // same banner also appears on the recording/info screens via
-      // [AppUpdateController].
+      // After what's-new: check once, and if a newer build exists start
+      // installing it immediately - no "do you want to update?" dialog. The
+      // only confirmation left is Android's own install screen, which no
+      // app can skip anyway. Progress still shows via [AppUpdateBanner] on
+      // the recording/info screens (via [AppUpdateController]) so this
+      // isn't invisible, just not asking permission first.
       if (AppUpdateController.isSupported) {
         final updates = context.read<AppUpdateController>();
         await updates.check();
         if (!mounted) return;
-        if (await offerAppUpdateDialog(context)) {
+        if (updates.available != null) {
           await installAppUpdate(context);
         }
       }
