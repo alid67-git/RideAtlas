@@ -25,12 +25,13 @@ import '../services/track_display_simplify.dart';
 import 'multi_route_map_screen.dart';
 import '../services/track_io.dart';
 import '../repositories/route_repository.dart';
-import 'route_list_screen.dart';
+import '../widgets/route_picker_dialog.dart';
 import 'settings_screen.dart';
 
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
 const _lastSeenBuildKey = 'last_seen_build';
+const _lastShownRouteIdsKey = 'multiroute_last_route_ids';
 
 /// A wide, regional view (several countries visible) - the landing map
 /// starts here and stays here even once the device's location is found;
@@ -342,21 +343,12 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                       position: PopupMenuPosition.under,
                       itemBuilder: (context) => [
                         PopupMenuItem(
-                          value: _HomeTrackMenuAction.showAll,
-                          child: Text(l10n.recordOverlayShowAllMenuItem),
-                        ),
-                        PopupMenuItem(
                           value: _HomeTrackMenuAction.pick,
                           child: Text(l10n.recordOverlaySelectMenuItem),
                         ),
                         PopupMenuItem(
                           value: _HomeTrackMenuAction.importFile,
                           child: Text(l10n.recordOverlayImportMenuItem),
-                        ),
-                        const PopupMenuDivider(),
-                        PopupMenuItem(
-                          value: _HomeTrackMenuAction.routeList,
-                          child: Text(l10n.routesDialogTitle),
                         ),
                       ],
                       onSelected: _onHomeTrackMenuAction,
@@ -365,11 +357,20 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                             .colorScheme
                             .surface
                             .withValues(alpha: 0.92),
-                        shape: const CircleBorder(),
+                        borderRadius: BorderRadius.circular(20),
                         elevation: 2,
-                        child: const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Icon(Icons.route),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Text(
+                            l10n.routesDialogTitle,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ),
                     ),
@@ -635,24 +636,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   Future<void> _onHomeTrackMenuAction(_HomeTrackMenuAction action) async {
-    final l10n = AppLocalizations.of(context)!;
-    final repo = context.read<RouteRepository>();
     switch (action) {
-      case _HomeTrackMenuAction.showAll:
-        final allIds = [for (final r in repo.routes) r.id];
-        if (allIds.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.recordOverlayNoRoutes)),
-          );
-          return;
-        }
-        final ids = await _confirmShowAllRouteIds(allIds);
-        if (ids == null || ids.isEmpty || !mounted) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => MultiRouteMapScreen(routeIds: ids),
-          ),
-        );
       case _HomeTrackMenuAction.pick:
         final ids = await _pickRoutesForOverlay();
         if (ids == null || ids.isEmpty || !mounted) return;
@@ -663,14 +647,14 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
         );
       case _HomeTrackMenuAction.importFile:
         await _importTracksFromHome();
-      case _HomeTrackMenuAction.routeList:
-        if (!mounted) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const RouteListScreen()),
-        );
     }
   }
 
+  /// The routes checked here start out as whatever was last shown on
+  /// [MultiRouteMapScreen] (same Hive key it persists on close) - so
+  /// reopening "Rota seç..." and tapping Göster without changing anything
+  /// just continues the previous view instead of starting from a blank
+  /// picker every time.
   Future<List<String>?> _pickRoutesForOverlay() async {
     final l10n = AppLocalizations.of(context)!;
     final routes = context.read<RouteRepository>().routes;
@@ -680,50 +664,17 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       );
       return null;
     }
-    final selected = <String>{};
-    final confirmed = await showDialog<bool>(
+    final box = await Hive.openBox<String>(_metaBoxName);
+    if (!mounted) return null;
+    final availableIds = routes.map((r) => r.id).toSet();
+    final lastShown =
+        box.get(_lastShownRouteIdsKey)?.split(',').toSet() ?? const {};
+    final selected = await showRoutePickerDialog(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setLocal) {
-            return AlertDialog(
-              title: Text(l10n.recordOverlayTitle),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final route in routes)
-                      CheckboxListTile(
-                        value: selected.contains(route.id),
-                        title: Text(route.name),
-                        onChanged: (v) => setLocal(() {
-                          if (v == true) {
-                            selected.add(route.id);
-                          } else {
-                            selected.remove(route.id);
-                          }
-                        }),
-                      ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text(l10n.cancel),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: Text(l10n.recordOverlayShow),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      routes: routes,
+      initiallySelected: lastShown.intersection(availableIds),
     );
-    if (confirmed != true) return null;
+    if (selected == null) return null;
     return _confirmShowAllRouteIds(selected.toList());
   }
 
@@ -802,7 +753,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 }
 
-enum _HomeTrackMenuAction { showAll, pick, importFile, routeList }
+enum _HomeTrackMenuAction { pick, importFile }
 
 class _RoundIconButton extends StatelessWidget {
   const _RoundIconButton({

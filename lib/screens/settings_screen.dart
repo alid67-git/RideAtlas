@@ -14,6 +14,7 @@ import 'about_screen.dart';
 import 'help_screen.dart';
 import 'language_picker.dart';
 import 'live_stats_layout_screen.dart';
+import 'route_list_screen.dart';
 import 'stat_icon_settings_screen.dart';
 import 'vehicle_icon_picker_screen.dart';
 
@@ -115,6 +116,16 @@ class SettingsScreen extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const StatIconSettingsScreen()),
+            ),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.list_alt_outlined),
+            title: Text(l10n.routesDialogTitle),
+            subtitle: Text(l10n.manageRoutesSubtitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const RouteListScreen()),
             ),
           ),
           const Divider(height: 1),

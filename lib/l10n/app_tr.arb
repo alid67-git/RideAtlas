@@ -39,6 +39,7 @@
   "routeFileReadError": "Rota dosyası okunamadı: {error}",
   "@routeFileReadError": {"placeholders": {"error": {"type": "String"}}},
   "routesDialogTitle": "Rotalar",
+  "manageRoutesSubtitle": "Yeniden adlandır, birleştir, sil",
   "importTooltip": "GPX/KML/KMZ İçe Aktar",
   "exportFormatQuestion": "Hangi formatta dışa aktarılsın?",
   "exportNameQuestion": "Dosya hangi isimle dışa aktarılsın?",

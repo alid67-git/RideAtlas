@@ -20,6 +20,25 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.113 beta',
+    date: '2026-09-07',
+    note:
+        'Ana ekrandaki rota menüsü sadeleştirildi: "Tümünü göster" ve '
+        '"Rotalar" listesi menüden kaldırıldı ("Hepsi" zaten "Rota '
+        'seç..." penceresinde vardı), sol üstteki rota ikonu yerine düz '
+        '"Rotalar" yazısı kondu. Rota yeniden adlandırma/birleştirme/'
+        'silme ekranı artık Ayarlar > Rotalar\'dan açılıyor (menüden '
+        'kaldırıldığı için erişimi orada kalsın diye taşındı). En büyük '
+        'değişiklik: izleri gösteren harita ekranı artık en son hangi '
+        'izler gösteriliyorduysa onu hatırlıyor - "Rota seç..." penceresi '
+        'son seçimi işaretli açılıyor, ve aynı seçimle yeniden açıldığında '
+        'harita da kapanmadan önceki zoom/konumla devam ediyor (her '
+        'seferinde yeniden çerçeveleme yapmıyor). Ayrıca üç ayrı yerde '
+        '(kayıt ekranı, çoklu-rota haritası, ana ekran) neredeyse aynı '
+        'olan "Hepsi + rota listesi" seçim penceresi tek bir ortak '
+        'bileşene indirildi.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.112 beta',
     date: '2026-09-06',
     note:

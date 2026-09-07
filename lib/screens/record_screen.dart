@@ -38,6 +38,7 @@ import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';
 import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
+import '../widgets/route_picker_dialog.dart';
 import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
 import '../widgets/route_photo_strip.dart' show PhotoViewerDialog;
@@ -652,71 +653,12 @@ class _RecordScreenState extends State<RecordScreen>
       return;
     }
 
-    final selected = Set<String>.from(_referenceRouteIds);
-    final confirmed = await showDialog<bool>(
+    final selected = await showRoutePickerDialog(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setLocal) {
-            final allSelected =
-                routes.isNotEmpty && selected.length == routes.length;
-            return AlertDialog(
-              title: Text(l10n.recordOverlayTitle),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: routes.length + 1,
-                  itemBuilder: (context, i) {
-                    if (i == 0) {
-                      return CheckboxListTile(
-                        value: allSelected,
-                        title: Text(l10n.recordOverlaySelectAll),
-                        onChanged: (_) => setLocal(() {
-                          if (allSelected) {
-                            selected.clear();
-                          } else {
-                            selected
-                              ..clear()
-                              ..addAll(routes.map((r) => r.id));
-                          }
-                        }),
-                      );
-                    }
-                    final route = routes[i - 1];
-                    return CheckboxListTile(
-                      value: selected.contains(route.id),
-                      title: Text(route.name),
-                      subtitle: Text(
-                        '${route.distanceKm.toStringAsFixed(1)} km',
-                      ),
-                      onChanged: (v) => setLocal(() {
-                        if (v == true) {
-                          selected.add(route.id);
-                        } else {
-                          selected.remove(route.id);
-                        }
-                      }),
-                    );
-                  },
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text(l10n.cancel),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: Text(l10n.recordOverlayShow),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      routes: routes,
+      initiallySelected: _referenceRouteIds,
     );
-    if (confirmed != true || !mounted) return;
+    if (selected == null || !mounted) return;
     final capped = await _confirmShowAllRouteIds(selected.toList());
     if (capped == null || capped.isEmpty || !mounted) return;
     await _applyReferenceRoutes(capped.toSet());

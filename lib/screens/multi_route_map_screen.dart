@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' show max, min, pi;
 
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hive/hive.dart';
@@ -17,10 +18,13 @@ import '../services/map_camera_fit.dart';
 import '../services/track_display_loader.dart';
 import '../services/track_display_simplify.dart';
 import '../widgets/route_photo_strip.dart' show PhotoViewerDialog;
+import '../widgets/route_picker_dialog.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
+const _lastRouteIdsKey = 'multiroute_last_route_ids';
+const _lastCameraKey = 'multiroute_last_camera';
 
 /// Overlays several routes on one map, each drawn in its own color, with a
 /// small legend that also re-centers the camera on a route when tapped.
@@ -69,11 +73,23 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   final _rotationDeg = ValueNotifier<double>(0);
   late final StreamSubscription<MapEvent> _mapEventSub;
 
+  /// Camera to resume with instead of re-fitting bounds, set only when this
+  /// screen reopens with the exact same route selection it last closed
+  /// with - so returning to the same tracks continues at the same zoom/pan
+  /// instead of always re-framing them. Consumed once, on the first load.
+  LatLng? _restoredCenter;
+  double? _restoredZoom;
+  bool _restoredCameraConsumed = false;
+
   @override
   void initState() {
     super.initState();
     _activeRouteIds = List<String>.from(widget.routeIds);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadRestoredCamera();
+      if (!mounted) return;
+      await _load();
+    });
     _loadMapStyle();
     _mapEventSub = _mapController.mapEventStream.listen((event) {
       final rotation = event.camera.rotation;
@@ -87,7 +103,39 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   void dispose() {
     _mapEventSub.cancel();
     _rotationDeg.dispose();
+    unawaited(_persistLastShown());
     super.dispose();
+  }
+
+  Future<void> _loadRestoredCamera() async {
+    final box = await Hive.openBox<String>(_metaBoxName);
+    final savedIds = box.get(_lastRouteIdsKey)?.split(',').toSet();
+    final savedCamera = box.get(_lastCameraKey);
+    if (!mounted || savedIds == null || savedCamera == null) return;
+    if (!setEquals(savedIds, widget.routeIds.toSet())) return;
+    final parts = savedCamera.split(',');
+    if (parts.length != 3) return;
+    final lat = double.tryParse(parts[0]);
+    final lng = double.tryParse(parts[1]);
+    final zoom = double.tryParse(parts[2]);
+    if (lat == null || lng == null || zoom == null) return;
+    _restoredCenter = LatLng(lat, lng);
+    _restoredZoom = zoom;
+  }
+
+  Future<void> _persistLastShown() async {
+    if (_activeRouteIds.isEmpty) return;
+    try {
+      final box = await Hive.openBox<String>(_metaBoxName);
+      final camera = _mapController.camera;
+      await box.put(_lastRouteIdsKey, _activeRouteIds.join(','));
+      await box.put(
+        _lastCameraKey,
+        '${camera.center.latitude},${camera.center.longitude},${camera.zoom}',
+      );
+    } catch (_) {
+      // Best-effort - losing the last-viewed camera isn't worth surfacing.
+    }
   }
 
   void _resetNorth() => _mapController.rotate(0);
@@ -137,7 +185,12 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
       _error = null;
       _lines.clear();
     });
-    _fitToRoutes(routes);
+    if (!_restoredCameraConsumed && _restoredCenter != null) {
+      _restoredCameraConsumed = true;
+      _moveToCamera(_restoredCenter!, _restoredZoom!);
+    } else {
+      _fitToRoutes(routes);
+    }
 
     try {
       final budget = mapDisplayBudget(routes.length);
@@ -191,75 +244,15 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
   /// Same picker as the recording overlay: Hepsi + checkboxes, then Göster
   /// reloads the map with the new selection (progressive draw again).
   Future<void> _reselectRoutes() async {
-    final l10n = AppLocalizations.of(context)!;
     final routes = context.read<RouteRepository>().routes;
     if (routes.isEmpty) return;
 
-    final selected = Set<String>.from(_activeRouteIds);
-    final confirmed = await showDialog<bool>(
+    final selected = await showRoutePickerDialog(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setLocal) {
-            final allSelected =
-                routes.isNotEmpty && selected.length == routes.length;
-            return AlertDialog(
-              title: Text(l10n.recordOverlayTitle),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: routes.length + 1,
-                  itemBuilder: (context, i) {
-                    if (i == 0) {
-                      return CheckboxListTile(
-                        value: allSelected,
-                        title: Text(l10n.recordOverlaySelectAll),
-                        onChanged: (_) => setLocal(() {
-                          if (allSelected) {
-                            selected.clear();
-                          } else {
-                            selected
-                              ..clear()
-                              ..addAll(routes.map((r) => r.id));
-                          }
-                        }),
-                      );
-                    }
-                    final route = routes[i - 1];
-                    return CheckboxListTile(
-                      value: selected.contains(route.id),
-                      title: Text(route.name),
-                      subtitle: Text(
-                        '${route.distanceKm.toStringAsFixed(1)} km',
-                      ),
-                      onChanged: (v) => setLocal(() {
-                        if (v == true) {
-                          selected.add(route.id);
-                        } else {
-                          selected.remove(route.id);
-                        }
-                      }),
-                    );
-                  },
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text(l10n.cancel),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: Text(l10n.recordOverlayShow),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      routes: routes,
+      initiallySelected: _activeRouteIds.toSet(),
     );
-    if (confirmed != true || !mounted) return;
+    if (selected == null || !mounted) return;
 
     var next = [
       for (final r in routes)
@@ -346,6 +339,14 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       fitMapToBounds(_mapController, bounds: bounds);
+    });
+  }
+
+  void _moveToCamera(LatLng center, double zoom) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _mapController.move(center, zoom);
+      kickMapTileLayer(_mapController);
     });
   }
 
