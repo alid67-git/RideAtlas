@@ -181,6 +181,8 @@
   "recordOverlayTooltip": "Gespeicherte Strecken zeigen",
   "recordOverlayTitle": "Auf der Karte anzuzeigende Strecken",
   "recordOverlayShow": "Anzeigen",
+  "recordOverlayShowCount": "Anzeigen ({count})",
+  "@recordOverlayShowCount": {"placeholders": {"count": {"type": "int"}}},
   "recordOverlaySelectAll": "Alle",
   "recordOverlayNoRoutes": "Noch keine gespeicherten Strecken. Zuerst eine GPX importieren oder eine Aufzeichnung speichern.",
   "recordOverlayShowAllMenuItem": "Alle anzeigen",

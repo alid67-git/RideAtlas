@@ -20,6 +20,22 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.114 beta',
+    date: '2026-09-07',
+    note:
+        'Rota seçim penceresi baştan tasarlandı. Eskiden kutu içinde sade '
+        'bir "Hepsi + checkbox listesi" olan AlertDialog, üç ayrı yerde '
+        '(kayıt ekranının referans iz overlay\'i, çoklu-rota haritasının '
+        '"N rota" pilinden açılan yeniden seçim, ana ekranın "Rota '
+        'seç...") de aynı "amatör" görünümdeydi. Şimdi alttan açılan, '
+        'yuvarlak köşeli bir panel: "Hepsi" satırı ve kaç rotanın seçili '
+        'olduğu ("2/5" gibi) listenin üstünde sabit duruyor (artık '
+        'kaydırılıp gözden kaçmıyor), her rota haritada çizileceği renkle '
+        '(çoklu-rota haritasındaki legend ile aynı renk sırası) '
+        'önizleniyor, "Göster" butonu seçili sayıyı gösteriyor ve hiçbir '
+        'şey seçili değilken pasif oluyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.113 beta',
     date: '2026-09-07',
     note:

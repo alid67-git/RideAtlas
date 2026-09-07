@@ -181,6 +181,8 @@
   "recordOverlayTooltip": "Show saved routes",
   "recordOverlayTitle": "Routes to show on the map",
   "recordOverlayShow": "Show",
+  "recordOverlayShowCount": "Show ({count})",
+  "@recordOverlayShowCount": {"placeholders": {"count": {"type": "int"}}},
   "recordOverlaySelectAll": "All",
   "recordOverlayNoRoutes": "No saved routes yet. Import a GPX first or finish a recording.",
   "recordOverlayShowAllMenuItem": "Show all",
