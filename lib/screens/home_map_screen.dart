@@ -10,19 +10,22 @@ import 'package:provider/provider.dart';
 import '../build_info.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
+import '../models/gpx_route.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/app_update_controller.dart';
+import '../services/daily_analysis.dart' show colorForDay;
 import '../services/gps_recorder.dart';
 import '../services/live_location.dart';
+import '../services/map_camera_fit.dart';
 import '../services/native_recording.dart';
+import '../services/track_display_loader.dart';
 import '../widgets/app_update_ui.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
-import 'map_screen.dart' show MapStylePickerDialog;
+import 'map_screen.dart' show MapStylePickerDialog, RouteMapScreen;
 import 'record_screen.dart';
 import '../services/track_display_simplify.dart';
-import 'multi_route_map_screen.dart';
 import '../services/track_io.dart';
 import '../repositories/route_repository.dart';
 import '../widgets/route_picker_dialog.dart';
@@ -31,7 +34,7 @@ import 'settings_screen.dart';
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
 const _lastSeenBuildKey = 'last_seen_build';
-const _lastShownRouteIdsKey = 'multiroute_last_route_ids';
+const _homeOverlayRouteIdsKey = 'home_overlay_route_ids';
 
 /// A wide, regional view (several countries visible) - the landing map
 /// starts here and stays here even once the device's location is found;
@@ -64,9 +67,20 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   static const _gpsFlashDuration = Duration(seconds: 4);
 
+  /// Saved routes shown as an overlay directly on this map (no separate
+  /// screen) - see [_applyOverlayRoutes]. Persisted so they come back
+  /// automatically next time this screen is shown, "as if never closed".
+  Set<String> _overlayRouteIds = {};
+  final List<_HomeOverlayTrack> _overlayTracks = [];
+  final _overlayPolylines = ValueNotifier<List<Polyline>>(const []);
+  String? _labeledTrackId;
+  LatLng? _labeledTrackPoint;
+  String? _labeledTrackName;
+
   @override
   void initState() {
     super.initState();
+    _loadOverlayRoutePreference();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // Ensure tiles fetch even if GPS never moves the camera (same center/
       // zoom as MapOptions → flutter_map may skip the first request).
@@ -260,6 +274,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   void dispose() {
     _gpsFlashTimer?.cancel();
     _positionSub?.cancel();
+    _overlayPolylines.dispose();
     super.dispose();
   }
 
@@ -314,6 +329,154 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       context: context,
       builder: (_) =>
           MapStylePickerDialog(current: _mapStyle, onSelected: _changeMapStyle),
+    );
+  }
+
+  /// Restores whichever routes were last shown as an overlay here - drawn
+  /// immediately, without waiting for any user action, so this screen picks
+  /// up exactly where it left off. Silently drops ids for routes deleted
+  /// since; applies nothing if the saved set is now empty.
+  Future<void> _loadOverlayRoutePreference() async {
+    final box = await Hive.openBox<String>(_metaBoxName);
+    final saved = box.get(_homeOverlayRouteIdsKey);
+    if (!mounted || saved == null || saved.isEmpty) return;
+    final savedIds = saved.split(',').toSet();
+    final availableIds = context
+        .read<RouteRepository>()
+        .routes
+        .map((r) => r.id)
+        .toSet();
+    final idsToShow = savedIds.intersection(availableIds);
+    if (idsToShow.isEmpty) return;
+    await _applyOverlayRoutes(idsToShow);
+  }
+
+  Future<void> _persistOverlayRouteIds(Set<String> ids) async {
+    final box = await Hive.openBox<String>(_metaBoxName);
+    await box.put(_homeOverlayRouteIdsKey, ids.join(','));
+  }
+
+  /// Draws [ids] directly on this map - no separate screen, so leaving via
+  /// the system back button (there's nowhere else to go from Home) can
+  /// never lose them the way a pushed screen's state would. An empty set
+  /// clears the overlay; both cases are always persisted (unlike the old
+  /// "skip saving when empty" bug that left a stale non-empty selection
+  /// stuck in memory after deliberately clearing it).
+  Future<void> _applyOverlayRoutes(Set<String> ids) async {
+    unawaited(_persistOverlayRouteIds(ids));
+    if (ids.isEmpty) {
+      setState(() {
+        _overlayRouteIds = {};
+        _overlayTracks.clear();
+        _labeledTrackId = null;
+        _labeledTrackPoint = null;
+        _labeledTrackName = null;
+      });
+      _overlayPolylines.value = const [];
+      return;
+    }
+
+    setState(() {
+      _overlayRouteIds = ids;
+      _overlayTracks.clear();
+    });
+    _overlayPolylines.value = const [];
+
+    final repo = context.read<RouteRepository>();
+    final byId = {for (final r in repo.routes) r.id: r};
+    final selectedRoutes = [
+      for (final id in ids)
+        if (byId[id] != null) byId[id]!,
+    ];
+    if (selectedRoutes.isEmpty) return;
+
+    final budget = mapDisplayBudget(selectedRoutes.length);
+    final loaded = await loadTracksForMapDisplay(
+      repo: repo,
+      routes: selectedRoutes,
+      maxPoints: budget.maxPoints,
+      minSpacingMeters: budget.minSpacingMeters,
+      isCancelled: () => !mounted,
+    );
+    if (!mounted) return;
+
+    final built = <Polyline>[];
+    _overlayTracks.clear();
+    for (final track in loaded) {
+      final color = colorForDay(track.index);
+      _overlayTracks.add(
+        _HomeOverlayTrack(
+          id: track.route.id,
+          name: track.route.name,
+          points: track.points,
+          color: color,
+        ),
+      );
+      built.add(Polyline(points: track.points, strokeWidth: 4, color: color));
+    }
+    _overlayPolylines.value = built;
+    _fitOverlayTracks(selectedRoutes);
+  }
+
+  /// MediaAtlas-style: frame the overlay (1 route → that track, N → union),
+  /// including the device location dot so it doesn't get framed out.
+  void _fitOverlayTracks(List<GpxRoute> routes) {
+    var bounds = boundsForRoutes(routes);
+    if (_currentLocation != null) {
+      bounds = extendBoundsWithPoints(bounds, [_currentLocation!]);
+    }
+    if (bounds == null) return;
+    fitMapToBounds(
+      _mapController,
+      bounds: bounds,
+      padding: const EdgeInsets.fromLTRB(48, 140, 48, 170),
+    );
+  }
+
+  void _toggleTrackLabel({
+    required String id,
+    required String name,
+    required LatLng point,
+  }) {
+    setState(() {
+      if (_labeledTrackId == id) {
+        _labeledTrackId = null;
+        _labeledTrackName = null;
+        _labeledTrackPoint = null;
+      } else {
+        _labeledTrackId = id;
+        _labeledTrackName = name;
+        _labeledTrackPoint = point;
+      }
+    });
+  }
+
+  /// Rough geographic hit-test: nearest polyline within ~35 m * 2^(15-zoom).
+  void _onMapTap(TapPosition tapPosition, LatLng latlng) {
+    final hit = findNearestTrackHit(
+      tap: latlng,
+      zoom: _mapController.camera.zoom,
+      tracks: [
+        for (final track in _overlayTracks)
+          (id: track.id, name: track.name, points: track.points),
+      ],
+    );
+    if (hit == null) {
+      if (_labeledTrackId != null) {
+        setState(() {
+          _labeledTrackId = null;
+          _labeledTrackName = null;
+          _labeledTrackPoint = null;
+        });
+      }
+      return;
+    }
+    _toggleTrackLabel(id: hit.id, name: hit.name, point: hit.point);
+  }
+
+  void _openRouteDetail(String routeId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => RouteMapScreen(routeId: routeId)),
     );
   }
 
@@ -534,6 +697,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   Widget _buildMap() {
+    final l10n = AppLocalizations.of(context)!;
     final vehicleIcon = context.watch<VehicleIconController>().option;
     final recorder = context.watch<GpsRecorder>();
     final markerSize = vehicleMarkerSize(vehicleIcon);
@@ -544,6 +708,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       options: MapOptions(
         initialCenter: _currentLocation ?? kUnknownLocationMapCenter,
         initialZoom: _defaultZoom,
+        onTap: _onMapTap,
       ),
       children: [
         TileLayer(
@@ -554,18 +719,27 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           maxNativeZoom: _mapStyle.maxNativeZoom,
           evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         ),
-        // Same live red track as RecordScreen so leaving the record UI
-        // doesn't hide the ride on the "outer" map.
-        if (trackPoints.length > 1)
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: [for (final p in trackPoints) p.latLng],
-                strokeWidth: 4,
-                color: const Color(0xFFE53935),
-              ),
-            ],
-          ),
+        ValueListenableBuilder<List<Polyline>>(
+          valueListenable: _overlayPolylines,
+          builder: (context, overlayLines, _) {
+            if (overlayLines.isEmpty && trackPoints.length <= 1) {
+              return const SizedBox.shrink();
+            }
+            return PolylineLayer(
+              polylines: [
+                ...overlayLines,
+                // Same live red track as RecordScreen so leaving the record
+                // UI doesn't hide the ride on the "outer" map.
+                if (trackPoints.length > 1)
+                  Polyline(
+                    points: [for (final p in trackPoints) p.latLng],
+                    strokeWidth: 4,
+                    color: const Color(0xFFE53935),
+                  ),
+              ],
+            );
+          },
+        ),
         if (_currentLocation != null)
           MarkerLayer(
             markers: [
@@ -574,6 +748,59 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                 width: markerSize,
                 height: markerSize,
                 child: buildVehicleMarker(vehicleIcon),
+              ),
+            ],
+          ),
+        if (_labeledTrackPoint != null && _labeledTrackName != null)
+          MarkerLayer(
+            markers: [
+              Marker(
+                point: _labeledTrackPoint!,
+                width: 220,
+                height: 76,
+                alignment: Alignment.bottomCenter,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.75),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        child: Text(
+                          _labeledTrackName!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    FilledButton.tonal(
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: () => _openRouteDetail(_labeledTrackId!),
+                      child: Text(
+                        l10n.routeDetailedAnalysisButton,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -639,22 +866,25 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     switch (action) {
       case _HomeTrackMenuAction.pick:
         final ids = await _pickRoutesForOverlay();
-        if (ids == null || ids.isEmpty || !mounted) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => MultiRouteMapScreen(routeIds: ids),
-          ),
-        );
+        if (ids == null || !mounted) return;
+        // Exactly one route: that's a request to inspect *that* ride in
+        // detail (day analysis, elevation, weather, full resolution), not
+        // to set what's overlaid on Home - leaves the existing overlay,
+        // if any, untouched.
+        if (ids.length == 1) {
+          _openRouteDetail(ids.first);
+          return;
+        }
+        await _applyOverlayRoutes(ids.toSet());
       case _HomeTrackMenuAction.importFile:
         await _importTracksFromHome();
     }
   }
 
-  /// The routes checked here start out as whatever was last shown on
-  /// [MultiRouteMapScreen] (same Hive key it persists on close) - so
-  /// reopening "Rota seç..." and tapping Göster without changing anything
-  /// just continues the previous view instead of starting from a blank
-  /// picker every time.
+  /// The routes checked here start out as whatever is currently overlaid
+  /// on Home - so reopening "Rota seç..." and tapping Göster without
+  /// changing anything just continues the current view instead of starting
+  /// from a blank picker every time.
   Future<List<String>?> _pickRoutesForOverlay() async {
     final l10n = AppLocalizations.of(context)!;
     final routes = context.read<RouteRepository>().routes;
@@ -664,17 +894,12 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       );
       return null;
     }
-    final box = await Hive.openBox<String>(_metaBoxName);
-    if (!mounted) return null;
-    final availableIds = routes.map((r) => r.id).toSet();
-    final lastShown =
-        box.get(_lastShownRouteIdsKey)?.split(',').toSet() ?? const {};
     final selected = await showRoutePickerDialog(
       context: context,
       routes: routes,
-      initiallySelected: lastShown.intersection(availableIds),
+      initiallySelected: _overlayRouteIds,
     );
-    if (selected == null) return null;
+    if (selected == null || selected.isEmpty) return selected?.toList();
     return _confirmShowAllRouteIds(selected.toList());
   }
 
@@ -745,15 +970,32 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       SnackBar(content: Text(parts.join(' '))),
     );
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => MultiRouteMapScreen(routeIds: importedIds),
-      ),
-    );
+    // A single imported file goes to its own detail page (day analysis,
+    // full resolution); several go straight onto Home's overlay alongside
+    // whatever was already shown, same as picking multiple via "Rota seç...".
+    if (importedIds.length == 1) {
+      _openRouteDetail(importedIds.first);
+      return;
+    }
+    await _applyOverlayRoutes({..._overlayRouteIds, ...importedIds});
   }
 }
 
 enum _HomeTrackMenuAction { pick, importFile }
+
+class _HomeOverlayTrack {
+  const _HomeOverlayTrack({
+    required this.id,
+    required this.name,
+    required this.points,
+    required this.color,
+  });
+
+  final String id;
+  final String name;
+  final List<LatLng> points;
+  final Color color;
+}
 
 class _RoundIconButton extends StatelessWidget {
   const _RoundIconButton({

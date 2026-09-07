@@ -20,6 +20,53 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.115 beta',
+    date: '2026-09-07',
+    note:
+        'Ana ekranın "Rota seç..." akışı yeniden kurgulandı. Önceki '
+        'sürümde (v1.4.113) birden fazla rota seçmek ayrı bir ekrana '
+        '(MultiRouteMapScreen) götürüyordu; sistem geri tuşuna basınca o '
+        'ekran kapanıyor, izleri tekrar görmek için "Rota seç..." '
+        'penceresini yeniden açıp onaylamak gerekiyordu - kullanıcı testi '
+        'sırasında bunun "hiç kapanmamış gibi devam etme" beklentisini '
+        'karşılamadığı, ayrıca gerçek bir hata barındırdığı ortaya çıktı: '
+        'gösterilen tüm izlerin işaretini kaldırıp onaylayınca (24 rotayı '
+        'seçip "Hepsi" ile hepsini kaldırma senaryosu) bu boş seçim hiç '
+        'hafızaya yazılmıyordu - ekran tekrar açıldığında eski, '
+        'kaldırılmış seçim geri geliyordu, sanki hiç temizlenmemiş gibi. '
+        'Şimdi: kayıt ekranındaki referans-iz mantığıyla aynı yaklaşım - '
+        'seçilen izler doğrudan ana ekranın kendi haritasının üzerine '
+        'çiziliyor, ayrı ekrana hiç gidilmiyor; bu seçim (boş dahil) her '
+        'zaman doğru şekilde hafızaya yazılıp uygulama yeniden açıldığında '
+        'geri yükleniyor. Tek rota seçilirse (Rota seç... ile veya tek '
+        'dosya içe aktararak) otomatik olarak o rotanın tam detay '
+        'ekranına (gün bazlı analiz, yükseklik, hava durumu, tam '
+        'çözünürlük) gidiliyor - MultiRouteMapScreen\'in paylaşılan/'
+        'düşürülmüş çözünürlük bütçesine hiç girmiyor. Çoklu izler '
+        'gösterilirken haritada birine dokununca ismi ve yanında bir '
+        '"Detaylı analiz" butonu çıkıyor, ona basınca da aynı tam detay '
+        'ekranı açılıyor. Ayrıca rota seçim penceresinin "Göster" butonu '
+        'artık hiçbir şey seçili değilken pasifleşmek yerine "Gizle" '
+        'yazıp etkin kalıyor - bilerek boş bırakmayı gerçek bir seçenek '
+        'haline getiriyor.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.114 beta',
+    date: '2026-09-07',
+    note:
+        'Rota seçim penceresi baştan tasarlandı. Eskiden kutu içinde sade '
+        'bir "Hepsi + checkbox listesi" olan AlertDialog, üç ayrı yerde '
+        '(kayıt ekranının referans iz overlay\'i, çoklu-rota haritasının '
+        '"N rota" pilinden açılan yeniden seçim, ana ekranın "Rota '
+        'seç...") de aynı "amatör" görünümdeydi. Şimdi alttan açılan, '
+        'yuvarlak köşeli bir panel: "Hepsi" satırı ve kaç rotanın seçili '
+        'olduğu ("2/5" gibi) listenin üstünde sabit duruyor (artık '
+        'kaydırılıp gözden kaçmıyor), her rota haritada çizileceği renkle '
+        '(çoklu-rota haritasındaki legend ile aynı renk sırası) '
+        'önizleniyor, "Göster" butonu seçili sayıyı gösteriyor ve hiçbir '
+        'şey seçili değilken pasif oluyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.113 beta',
     date: '2026-09-07',
     note:
