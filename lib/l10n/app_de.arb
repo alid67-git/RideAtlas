@@ -31,6 +31,7 @@
   "routeNotFound": "Route nicht gefunden.",
   "routeFileReadError": "Routendatei konnte nicht gelesen werden: {error}",
   "routesDialogTitle": "Routen",
+  "manageRoutesSubtitle": "Umbenennen, zusammenführen, löschen",
   "importTooltip": "GPX/KML/KMZ importieren",
   "exportFormatQuestion": "In welchem Format exportieren?",
   "exportNameQuestion": "Unter welchem Namen soll die Datei exportiert werden?",
