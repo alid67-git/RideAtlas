@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' show max, min, pi;
 
 import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
@@ -254,11 +253,10 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
     );
     if (selected == null || !mounted) return;
 
-    var next = [
+    final next = [
       for (final r in routes)
         if (selected.contains(r.id)) r.id,
     ];
-    next = await _capRouteIds(next) ?? const <String>[];
     if (next.isEmpty || !mounted) return;
     final same = next.length == _activeRouteIds.length &&
         next.asMap().entries.every((e) => e.value == _activeRouteIds[e.key]);
@@ -266,58 +264,6 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
 
     setState(() => _activeRouteIds = next);
     await _load();
-  }
-
-  /// Soft/hard caps shared with home/record "show all".
-  Future<List<String>?> _capRouteIds(List<String> ids) async {
-    final l10n = AppLocalizations.of(context)!;
-    if (ids.length > kShowAllRoutesHardCap) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(l10n.showAllTracksTooManyTitle),
-          content: Text(
-            l10n.showAllTracksTooManyMessage(
-              ids.length,
-              kShowAllRoutesHardCap,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(l10n.showAllTracksLimitButton),
-            ),
-          ],
-        ),
-      );
-      if (ok != true) return null;
-      return ids.take(kShowAllRoutesHardCap).toList();
-    }
-    if (ids.length > kShowAllRoutesSoftCap) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(l10n.showAllTracksHeavyTitle),
-          content: Text(l10n.showAllTracksHeavyMessage(ids.length)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(l10n.recordOverlayShow),
-            ),
-          ],
-        ),
-      );
-      if (ok != true) return null;
-    }
-    return ids;
   }
 
   LatLngBounds _boundsFor(GpxRoute route) =>

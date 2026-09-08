@@ -62,31 +62,6 @@ class AppUpdateBanner extends StatelessWidget {
   }
 }
 
-/// Opens a one-button "Güncelle" dialog when [ctrl.available] is set and not
-/// yet dismissed. Returns whether the user tapped Update.
-Future<bool> offerAppUpdateDialog(BuildContext context) async {
-  final ctrl = context.read<AppUpdateController>();
-  final info = ctrl.available;
-  if (info == null || ctrl.dismissed || ctrl.installing) return false;
-
-  final l10n = AppLocalizations.of(context)!;
-  final accepted = await showDialog<bool>(
-    context: context,
-    useRootNavigator: true,
-    builder: (context) => AlertDialog(
-      title: Text(l10n.updateAvailableTitle),
-      content: Text(l10n.updateAvailableMessage(info.version)),
-      actions: [
-        FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: Text(l10n.updateButtonLabel),
-        ),
-      ],
-    ),
-  );
-  return accepted == true;
-}
-
 /// Downloads the APK in the background; progress appears in [AppUpdateBanner]
 /// on home / record screens so the rider can keep using the app.
 Future<void> installAppUpdate(BuildContext context) async {
