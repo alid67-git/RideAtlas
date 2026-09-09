@@ -577,6 +577,35 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     }
   }
 
+  /// Same confirm + repo/photo delete path as the routes list - exposed here
+  /// so riders can remove the open route without leaving the map chrome.
+  Future<void> _deleteRoute(BuildContext context, GpxRoute route) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.deleteRouteTitle),
+        content: Text(l10n.deleteRouteConfirm(route.name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await context.read<RouteRepository>().delete(route.id);
+    if (!mounted) return;
+    await context.read<PhotoRepository>().deleteForRoute(route.id);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
   Future<void> _share(GpxRoute route) async {
     final points = _points;
     if (points == null) return;
@@ -1202,6 +1231,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                         child: Text(
                           AppLocalizations.of(context)!.anomalyEditorMenuItem,
                         ),
+                      ),
+                      PopupMenuItem(
+                        value: () => _deleteRoute(context, route),
+                        child: Text(AppLocalizations.of(context)!.delete),
                       ),
                     ],
                   ),

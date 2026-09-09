@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.120 beta',
+    date: '2026-09-09',
+    note:
+        'Seçili rotayı silmek artık rota detay haritasında (⋮ menü) ve ana '
+        'ekran / kayıt haritasında rotaya dokununca çıkan etiketin altındaki '
+        'Sil tuşuyla mümkün - yalnızca rota listesinden silmek zorunda '
+        'kalınmıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.119 beta',
     date: '2026-09-07',
     note:
