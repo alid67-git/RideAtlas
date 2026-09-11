@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.122 beta',
+    date: '2026-09-11',
+    note:
+        'Uygulama sürekli açıksa (ör. gece boyu kayıt) her gün yerel saat '
+        '12:00\'de güncelleme kontrolü yapılıyor; yeni sürüm varsa sessizce '
+        'indirmeye başlıyor - yalnızca açılışta bakmakla kalmıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.121 beta',
     date: '2026-09-11',
     note:

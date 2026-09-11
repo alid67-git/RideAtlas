@@ -16,6 +16,7 @@ import 'services/app_update_controller.dart';
 import 'services/car_bridge.dart';
 import 'services/gps_recorder.dart';
 import 'navigation/root_navigator.dart';
+import 'widgets/app_update_ui.dart';
 import 'widgets/incoming_track_gate.dart';
 
 Future<void> main() async {
@@ -92,6 +93,11 @@ class RideAtlasApp extends StatelessWidget {
                 ),
                 useMaterial3: true,
               ),
+              // Arms the daily-noon update probe with a navigator context
+              // so a long-lived session (recording left open overnight) can
+              // still silently install when GitHub gets a newer APK.
+              builder: (context, child) =>
+                  _DailyNoonUpdateHost(child: child ?? const SizedBox.shrink()),
               home: const HomeMapScreen(),
             );
           },
@@ -100,6 +106,37 @@ class RideAtlasApp extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Starts [AppUpdateController.startDailyNoonChecks] once, with a callback
+/// that runs the same silent install path as the home-screen launch check.
+class _DailyNoonUpdateHost extends StatefulWidget {
+  const _DailyNoonUpdateHost({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_DailyNoonUpdateHost> createState() => _DailyNoonUpdateHostState();
+}
+
+class _DailyNoonUpdateHostState extends State<_DailyNoonUpdateHost> {
+  var _armed = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_armed) return;
+    _armed = true;
+    context.read<AppUpdateController>().startDailyNoonChecks(
+      onUpdateFound: () async {
+        if (!mounted) return;
+        await installAppUpdate(context);
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Wires up [CarBridge] once both [GpsRecorder] and [RouteRepository] are
