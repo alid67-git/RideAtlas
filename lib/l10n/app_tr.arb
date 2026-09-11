@@ -18,6 +18,7 @@
   "@openWithImported": {"placeholders": {"name": {"type": "String"}}},
   "renameRouteTitle": "Rotayı yeniden adlandır",
   "cancel": "Vazgeç",
+  "ok": "Tamam",
   "save": "Kaydet",
   "deleteRouteTitle": "Rotayı sil",
   "deleteRouteConfirm": "\"{name}\" silinsin mi? Bu işlem geri alınamaz.",

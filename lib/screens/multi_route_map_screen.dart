@@ -257,7 +257,12 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
       for (final r in routes)
         if (selected.contains(r.id)) r.id,
     ];
-    if (next.isEmpty || !mounted) return;
+    // Empty Tamam: nothing left to show on this dedicated multi-route
+    // viewer, so leave it rather than rendering a blank map.
+    if (next.isEmpty) {
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
     final same = next.length == _activeRouteIds.length &&
         next.asMap().entries.every((e) => e.value == _activeRouteIds[e.key]);
     if (same) return;

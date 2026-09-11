@@ -648,8 +648,15 @@ class _RecordScreenState extends State<RecordScreen>
       initiallySelected: _referenceRouteIds,
     );
     if (selected == null || !mounted) return;
+    // Empty Tamam must clear overlays. The old path treated empty as a
+    // no-op (and even snacked "no routes"), so deselecting the one shown
+    // track left it stuck on the map.
+    if (selected.isEmpty) {
+      await _applyReferenceRoutes({});
+      return;
+    }
     final capped = await _confirmShowAllRouteIds(selected.toList());
-    if (capped == null || capped.isEmpty || !mounted) return;
+    if (capped == null || !mounted) return;
     await _applyReferenceRoutes(capped.toSet());
   }
 
@@ -2325,6 +2332,47 @@ class _RecordScreenState extends State<RecordScreen>
     });
   }
 
+  /// Permanently deletes the tapped overlay route (not the live line) and
+  /// drops it from the recording map overlays - same confirm path as the
+  /// routes list.
+  Future<void> _deleteLabeledOverlayRoute() async {
+    final id = _labeledTrackId;
+    final name = _labeledTrackName;
+    if (id == null || name == null || id == _liveTrackLabelId) return;
+
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.deleteRouteTitle),
+        content: Text(l10n.deleteRouteConfirm(name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await context.read<RouteRepository>().delete(id);
+    if (!mounted) return;
+    await context.read<PhotoRepository>().deleteForRoute(id);
+    if (!mounted) return;
+
+    setState(() {
+      _labeledTrackId = null;
+      _labeledTrackName = null;
+      _labeledTrackPoint = null;
+    });
+    await _applyReferenceRoutes({..._referenceRouteIds}..remove(id));
+  }
+
   /// Rough geographic hit-test: nearest polyline within ~35 m * 2^(15-zoom).
   void _onMapTap(TapPosition tapPosition, LatLng latlng) {
     final l10n = AppLocalizations.of(context)!;
@@ -2356,6 +2404,7 @@ class _RecordScreenState extends State<RecordScreen>
   }
 
   Widget _buildMap() {
+    final l10n = AppLocalizations.of(context)!;
     final recorder = context.read<GpsRecorder>();
     final vehicleIcon = context.watch<VehicleIconController>().option;
     final style = _mapStyle;
@@ -2528,29 +2577,53 @@ class _RecordScreenState extends State<RecordScreen>
             markers: [
               Marker(
                 point: _labeledTrackPoint!,
-                width: 180,
-                height: 36,
+                width: 220,
+                height: _labeledTrackId == _liveTrackLabelId ? 36 : 76,
                 alignment: Alignment.bottomCenter,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.75),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    child: Text(
-                      _labeledTrackName!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.75),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        child: Text(
+                          _labeledTrackName!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    if (_labeledTrackId != null &&
+                        _labeledTrackId != _liveTrackLabelId) ...[
+                      const SizedBox(height: 6),
+                      FilledButton.tonal(
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: _deleteLabeledOverlayRoute,
+                        child: Text(
+                          l10n.delete,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],

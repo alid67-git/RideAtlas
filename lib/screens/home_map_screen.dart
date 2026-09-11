@@ -28,6 +28,7 @@ import 'record_screen.dart';
 import '../services/track_display_simplify.dart';
 import '../services/track_io.dart';
 import '../repositories/route_repository.dart';
+import '../repositories/photo_repository.dart';
 import '../widgets/route_picker_dialog.dart';
 import 'settings_screen.dart';
 
@@ -505,6 +506,46 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     );
   }
 
+  /// Permanently deletes the tapped overlay route and removes it from Home's
+  /// overlay set - same confirm path as the routes list / route detail map.
+  Future<void> _deleteLabeledOverlayRoute() async {
+    final id = _labeledTrackId;
+    final name = _labeledTrackName;
+    if (id == null || name == null) return;
+
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.deleteRouteTitle),
+        content: Text(l10n.deleteRouteConfirm(name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await context.read<RouteRepository>().delete(id);
+    if (!mounted) return;
+    await context.read<PhotoRepository>().deleteForRoute(id);
+    if (!mounted) return;
+
+    setState(() {
+      _labeledTrackId = null;
+      _labeledTrackName = null;
+      _labeledTrackPoint = null;
+    });
+    await _applyOverlayRoutes({..._overlayRouteIds}..remove(id));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -790,8 +831,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             markers: [
               Marker(
                 point: _labeledTrackPoint!,
-                width: 220,
-                height: 76,
+                width: 260,
+                height: 112,
                 alignment: Alignment.bottomCenter,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -818,20 +859,43 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    FilledButton.tonal(
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        FilledButton.tonal(
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: () =>
+                              _openRouteDetail(_labeledTrackId!),
+                          child: Text(
+                            l10n.routeDetailedAnalysisButton,
+                            style: const TextStyle(fontSize: 12),
+                          ),
                         ),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: () => _openRouteDetail(_labeledTrackId!),
-                      child: Text(
-                        l10n.routeDetailedAnalysisButton,
-                        style: const TextStyle(fontSize: 12),
-                      ),
+                        FilledButton.tonal(
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: _deleteLabeledOverlayRoute,
+                          child: Text(
+                            l10n.delete,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -868,7 +932,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   /// The routes checked here start out as whatever is currently overlaid
-  /// on Home - so reopening "Rota seç..." and tapping Göster without
+  /// on Home - so reopening "Rota seç..." and tapping Tamam without
   /// changing anything just continues the current view instead of starting
   /// from a blank picker every time.
   Future<List<String>?> _pickRoutesForOverlay() async {

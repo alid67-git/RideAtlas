@@ -20,6 +20,31 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.122 beta',
+    date: '2026-09-11',
+    note:
+        'Uygulama sürekli açıksa (ör. gece boyu kayıt) her gün yerel saat '
+        '12:00\'de güncelleme kontrolü yapılıyor; yeni sürüm varsa sessizce '
+        'indirmeye başlıyor - yalnızca açılışta bakmakla kalmıyor.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.121 beta',
+    date: '2026-09-11',
+    note:
+        'Rota seçim ekranında Göster/Gizle yerine Tamam/Vazgeç var; seçimi '
+        'boş bırakıp Tamam deyince haritadaki rotalar kalkıyor. İşaretlenen '
+        'rotalar için çöp kutusu çıkıyor - seçililer kalıcı silinebiliyor.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.120 beta',
+    date: '2026-09-09',
+    note:
+        'Seçili rotayı silmek artık rota detay haritasında (⋮ menü) ve ana '
+        'ekran / kayıt haritasında rotaya dokununca çıkan etiketin altındaki '
+        'Sil tuşuyla mümkün - yalnızca rota listesinden silmek zorunda '
+        'kalınmıyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.119 beta',
     date: '2026-09-07',
     note:
