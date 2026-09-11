@@ -932,7 +932,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   /// The routes checked here start out as whatever is currently overlaid
-  /// on Home - so reopening "Rota seç..." and tapping Göster without
+  /// on Home - so reopening "Rota seç..." and tapping Tamam without
   /// changing anything just continues the current view instead of starting
   /// from a blank picker every time.
   Future<List<String>?> _pickRoutesForOverlay() async {

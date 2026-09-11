@@ -16,6 +16,7 @@
   "@openWithImported": {"placeholders": {"name": {"type": "String"}}},
   "renameRouteTitle": "Route umbenennen",
   "cancel": "Abbrechen",
+  "ok": "OK",
   "save": "Speichern",
   "deleteRouteTitle": "Route löschen",
   "deleteRouteConfirm": "\"{name}\" löschen? Dies kann nicht rückgängig gemacht werden.",

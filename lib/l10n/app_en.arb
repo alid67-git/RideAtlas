@@ -16,6 +16,7 @@
   "@openWithImported": {"placeholders": {"name": {"type": "String"}}},
   "renameRouteTitle": "Rename route",
   "cancel": "Cancel",
+  "ok": "OK",
   "save": "Save",
   "deleteRouteTitle": "Delete route",
   "deleteRouteConfirm": "Delete \"{name}\"? This can't be undone.",

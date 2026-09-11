@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
+import '../repositories/photo_repository.dart';
+import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart' show colorForDay;
 
 /// Sort orders offered by the picker's sort menu. [original] keeps whatever
@@ -34,6 +37,11 @@ List<GpxRoute> _sorted(List<GpxRoute> routes, _RouteSortMode mode) {
 /// selection count stay pinned above the scrolling list instead of being
 /// just another row you can scroll past, and each route gets a color swatch
 /// previewing the same color it's drawn in once shown on the map.
+///
+/// Confirm is always [AppLocalizations.ok] / cancel [AppLocalizations.cancel]
+/// (never Show/Hide): empty confirm means clear the map overlays. Checking
+/// one or more rows reveals a delete action that permanently removes those
+/// routes (same repo + photo path as the routes list).
 Future<Set<String>?> showRoutePickerDialog({
   required BuildContext context,
   required List<GpxRoute> routes,
@@ -42,6 +50,9 @@ Future<Set<String>?> showRoutePickerDialog({
   final l10n = AppLocalizations.of(context)!;
   final selected = Set<String>.from(initiallySelected);
   var sortMode = _RouteSortMode.original;
+  // Local mutable copy so deletes inside the sheet update the list without
+  // waiting for the caller to rebuild and reopen.
+  final available = List<GpxRoute>.from(routes);
   return showModalBottomSheet<Set<String>>(
     context: context,
     isScrollControlled: true,
@@ -53,8 +64,63 @@ Future<Set<String>?> showRoutePickerDialog({
       return StatefulBuilder(
         builder: (context, setLocal) {
           final allSelected =
-              routes.isNotEmpty && selected.length == routes.length;
-          final sortedRoutes = _sorted(routes, sortMode);
+              available.isNotEmpty && selected.length == available.length;
+          final sortedRoutes = _sorted(available, sortMode);
+
+          Future<void> deleteSelected() async {
+            if (selected.isEmpty) return;
+            final count = selected.length;
+            GpxRoute? single;
+            if (count == 1) {
+              for (final r in available) {
+                if (selected.contains(r.id)) {
+                  single = r;
+                  break;
+                }
+              }
+            }
+            final confirmed = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(
+                  count == 1
+                      ? l10n.deleteRouteTitle
+                      : l10n.deleteRoutesTitle,
+                ),
+                content: Text(
+                  single != null
+                      ? l10n.deleteRouteConfirm(single.name)
+                      : l10n.deleteRoutesConfirm(count),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text(l10n.cancel),
+                  ),
+                  FilledButton.tonal(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text(l10n.delete),
+                  ),
+                ],
+              ),
+            );
+            if (confirmed != true || !context.mounted) return;
+
+            final repo = context.read<RouteRepository>();
+            final photoRepo = context.read<PhotoRepository>();
+            final toDelete = selected.toList();
+            for (final id in toDelete) {
+              await repo.delete(id);
+              if (!context.mounted) return;
+              await photoRepo.deleteForRoute(id);
+              if (!context.mounted) return;
+            }
+            setLocal(() {
+              available.removeWhere((r) => toDelete.contains(r.id));
+              selected.removeAll(toDelete);
+            });
+          }
+
           return FractionallySizedBox(
             heightFactor: 0.85,
             child: Column(
@@ -79,6 +145,12 @@ Future<Set<String>?> showRoutePickerDialog({
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                       ),
+                      if (selected.isNotEmpty)
+                        IconButton(
+                          tooltip: l10n.deleteSelectedRoutesTooltip,
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: deleteSelected,
+                        ),
                       PopupMenuButton<_RouteSortMode>(
                         tooltip: l10n.sortRoutesTooltip,
                         icon: const Icon(Icons.sort),
@@ -114,12 +186,12 @@ Future<Set<String>?> showRoutePickerDialog({
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     secondary: Text(
-                      '${selected.length}/${routes.length}',
+                      '${selected.length}/${available.length}',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    onChanged: routes.isEmpty
+                    onChanged: available.isEmpty
                         ? null
                         : (_) => setLocal(() {
                             if (allSelected) {
@@ -127,7 +199,7 @@ Future<Set<String>?> showRoutePickerDialog({
                             } else {
                               selected
                                 ..clear()
-                                ..addAll(routes.map((r) => r.id));
+                                ..addAll(available.map((r) => r.id));
                             }
                           }),
                   ),
@@ -175,18 +247,12 @@ Future<Set<String>?> showRoutePickerDialog({
                         Expanded(
                           child: FilledButton(
                             // Confirming with nothing checked is a deliberate
-                            // "hide everything" - not disabled, so a rider
-                            // can actually clear a previous selection instead
-                            // of being stuck re-showing whatever was checked
-                            // last time this opened.
+                            // "clear overlays" - empty set, not null (null is
+                            // only Vazgeç / the X button). Callers must apply
+                            // an empty set so a previously shown route actually
+                            // disappears.
                             onPressed: () => Navigator.pop(context, selected),
-                            child: Text(
-                              selected.isEmpty
-                                  ? l10n.recordOverlayHideButton
-                                  : l10n.recordOverlayShowCount(
-                                      selected.length,
-                                    ),
-                            ),
+                            child: Text(l10n.ok),
                           ),
                         ),
                       ],

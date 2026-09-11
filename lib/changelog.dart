@@ -20,6 +20,14 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.121 beta',
+    date: '2026-09-11',
+    note:
+        'Rota seçim ekranında Göster/Gizle yerine Tamam/Vazgeç var; seçimi '
+        'boş bırakıp Tamam deyince haritadaki rotalar kalkıyor. İşaretlenen '
+        'rotalar için çöp kutusu çıkıyor - seçililer kalıcı silinebiliyor.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.120 beta',
     date: '2026-09-09',
     note:

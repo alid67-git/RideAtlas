@@ -648,8 +648,15 @@ class _RecordScreenState extends State<RecordScreen>
       initiallySelected: _referenceRouteIds,
     );
     if (selected == null || !mounted) return;
+    // Empty Tamam must clear overlays. The old path treated empty as a
+    // no-op (and even snacked "no routes"), so deselecting the one shown
+    // track left it stuck on the map.
+    if (selected.isEmpty) {
+      await _applyReferenceRoutes({});
+      return;
+    }
     final capped = await _confirmShowAllRouteIds(selected.toList());
-    if (capped == null || capped.isEmpty || !mounted) return;
+    if (capped == null || !mounted) return;
     await _applyReferenceRoutes(capped.toSet());
   }
 
