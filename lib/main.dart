@@ -92,7 +92,7 @@ class RideAtlasApp extends StatelessWidget {
                 ),
                 useMaterial3: true,
               ),
-              home: const HomeMapScreen(),
+              home: HomeMapScreen(key: homeMapScreenKey),
             );
           },
         ),

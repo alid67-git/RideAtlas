@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.120 beta',
+    date: '2026-09-14',
+    note:
+        'Dışarıdan (Google Drive, dosya yöneticisi, "Şununla aç") bir GPX/'
+        'KML/KMZ dosyasına dokununca artık RideAtlas\'ın ana ekranı açılıyor '
+        '(kayıt ekranı değil) ve sadece o rota gösteriliyor. Rota '
+        'ekranından geri dönüldüğünde ise o rota, ana ekranda önceden '
+        'işaretli/gösterilir durumdaki diğer rotalarla birlikte haritada '
+        'kalmaya devam ediyor - önceden bu dışarıdan açma akışı ana '
+        'ekranın işaretli rota listesine hiç dokunmuyordu, geri dönünce '
+        'yeni rota kayboluyordu.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.119 beta',
     date: '2026-09-07',
     note:

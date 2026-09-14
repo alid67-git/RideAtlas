@@ -48,10 +48,14 @@ class HomeMapScreen extends StatefulWidget {
   const HomeMapScreen({super.key});
 
   @override
-  State<HomeMapScreen> createState() => _HomeMapScreenState();
+  State<HomeMapScreen> createState() => HomeMapScreenState();
 }
 
-class _HomeMapScreenState extends State<HomeMapScreen> {
+/// Public (unlike the usual private `_FooState`) so [homeMapScreenKey] can
+/// reach [addRoutesToOverlay] from outside this file - IncomingTrackGate
+/// lives above the Navigator and needs to fold an externally-opened track
+/// into Home's overlay without a screen of its own to hold that state.
+class HomeMapScreenState extends State<HomeMapScreen> {
   final _mapController = MapController();
   StreamSubscription<Position>? _positionSub;
   LatLng? _currentLocation;
@@ -425,6 +429,14 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     if (mounted) setState(() {});
     _fitOverlayTracks(selectedRoutes);
   }
+
+  /// Folds [ids] into whatever is already overlaid here - same merge
+  /// [_importTracksFromHome] does for an in-app import, exposed for
+  /// `IncomingTrackGate` (an externally-opened GPX/KML/KMZ) so both paths
+  /// leave Home showing the new route alongside whatever was already
+  /// marked, instead of the external path silently ignoring Home's state.
+  Future<void> addRoutesToOverlay(Set<String> ids) =>
+      _applyOverlayRoutes({..._overlayRouteIds, ...ids});
 
   /// MediaAtlas-style: frame the overlay (1 route → that track, N → union),
   /// including the device location dot so it doesn't get framed out.

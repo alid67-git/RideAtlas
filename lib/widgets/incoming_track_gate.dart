@@ -9,6 +9,16 @@ import '../repositories/route_repository.dart';
 import '../screens/map_screen.dart';
 import '../services/incoming_track_opener.dart';
 
+/// Small helper so a route opened from outside the app doesn't just vanish
+/// from Home's map the moment the rider backs out of [RouteMapScreen] -
+/// mirrors what an in-app import does (see
+/// `HomeMapScreenState._importTracksFromHome`), so it joins whatever other
+/// routes were already marked instead of Home reverting to its last-saved
+/// selection as if the tap never happened.
+void _addToHomeOverlay(String routeId) {
+  unawaited(homeMapScreenKey.currentState?.addRoutesToOverlay({routeId}));
+}
+
 /// Listens for Android "Open with" / share-sheet GPX/KML/KMZ files and
 /// imports them into [RouteRepository], then opens the route map. Lives
 /// above the Navigator (see main.dart) so a cold-start VIEW intent still
@@ -57,6 +67,7 @@ class _IncomingTrackGateState extends State<IncomingTrackGate> {
       );
       if (!mounted) return;
       _snack((l10n) => l10n.openWithImported(route.name));
+      _addToHomeOverlay(route.id);
       final nav = rootNavigatorKey.currentState;
       if (nav == null) return;
       await nav.push(
@@ -64,6 +75,7 @@ class _IncomingTrackGateState extends State<IncomingTrackGate> {
       );
     } on DuplicateRouteException catch (e) {
       _snack((l10n) => l10n.duplicateRouteMessage(e.existing.name));
+      _addToHomeOverlay(e.existing.id);
       final nav = rootNavigatorKey.currentState;
       if (nav == null) return;
       await nav.push(
