@@ -1616,16 +1616,14 @@ class _RecordScreenState extends State<RecordScreen>
                         const SizedBox(width: 8),
                         _buildOverlayMenuButton(l10n),
                         const SizedBox(width: 8),
-                        // Recording: Expanded reserves the space between the
-                        // icons on either side, Center keeps the speed box
-                        // centered in it - the box itself still sizes to its
-                        // own digits (mainAxisSize.min in _buildStats), so it
-                        // grows symmetrically outward as the number goes from
-                        // 1 to 3 figures instead of staying left-anchored
-                        // right after the menu button and only growing
-                        // rightward. Idle's Expanded (no Center) is
-                        // unchanged - that's a notice text that should fill
-                        // and wrap, not a number that should stay centered.
+                        // Recording: one Expanded between the left icons and
+                        // the right icons - a trailing Spacer used to steal
+                        // half that space and shove the speed pill left,
+                        // which then wrapped mid-number (e.g. "9"/"7") once
+                        // fontSize 92 no longer fit. Center keeps the pill
+                        // in the middle of the full remaining width. Idle's
+                        // Expanded (no Center) is unchanged - notice text
+                        // should fill and wrap, not sit as a centered number.
                         recorder.isIdle
                             ? Expanded(
                                 child: _buildStats(context, l10n, recorder),
@@ -1635,7 +1633,6 @@ class _RecordScreenState extends State<RecordScreen>
                                   child: _buildStats(context, l10n, recorder),
                                 ),
                               ),
-                        const Spacer(),
                         const Padding(
                           padding: EdgeInsets.only(top: 4),
                           child: SatelliteCountBadge(),
@@ -1795,36 +1792,53 @@ class _RecordScreenState extends State<RecordScreen>
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // The current speed is the one number a rider actually needs to
-          // read at a glance while moving, so it gets its own big display;
-          // everything else is secondary and stays small. Deliberately not
-          // wrapped in Expanded/FittedBox by width - see the caller, which
-          // now keeps this box out of any Row it could squeeze.
-          _AnimatedNumber(
-            value: recorder.currentSpeedKmh,
-            builder: (context, value) => Text(
-              value.round().toString(),
-              style: const TextStyle(
-                fontSize: 92,
-                fontWeight: FontWeight.w800,
-                height: 1,
-              ),
-            ),
+    // LayoutBuilder sees the Expanded+Center max width so FittedBox can
+    // scale the 92pt digits down when 2–3 figures would otherwise wrap
+    // mid-number on a narrow landscape strip.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxDigitsWidth = constraints.maxWidth.isFinite
+            ? (constraints.maxWidth - 40).clamp(48.0, 320.0)
+            : 320.0;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: const [
+              BoxShadow(color: Colors.black26, blurRadius: 6),
+            ],
           ),
-          Text(l10n.speedLabel, style: theme.textTheme.titleMedium),
-        ],
-      ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // One centered line: shrink the glyphs if needed, never wrap.
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxDigitsWidth),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: _AnimatedNumber(
+                    value: recorder.currentSpeedKmh,
+                    builder: (context, value) => Text(
+                      value.round().toString(),
+                      maxLines: 1,
+                      softWrap: false,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 92,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Text(l10n.speedLabel, style: theme.textTheme.titleMedium),
+            ],
+          ),
+        );
+      },
     );
   }
 

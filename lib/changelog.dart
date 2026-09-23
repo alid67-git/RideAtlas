@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.123 beta',
+    date: '2026-09-23',
+    note:
+        'Kayıt haritasındaki hız rakamı artık tek satırda ortalanıyor: hane '
+        'artınca (ör. 97 → 108) gerekirse küçülüyor, rakamlar alt alta '
+        'kırılmıyor. Üst sıradaki gereksiz Spacer kaldırıldı - hız kutusu '
+        'sola sıkışıp "9 / 7" diye iki satıra bölünüyordu.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.122 beta',
     date: '2026-09-11',
     note:
