@@ -45,11 +45,15 @@ Flutter SDK beklenen konum: `C:\src\flutter` (yoksa [Flutter kurulum](https://do
 
 ## GitHub Pages (ilk kurulum)
 
-Repo ayarlarında bir kez:
+Repo ayarlarında bir kez (Flutter web `gh-pages` dalına yayınlanır):
 
 1. **Settings → Pages**
-2. **Build and deployment → Source:** GitHub Actions
-3. `main` branch’e push olunca workflow otomatik derler ve yayınlar
+2. **Build and deployment → Source:** Deploy from a branch
+3. **Branch:** `gh-pages` / folder `/` (root) → Save
+4. `main`’e her push’ta workflow siteyi yeniden derleyip `gh-pages`’e yazar
+
+> Source olarak “GitHub Actions” değil **`gh-pages` dalı** seçilmeli. `main` kökü
+> yalnızca README’yi Jekyll ile gösterir; asıl uygulama `gh-pages` üzerindedir.
 
 ## Klasör yapısı
 
