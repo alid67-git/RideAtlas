@@ -246,14 +246,14 @@ const _helpSectionsTr = <HelpSection>[
   HelpSection(
     title: 'Uygulama güncellemeleri',
     body:
-        'Android\'de yeni sürüm çıkınca uygulama açılışta sorar; tek '
-        'düğme "Güncelle" yeterlidir. Sonrası otomatik: indirme yüzdesi '
-        'uygulamayı kilitlemeden alttaki banner\'da gösterilir, bitince '
-        'kurulum ekranı açılır ve eski uygulama süreci kendini kapatır - '
-        'geri kaydırınca eski sürüme değil güncel sürüme dönersiniz. '
-        'İstemezseniz diyaloğu kapatın - ana ekranda yine "Güncelle" '
-        'banner\'ı kalır, istediğiniz an devam edebilirsiniz. Web sürümü '
-        'her ziyarette zaten güncel haliyle yüklenir.',
+        'Android\'de yeni sürüm çıkınca uygulama açılışta veya öğlen '
+        'otomatik kontrolde fark eder; tek düğme "Güncelle" yeterlidir. '
+        'Ayarlar > "Güncellemeleri kontrol et" ile istediğiniz an da '
+        'bakabilirsiniz - güncelseniz söyler, yeni sürüm varsa aynı '
+        'indirme/kurulum akışını başlatır. İndirme yüzdesi uygulamayı '
+        'kilitlemeden banner\'da gösterilir, bitince kurulum ekranı '
+        'açılır. Web\'de aynı Ayarlar satırı service worker\'ı yoklar; '
+        'yeni sürüm varsa alttaki "Güncelle" banner\'ı çıkar.',
   ),
   HelpSection(
     title: 'Dil değiştirme',
@@ -483,15 +483,14 @@ const _helpSectionsEn = <HelpSection>[
   HelpSection(
     title: 'App updates',
     body:
-        'On Android, the app asks at launch when a new version is out - '
-        'one "Update" tap is enough. Everything after that runs in the '
-        'background without locking the app: download progress shows in '
-        'a bottom banner, the installer opens automatically once it\'s '
-        'done, and the old app process closes itself - swiping back lands '
-        'you in the new version, not the stale one. Dismiss the dialog '
-        'and a home-screen banner still offers the same single Update '
-        'button whenever you\'re ready. The web version always loads the '
-        'latest build on every visit.',
+        'On Android, the app notices a new version at launch or during '
+        'the daily noon check - one "Update" tap is enough. You can also '
+        'open Settings > "Check for updates" anytime: it tells you if '
+        'you\'re current, or starts the same download/install flow when '
+        'a newer APK is available. Progress shows in a banner without '
+        'locking the app. On web, that same Settings row asks the '
+        'service worker to look; if an update is ready, the bottom '
+        '"Update" banner appears.',
   ),
   HelpSection(
     title: 'Changing the language',

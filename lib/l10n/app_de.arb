@@ -264,5 +264,10 @@
   "recordingAddNoteTitle": "Notiz oder Foto hinzufügen",
   "recordingAddNoteMessage": "Hinterlassen Sie an diesem Punkt der aufgezeichneten Strecke eine Notiz und/oder ein Foto. Beim Speichern gehören sie zur Route.",
   "recordingNoteFieldLabel": "Notiz",
-  "recordingPhotoWaypointName": "Foto"
+  "recordingPhotoWaypointName": "Foto",
+  "checkForUpdatesTitle": "Nach Updates suchen",
+  "updateUpToDateMessage": "Sie verwenden die neueste Version.",
+  "updateCheckFailedMessage": "Update-Prüfung fehlgeschlagen. Verbindung prüfen und erneut versuchen.",
+  "updateCheckUnsupportedMessage": "Manuelle Update-Prüfung ist unter Android und im Web verfügbar.",
+  "updateWebAvailableMessage": "Eine neue Version ist bereit — nutzen Sie das Update-Banner unten auf der Seite."
 }

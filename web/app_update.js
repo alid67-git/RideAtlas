@@ -138,7 +138,10 @@
     window.location.reload();
   });
 
+  var registration = null;
+
   function watch(reg) {
+    registration = reg;
     // A new SW might already be parked waiting (deploy happened while the
     // tab was closed) - only banner it when an old version is actually in
     // control, otherwise this is just the first install.
@@ -166,6 +169,47 @@
       if (document.visibilityState === 'visible') check();
     });
   }
+
+  // Settings → "Check for updates". Returns a Promise of
+  // 'available' | 'upToDate' | 'failed' | 'unsupported'. Uses the same
+  // bottom banner when a waiting worker is found (no second update UI).
+  window.rideAtlasCheckWebUpdate = function () {
+    if (!registration) {
+      return Promise.resolve('unsupported');
+    }
+    return registration
+      .update()
+      .then(function () {
+        if (registration.waiting && navigator.serviceWorker.controller) {
+          showBanner(registration.waiting);
+          return 'available';
+        }
+        var installing = registration.installing;
+        if (installing && navigator.serviceWorker.controller) {
+          return new Promise(function (resolve) {
+            var done = false;
+            function finish(value) {
+              if (done) return;
+              done = true;
+              resolve(value);
+            }
+            installing.addEventListener('statechange', function () {
+              if (installing.state === 'installed') {
+                showBanner(installing);
+                finish('available');
+              }
+            });
+            setTimeout(function () {
+              finish('upToDate');
+            }, 8000);
+          });
+        }
+        return 'upToDate';
+      })
+      .catch(function () {
+        return 'failed';
+      });
+  };
 
   navigator.serviceWorker
     .register('sw.js')

@@ -289,5 +289,10 @@
   "recordingAddNoteTitle": "Not veya fotoğraf ekle",
   "recordingAddNoteMessage": "Kayıtlı iz üzerinde bu noktaya not bırakın ve/veya fotoğraf ekleyin. Kaydettiğinizde rotayla birlikte saklanır.",
   "recordingNoteFieldLabel": "Not",
-  "recordingPhotoWaypointName": "Fotoğraf"
+  "recordingPhotoWaypointName": "Fotoğraf",
+  "checkForUpdatesTitle": "Güncellemeleri kontrol et",
+  "updateUpToDateMessage": "En güncel sürümü kullanıyorsunuz.",
+  "updateCheckFailedMessage": "Güncelleme kontrol edilemedi. Bağlantınızı kontrol edip tekrar deneyin.",
+  "updateCheckUnsupportedMessage": "Manuel güncelleme kontrolü Android ve web'de kullanılabilir.",
+  "updateWebAvailableMessage": "Yeni sürüm hazır — sayfanın altındaki Güncelle banner'ını kullanın."
 }

@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.125 beta',
+    date: '2026-09-29',
+    note:
+        'Ayarlar\'a "Güncellemeleri kontrol et" satırı eklendi: çalışan '
+        'sürümü gösterir, GitHub\'daki android-latest ile karşılaştırır; '
+        'güncelseniz söyler, yeni APK varsa aynı Güncelle / indirme '
+        'akışını başlatır. Web\'de service worker yoklaması yapıp alttaki '
+        'mevcut Güncelle banner\'ını kullanır (ikinci bir web güncelleme '
+        'UI\'ı yok).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.124 beta',
     date: '2026-09-29',
     note:
