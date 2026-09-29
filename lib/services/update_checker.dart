@@ -35,32 +35,71 @@ const _releaseApiUrl =
 /// build_info.dart into the release name as "... - vX.Y.Z beta".
 final _versionInName = RegExp(r'v[\d.]+(?:\s+\w+)?$');
 
-/// Checks GitHub's rolling "android-latest" release against [currentVersion]
-/// (typically [kAppBuildLabel]). Returns null if already up to date, or if
-/// the check fails for any reason (offline, rate-limited, malformed
-/// response) - this is a best-effort background check that should never
-/// block or error out the app.
-Future<UpdateInfo?> checkForAndroidUpdate(String currentVersion) async {
+/// Outcome of probing GitHub for a newer Android APK.
+enum AndroidUpdateProbeStatus {
+  /// Running build matches (or is newer than) android-latest.
+  upToDate,
+
+  /// A newer APK is available - see [AndroidUpdateProbeResult.info].
+  updateAvailable,
+
+  /// Offline, rate-limited, malformed response, etc.
+  failed,
+}
+
+/// Result of [probeAndroidUpdate] - distinguishes "already latest" from
+/// "couldn't reach GitHub", which the silent [checkForAndroidUpdate] path
+/// used to collapse into a single null.
+class AndroidUpdateProbeResult {
+  const AndroidUpdateProbeResult._(this.status, [this.info]);
+
+  const AndroidUpdateProbeResult.upToDate()
+      : this._(AndroidUpdateProbeStatus.upToDate);
+
+  const AndroidUpdateProbeResult.failed()
+      : this._(AndroidUpdateProbeStatus.failed);
+
+  const AndroidUpdateProbeResult.available(UpdateInfo info)
+      : this._(AndroidUpdateProbeStatus.updateAvailable, info);
+
+  final AndroidUpdateProbeStatus status;
+  final UpdateInfo? info;
+}
+
+/// Probes GitHub's rolling "android-latest" release against [currentVersion]
+/// (typically [kAppBuildLabel]).
+Future<AndroidUpdateProbeResult> probeAndroidUpdate(
+  String currentVersion,
+) async {
   try {
     final response = await http
         .get(Uri.parse(_releaseApiUrl))
         .timeout(const Duration(seconds: 8));
-    if (response.statusCode != 200) return null;
+    if (response.statusCode != 200) {
+      return const AndroidUpdateProbeResult.failed();
+    }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     final name = json['name'] as String? ?? '';
     final releaseVersion = _versionInName.firstMatch(name)?.group(0)?.trim();
-    if (releaseVersion == null || releaseVersion == currentVersion) {
-      return null;
+    if (releaseVersion == null) {
+      return const AndroidUpdateProbeResult.failed();
+    }
+    if (releaseVersion == currentVersion) {
+      return const AndroidUpdateProbeResult.upToDate();
     }
 
     final assets = (json['assets'] as List<dynamic>? ?? [])
         .cast<Map<String, dynamic>>();
     final apkAsset = assets.where((a) => a['name'] == 'RideAtlas.apk');
-    if (apkAsset.isEmpty) return null;
+    if (apkAsset.isEmpty) {
+      return const AndroidUpdateProbeResult.failed();
+    }
     final asset = apkAsset.first;
     final downloadUrl = asset['browser_download_url'] as String?;
-    if (downloadUrl == null) return null;
+    if (downloadUrl == null) {
+      return const AndroidUpdateProbeResult.failed();
+    }
     final size = asset['size'];
     final sizeBytes = size is int
         ? size
@@ -68,14 +107,25 @@ Future<UpdateInfo?> checkForAndroidUpdate(String currentVersion) async {
         ? size.toInt()
         : 0;
 
-    return UpdateInfo(
-      version: releaseVersion,
-      downloadUrl: downloadUrl,
-      sizeBytes: sizeBytes,
+    return AndroidUpdateProbeResult.available(
+      UpdateInfo(
+        version: releaseVersion,
+        downloadUrl: downloadUrl,
+        sizeBytes: sizeBytes,
+      ),
     );
   } catch (_) {
-    return null;
+    return const AndroidUpdateProbeResult.failed();
   }
+}
+
+/// Checks GitHub's rolling "android-latest" release against [currentVersion].
+/// Returns null if already up to date, or if the check fails for any reason
+/// (offline, rate-limited, malformed response) - best-effort background
+/// check that should never block or error out the app.
+Future<UpdateInfo?> checkForAndroidUpdate(String currentVersion) async {
+  final result = await probeAndroidUpdate(currentVersion);
+  return result.info;
 }
 
 /// Streams [info]'s APK to a temp file (reporting [onProgress]), then hands

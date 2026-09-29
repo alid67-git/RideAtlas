@@ -264,5 +264,10 @@
   "recordingAddNoteTitle": "Add note or photo",
   "recordingAddNoteMessage": "Leave a note and/or attach a photo at this point on the recorded path. They are saved with the ride.",
   "recordingNoteFieldLabel": "Note",
-  "recordingPhotoWaypointName": "Photo"
+  "recordingPhotoWaypointName": "Photo",
+  "checkForUpdatesTitle": "Check for updates",
+  "updateUpToDateMessage": "You're on the latest version.",
+  "updateCheckFailedMessage": "Couldn't check for updates. Check your connection and try again.",
+  "updateCheckUnsupportedMessage": "Manual update check is available on Android and web.",
+  "updateWebAvailableMessage": "A new version is ready — use the Update banner at the bottom of the page."
 }

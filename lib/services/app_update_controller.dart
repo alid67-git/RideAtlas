@@ -37,6 +37,9 @@ class AppUpdateController extends ChangeNotifier {
   static final bool isSupported =
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
+  /// True while a GitHub probe is in flight (silent or Settings-triggered).
+  bool get isChecking => _checking;
+
   bool get showBanner {
     if (!isSupported) return false;
     if (installing) return true;
@@ -85,14 +88,28 @@ class AppUpdateController extends ChangeNotifier {
   Future<void> check({bool force = false}) async {
     if (!isSupported || _checking) return;
     if (!force && available != null) return;
+    await checkNow();
+  }
+
+  /// Always hits the network (unless a probe is already running). Used by
+  /// Settings so the rider can ask "is there an update?" and get a clear
+  /// up-to-date / available / failed answer. Revives a previously dismissed
+  /// offer when a newer build is found.
+  Future<AndroidUpdateProbeStatus> checkNow() async {
+    if (!isSupported) return AndroidUpdateProbeStatus.failed;
+    if (_checking) return AndroidUpdateProbeStatus.failed;
     _checking = true;
+    notifyListeners();
     try {
-      final info = await checkForAndroidUpdate(kAppBuildLabel);
-      if (info == null) return;
-      available = info;
-      notifyListeners();
+      final result = await probeAndroidUpdate(kAppBuildLabel);
+      if (result.status == AndroidUpdateProbeStatus.updateAvailable) {
+        available = result.info;
+        dismissed = false;
+      }
+      return result.status;
     } finally {
       _checking = false;
+      notifyListeners();
     }
   }
 
