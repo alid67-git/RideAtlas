@@ -285,5 +285,9 @@
   "showAllTracksLimitButton": "Sınırlı aç",
   "showAllTracksHeavyTitle": "Çok sayıda iz",
   "showAllTracksHeavyMessage": "Tek haritada {count} iz gösterilecek. Uzun sürüşlerde uygulama yavaşlayabilir.",
-  "@showAllTracksHeavyMessage": {"placeholders": {"count": {"type": "int"}}}
+  "@showAllTracksHeavyMessage": {"placeholders": {"count": {"type": "int"}}},
+  "recordingAddNoteTitle": "Not veya fotoğraf ekle",
+  "recordingAddNoteMessage": "Kayıtlı iz üzerinde bu noktaya not bırakın ve/veya fotoğraf ekleyin. Kaydettiğinizde rotayla birlikte saklanır.",
+  "recordingNoteFieldLabel": "Not",
+  "recordingPhotoWaypointName": "Fotoğraf"
 }

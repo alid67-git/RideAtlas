@@ -8,15 +8,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:photo_manager/photo_manager.dart' hide LatLng;
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
+import '../models/route_photo.dart';
 import '../models/track_point.dart';
+import '../models/waypoint.dart';
 import '../repositories/live_stats_layout_controller.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
@@ -52,6 +56,7 @@ const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
 const _recordShowMapKey = 'record_show_map';
 const _recordOverlayRouteIdsKey = 'record_overlay_route_ids';
+const _annotationUuid = Uuid();
 
 /// True on a native Android build, where [GpsRecorder] runs a foreground
 /// service and recording survives the app being minimized. Everywhere else
@@ -216,6 +221,10 @@ class _RecordScreenState extends State<RecordScreen>
   /// mid-ride save, or -1 if this session hasn't been saved yet. Reset asks
   /// for confirmation only when there's data newer than the last save.
   int _savedPointCount = -1;
+
+  /// Notes / photos dropped on the live track during this session. Exported
+  /// as GPX waypoints + [PhotoRepository] attachments on save, then cleared.
+  final List<_SessionAnnotation> _sessionAnnotations = [];
 
   /// GPS course-over-ground in degrees (0-360, clockwise from north), from
   /// the same position stream - null until the device reports one (it
@@ -1204,11 +1213,12 @@ class _RecordScreenState extends State<RecordScreen>
   }
 
   /// True when there are recorded points newer than the last mid-ride save
-  /// (or any points at all if this session was never saved) - the data a
-  /// reset would actually lose.
+  /// (or any points at all if this session was never saved), or unsaved
+  /// note/photo pins - the data a reset would actually lose.
   bool get _hasUnsavedData {
     final points = _recorder.points;
-    return points.isNotEmpty && points.length != _savedPointCount;
+    return (points.isNotEmpty && points.length != _savedPointCount) ||
+        _sessionAnnotations.isNotEmpty;
   }
 
   /// Resets the session back to idle, zeroing every stat. Asks for
@@ -1241,6 +1251,7 @@ class _RecordScreenState extends State<RecordScreen>
     _savedPointCount = -1;
     _liveLineCache = [];
     _liveLineCacheCount = 0;
+    _sessionAnnotations.clear();
     await _recorder.discard();
   }
 
@@ -1280,16 +1291,31 @@ class _RecordScreenState extends State<RecordScreen>
 
     setState(() => _saving = true);
     final repo = context.read<RouteRepository>();
+    final photoRepo = context.read<PhotoRepository>();
     final batteryStart = _recorder.batteryStartPercent;
     final batteryEnd = await currentBatteryPercent();
     final recordingStart = _recorder.startedAt;
     // Snapshot - the recorder stays alive (still paused) rather than being
     // stopped, so the session can continue after the save.
     final points = _recorder.points;
+    final annotations = List<_SessionAnnotation>.from(_sessionAnnotations);
+    final waypoints = [
+      for (final a in annotations)
+        if (a.hasNote || a.hasPhoto)
+          Waypoint(
+            latLng: a.latLng,
+            name: a.hasNote
+                ? a.note!.trim()
+                : l10n.recordingPhotoWaypointName,
+            description: a.hasPhoto && a.hasNote
+                ? l10n.recordingPhotoWaypointName
+                : null,
+          ),
+    ];
     final gpx = exportTrack(
       name: name,
       points: points,
-      waypoints: const [],
+      waypoints: waypoints,
       format: TrackFormat.gpx,
     );
     final bytes = Uint8List.fromList(utf8.encode(gpx));
@@ -1300,7 +1326,19 @@ class _RecordScreenState extends State<RecordScreen>
       batteryEndPercent: batteryEnd,
       skipDuplicateCheck: true,
     );
+    for (final a in annotations) {
+      final photoBytes = a.photoBytes;
+      if (photoBytes == null) continue;
+      await photoRepo.add(
+        routeId: route.id,
+        bytes: photoBytes,
+        lat: a.latLng.latitude,
+        lng: a.latLng.longitude,
+        type: a.mediaType ?? RouteMediaType.photo,
+      );
+    }
     _savedPointCount = points.length;
+    _sessionAnnotations.clear();
     if (!mounted) return;
     setState(() => _saving = false);
     if (recordingStart != null) {
@@ -2388,15 +2426,17 @@ class _RecordScreenState extends State<RecordScreen>
   }
 
   /// Rough geographic hit-test: nearest polyline within ~35 m * 2^(15-zoom).
+  /// Tapping the live track while a session is active opens note/photo add.
   void _onMapTap(TapPosition tapPosition, LatLng latlng) {
     final l10n = AppLocalizations.of(context)!;
+    final liveActive = !_recorder.isIdle && _liveLineCache.length >= 2;
     final hit = findNearestTrackHit(
       tap: latlng,
       zoom: _mapController.camera.zoom,
       tracks: [
         for (final track in _overlayTracks)
           (id: track.id, name: track.name, points: track.points),
-        if (_liveLineCache.length >= 2)
+        if (liveActive)
           (
             id: _liveTrackLabelId,
             name: l10n.recordingLiveTrackLabel,
@@ -2414,7 +2454,194 @@ class _RecordScreenState extends State<RecordScreen>
       }
       return;
     }
+    if (hit.id == _liveTrackLabelId) {
+      unawaited(_addAnnotationAt(hit.point));
+      return;
+    }
     _toggleTrackLabel(id: hit.id, name: hit.name, point: hit.point);
+  }
+
+  /// Note and/or photo at a point on the live track. Saved into the session
+  /// until [_saveRecording] exports them as GPX waypoints + route photos.
+  Future<void> _addAnnotationAt(LatLng point) async {
+    final l10n = AppLocalizations.of(context)!;
+    final noteController = TextEditingController();
+    Uint8List? photoBytes;
+    var mediaType = RouteMediaType.photo;
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 8,
+            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 16,
+          ),
+          child: StatefulBuilder(
+            builder: (context, setSheetState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    l10n.recordingAddNoteTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.recordingAddNoteMessage,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: noteController,
+                    autofocus: true,
+                    maxLines: 3,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      labelText: l10n.recordingNoteFieldLabel,
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (photoBytes != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: Image.memory(
+                              photoBytes!,
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          TextButton(
+                            onPressed: () => setSheetState(() {
+                              photoBytes = null;
+                            }),
+                            child: Text(l10n.delete),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            try {
+                              final file = await ImagePicker().pickImage(
+                                source: ImageSource.camera,
+                                imageQuality: 85,
+                              );
+                              if (file == null) return;
+                              final bytes = await file.readAsBytes();
+                              setSheetState(() {
+                                photoBytes = bytes;
+                                mediaType = RouteMediaType.photo;
+                              });
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    l10n.photoAddFailedGeneric('$e'),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.photo_camera),
+                          label: Text(l10n.cameraSourceLabel),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            try {
+                              final file = await ImagePicker().pickMedia(
+                                imageQuality: 85,
+                              );
+                              if (file == null) return;
+                              final bytes = await file.readAsBytes();
+                              final isVideo = _annotationLooksLikeVideo(file);
+                              setSheetState(() {
+                                photoBytes = bytes;
+                                mediaType = isVideo
+                                    ? RouteMediaType.video
+                                    : RouteMediaType.photo;
+                              });
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    l10n.photoAddFailedGeneric('$e'),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.photo_library),
+                          label: Text(l10n.gallerySourceLabel),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(sheetContext, false),
+                        child: Text(l10n.cancel),
+                      ),
+                      const Spacer(),
+                      FilledButton(
+                        onPressed: () {
+                          final note = noteController.text.trim();
+                          if (note.isEmpty && photoBytes == null) {
+                            Navigator.pop(sheetContext, false);
+                            return;
+                          }
+                          Navigator.pop(sheetContext, true);
+                        },
+                        child: Text(l10n.save),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    final note = noteController.text.trim();
+    noteController.dispose();
+    if (saved != true || !mounted) return;
+    if (note.isEmpty && photoBytes == null) return;
+
+    setState(() {
+      _sessionAnnotations.add(
+        _SessionAnnotation(
+          id: _annotationUuid.v4(),
+          latLng: point,
+          note: note.isEmpty ? null : note,
+          photoBytes: photoBytes,
+          mediaType: photoBytes == null ? null : mediaType,
+        ),
+      );
+    });
   }
 
   Widget _buildMap() {
@@ -2586,6 +2813,41 @@ class _RecordScreenState extends State<RecordScreen>
             return MarkerLayer(markers: markers);
           },
         ),
+        // Session note / photo pins for the in-progress recording.
+        if (_sessionAnnotations.isNotEmpty)
+          MarkerLayer(
+            markers: [
+              for (final a in _sessionAnnotations)
+                Marker(
+                  point: a.latLng,
+                  width: 28,
+                  height: 28,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: a.hasPhoto
+                          ? (a.mediaType == RouteMediaType.video
+                              ? Colors.deepPurple
+                              : Colors.teal)
+                          : Colors.orange.shade800,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black38, blurRadius: 3),
+                      ],
+                    ),
+                    child: Icon(
+                      a.hasPhoto
+                          ? (a.mediaType == RouteMediaType.video
+                              ? Icons.videocam
+                              : Icons.photo_camera)
+                          : Icons.sticky_note_2,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         if (_labeledTrackPoint != null && _labeledTrackName != null)
           MarkerLayer(
             markers: [
@@ -2653,6 +2915,38 @@ class _RecordScreenState extends State<RecordScreen>
 
 /// Actions offered by the top-left reference-route menu on the recording
 /// map (see [_RecordScreenState._handleOverlayMenuAction]).
+
+bool _annotationLooksLikeVideo(XFile file) {
+  final mime = file.mimeType;
+  if (mime != null) return mime.startsWith('video/');
+  final name = file.name.toLowerCase();
+  return name.endsWith('.mp4') ||
+      name.endsWith('.mov') ||
+      name.endsWith('.m4v') ||
+      name.endsWith('.avi') ||
+      name.endsWith('.webm') ||
+      name.endsWith('.3gp');
+}
+
+/// A note and/or photo attached to the live track before the ride is saved.
+class _SessionAnnotation {
+  const _SessionAnnotation({
+    required this.id,
+    required this.latLng,
+    this.note,
+    this.photoBytes,
+    this.mediaType,
+  });
+
+  final String id;
+  final LatLng latLng;
+  final String? note;
+  final Uint8List? photoBytes;
+  final RouteMediaType? mediaType;
+
+  bool get hasNote => note != null && note!.trim().isNotEmpty;
+  bool get hasPhoto => photoBytes != null;
+}
 
 class _OverlayTrack {
   const _OverlayTrack({
