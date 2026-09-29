@@ -260,5 +260,9 @@
   "showAllTracksLimitButton": "Open limited set",
   "showAllTracksHeavyTitle": "Many tracks",
   "showAllTracksHeavyMessage": "You are about to show {count} tracks on one map. The app may slow down on long rides.",
-  "@showAllTracksHeavyMessage": {"placeholders": {"count": {"type": "int"}}}
+  "@showAllTracksHeavyMessage": {"placeholders": {"count": {"type": "int"}}},
+  "recordingAddNoteTitle": "Add note or photo",
+  "recordingAddNoteMessage": "Leave a note and/or attach a photo at this point on the recorded path. They are saved with the ride.",
+  "recordingNoteFieldLabel": "Note",
+  "recordingPhotoWaypointName": "Photo"
 }

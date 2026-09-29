@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.124 beta',
+    date: '2026-09-29',
+    note:
+        'Kayıt haritasında canlı kırmızı ize dokunarak not ve/veya fotoğraf '
+        'eklenebiliyor; kaydetince GPX waypoint ve rota fotoğrafı olarak '
+        'saklanıyor. Kapalı alanda GPS\'in telefon dururken gösterdiği sahte '
+        '2–5 km/s sürüklenme, yer değiştirmeye göre sınırlandırılıyor — hız '
+        'HUD\'da ~0 görünür ve otomatik duraklama yine devreye girer. Mevcut '
+        'sıçrama / imkânsız hız filtreleri aynı kaldı.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.123 beta',
     date: '2026-09-23',
     note:

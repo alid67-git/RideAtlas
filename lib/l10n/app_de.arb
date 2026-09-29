@@ -260,5 +260,9 @@
   "showAllTracksLimitButton": "Begrenzt öffnen",
   "showAllTracksHeavyTitle": "Viele Tracks",
   "showAllTracksHeavyMessage": "Es werden {count} Tracks auf einer Karte gezeigt. Bei langen Fahrten kann die App langsamer werden.",
-  "@showAllTracksHeavyMessage": {"placeholders": {"count": {"type": "int"}}}
+  "@showAllTracksHeavyMessage": {"placeholders": {"count": {"type": "int"}}},
+  "recordingAddNoteTitle": "Notiz oder Foto hinzufügen",
+  "recordingAddNoteMessage": "Hinterlassen Sie an diesem Punkt der aufgezeichneten Strecke eine Notiz und/oder ein Foto. Beim Speichern gehören sie zur Route.",
+  "recordingNoteFieldLabel": "Notiz",
+  "recordingPhotoWaypointName": "Foto"
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:math' show min;
 
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
@@ -11,6 +12,17 @@ import 'gpx_parser.dart';
 import 'native_recording.dart';
 
 const _distance = Distance();
+
+/// Caps Doppler speed by recent ground coverage. Indoor / multipath GPS often
+/// reports a steady 2–5 km/h crawl while the phone is still; without this,
+/// auto-pause never engages and the HUD shows a fake crawl. When the device
+/// is actually moving, displacement speed tracks Doppler and the min is a
+/// no-op. Exposed for unit tests.
+double effectiveRecordingSpeedKmh({
+  required double dopplerKmh,
+  required double displacementKmh,
+}) =>
+    min(dopplerKmh, displacementKmh);
 
 enum RecordingState { idle, recording, paused }
 
@@ -34,6 +46,9 @@ enum RecordingStartError {
 class GpsRecorder extends ChangeNotifier {
   // Stationary / traffic-light floor. Kept low so a slow walk (~3–5 km/h)
   // stays in the recording state instead of flipping into auto-pause.
+  // Effective speed is Doppler capped by recent displacement (see
+  // [effectiveRecordingSpeedKmh]), so indoor phantom 2–5 km/h crawls still
+  // fall under this threshold once the phone isn't covering ground.
   static const _autoPauseSpeedThresholdKmh = 1.5;
   // Resume as soon as motion is clearly above a crawl. Was 6 km/h, which
   // left walkers stuck on "Otomatik duraklatıldı" the whole way.
@@ -47,6 +62,10 @@ class GpsRecorder extends ChangeNotifier {
   // detection at all.
   static const _autoPauseDelay = Duration(seconds: 3);
   static const _speedSmoothingWindow = 4;
+  /// How far back to look when deriving ground speed from position change.
+  /// Long enough to average out a couple of jittery indoor fixes, short
+  /// enough that a real walk (~3 km/h ≈ 4 m in 5 s) still looks like motion.
+  static const _displacementSpeedWindow = Duration(seconds: 5);
 
   /// Only a stop lasting this long or more counts as an actual "mola" -
   /// shorter ones (a red light, a junction) are momentary, not rest, and
@@ -94,6 +113,10 @@ class GpsRecorder extends ChangeNotifier {
   DateTime? _lastAutoPauseFixTime;
   int? _batteryStartPercent;
   final List<double> _recentSpeedsKmh = [];
+  /// Fallback anchor for displacement speed before enough track points exist
+  /// inside [_displacementSpeedWindow] (first fixes / after a prune).
+  LatLng? _dispSpeedOrigin;
+  DateTime? _dispSpeedOriginTime;
   String _notificationTitle = 'RideAtlas';
   String _notificationText = 'Recording your ride';
 
@@ -242,6 +265,8 @@ class GpsRecorder extends ChangeNotifier {
     _recentSpeedsKmh.clear();
     _lastAcceptedSpeedKmh = null;
     _lastAcceptedSpeedTime = null;
+    _dispSpeedOrigin = null;
+    _dispSpeedOriginTime = null;
     _batteryStartPercent = await currentBatteryPercent();
     _notificationTitle = androidNotificationTitle;
     _notificationText = androidNotificationText;
@@ -467,6 +492,51 @@ class GpsRecorder extends ChangeNotifier {
     return _recentSpeedsKmh.reduce((a, b) => a + b) / _recentSpeedsKmh.length;
   }
 
+  /// Ground speed implied by how far [here] moved over
+  /// [_displacementSpeedWindow]. Returns a large value when the window is
+  /// too short to judge, so Doppler is left uncapped for the first second.
+  ///
+  /// While auto-paused no track points are appended, so this falls back to a
+  /// rolling probe: every window it re-anchors and reports crow-flies speed
+  /// over that window (indoor wander stays low; a real walk-away does not).
+  double _displacementSpeedKmh(LatLng here, DateTime time) {
+    LatLng? origin;
+    DateTime? originTime;
+    final cutoff = time.subtract(_displacementSpeedWindow);
+    for (var i = _points.length - 1; i >= 0; i--) {
+      final t = _points[i].time;
+      if (t == null) continue;
+      if (t.isBefore(cutoff)) break;
+      origin = _points[i].latLng;
+      originTime = t;
+    }
+    if (origin == null || originTime == null) {
+      final probeOrigin = _dispSpeedOrigin;
+      final probeTime = _dispSpeedOriginTime;
+      if (probeOrigin == null || probeTime == null) {
+        _dispSpeedOrigin = here;
+        _dispSpeedOriginTime = time;
+        return 999;
+      }
+      if (time.difference(probeTime) > _displacementSpeedWindow) {
+        final meters = _distance(probeOrigin, here);
+        final speedKmh =
+            (meters / _displacementSpeedWindow.inSeconds) * 3.6;
+        _dispSpeedOrigin = here;
+        _dispSpeedOriginTime = time;
+        return speedKmh;
+      }
+      origin = probeOrigin;
+      originTime = probeTime;
+    } else {
+      _dispSpeedOrigin = origin;
+      _dispSpeedOriginTime = originTime;
+    }
+    final dtSeconds = time.difference(originTime).inMilliseconds / 1000.0;
+    if (dtSeconds < 1.0) return 999;
+    return (_distance(origin, here) / dtSeconds) * 3.6;
+  }
+
   /// Rejects a speed reading that implies physically implausible
   /// acceleration/deceleration since the last accepted one (a GPS glitch -
   /// a single bad fix or a momentary Doppler misread - not real riding),
@@ -566,19 +636,28 @@ class GpsRecorder extends ChangeNotifier {
   void _onPosition(Position pos) {
     if (_state != RecordingState.recording) return;
 
+    final here = LatLng(pos.latitude, pos.longitude);
     final rawSpeedKmh = (pos.speed.isFinite && pos.speed > 0)
         ? pos.speed * 3.6
         : 0.0;
     final speedKmh = _plausibleSpeedKmh(rawSpeedKmh, pos.timestamp);
-    _currentSpeedKmh = speedKmh;
+    final smoothedDopplerKmh = _smoothedSpeedKmh(speedKmh);
+    final displacementKmh = _displacementSpeedKmh(here, pos.timestamp);
+    final smoothedSpeedKmh = effectiveRecordingSpeedKmh(
+      dopplerKmh: smoothedDopplerKmh,
+      displacementKmh: displacementKmh,
+    );
+    // HUD uses the same capped value so indoor phantom crawls read as ~0.
+    _currentSpeedKmh = effectiveRecordingSpeedKmh(
+      dopplerKmh: speedKmh,
+      displacementKmh: displacementKmh,
+    );
     _currentAltitude = pos.altitude;
-    final smoothedSpeedKmh = _smoothedSpeedKmh(speedKmh);
     if (pos.heading.isFinite && pos.heading >= 0 && smoothedSpeedKmh > 3) {
       _currentHeading = pos.heading;
     }
 
     if (_isAutoPaused) {
-      final here = LatLng(pos.latitude, pos.longitude);
       _autoPauseOrigin ??= here;
 
       // A single fix that implies an impossible speed since the previous
@@ -604,9 +683,14 @@ class GpsRecorder extends ChangeNotifier {
       }
 
       final movedMeters = _distance(_autoPauseOrigin!, here);
+      // Speed alone used to resume from indoor Doppler noise (2–5 km/h)
+      // the moment auto-pause engaged. Require a little ground coverage with
+      // the speed signal; a clear walk-away (≥20 m) still resumes even when
+      // Doppler stays near zero.
       final shouldResume =
-          smoothedSpeedKmh >= _autoPauseResumeThresholdKmh ||
-          movedMeters >= _autoPauseResumeDisplacementMeters;
+          movedMeters >= _autoPauseResumeDisplacementMeters ||
+          (smoothedSpeedKmh >= _autoPauseResumeThresholdKmh &&
+              movedMeters >= 5.0);
       if (shouldResume) {
         _isAutoPaused = false;
         _stationarySince = null;
@@ -651,11 +735,10 @@ class GpsRecorder extends ChangeNotifier {
       _stationarySince = null;
     }
 
-    final latLng = LatLng(pos.latitude, pos.longitude);
-    if (_isPlausiblePoint(latLng, pos.timestamp)) {
+    if (_isPlausiblePoint(here, pos.timestamp)) {
       _points.add(
         TrackPoint(
-          latLng: latLng,
+          latLng: here,
           elevation: pos.altitude,
           time: pos.timestamp,
         ),
@@ -698,6 +781,8 @@ class GpsRecorder extends ChangeNotifier {
     _autoPauseOrigin = null;
     _lastAutoPauseFixLatLng = null;
     _lastAutoPauseFixTime = null;
+    _dispSpeedOrigin = null;
+    _dispSpeedOriginTime = null;
     _state = RecordingState.recording;
     if (NativeRecording.isSupported) {
       unawaited(NativeRecording.setPaused(false, manualPaused: false));
@@ -739,6 +824,8 @@ class GpsRecorder extends ChangeNotifier {
     _lastAutoPauseFixLatLng = null;
     _lastAutoPauseFixTime = null;
     _recentSpeedsKmh.clear();
+    _dispSpeedOrigin = null;
+    _dispSpeedOriginTime = null;
     for (final raw in batch) {
       final lat = (raw['latitude'] as num?)?.toDouble();
       final lng = (raw['longitude'] as num?)?.toDouble();
@@ -806,6 +893,8 @@ class GpsRecorder extends ChangeNotifier {
     _recentSpeedsKmh.clear();
     _lastAcceptedSpeedKmh = null;
     _lastAcceptedSpeedTime = null;
+    _dispSpeedOrigin = null;
+    _dispSpeedOriginTime = null;
     _batteryStartPercent = null;
     _notificationTitle = 'RideAtlas';
     _notificationText = 'Recording your ride';
