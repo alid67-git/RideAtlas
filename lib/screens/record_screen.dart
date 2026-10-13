@@ -21,6 +21,7 @@ import '../models/gpx_route.dart';
 import '../models/route_photo.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
+import '../repositories/daily_drive_backup_controller.dart';
 import '../repositories/live_stats_layout_controller.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
@@ -1339,6 +1340,16 @@ class _RecordScreenState extends State<RecordScreen>
     }
     _savedPointCount = points.length;
     _sessionAnnotations.clear();
+    // Mid-ride save closes each present local day into its own Drive/SAF
+    // GPX (today included) - never the cumulative multi-day file.
+    if (mounted) {
+      unawaited(
+        context.read<DailyDriveBackupController>().backupDaysPresent(
+          points: points,
+          includeToday: true,
+        ),
+      );
+    }
     if (!mounted) return;
     setState(() => _saving = false);
     if (recordingStart != null) {

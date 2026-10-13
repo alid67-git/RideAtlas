@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.126 beta',
+    date: '2026-10-13',
+    note:
+        'Çok günlük kayıtlarda her yerel gün, Analiz "Günlük" ile aynı '
+        'sınırlarla tek GPX olarak yedeklenebiliyor (RideAtlas_yyyy-MM-dd.gpx) '
+        '- dosyada yalnızca o günün noktaları. Ayarlar > Günlük Drive '
+        'yedeği ile Google Drive klasörü seçilir (Android SAF); gece '
+        'yarısı geçen gün ve kayıt sırasında kaydetme tetikler.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.125 beta',
     date: '2026-09-29',
     note:

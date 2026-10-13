@@ -269,5 +269,11 @@
   "updateUpToDateMessage": "You're on the latest version.",
   "updateCheckFailedMessage": "Couldn't check for updates. Check your connection and try again.",
   "updateCheckUnsupportedMessage": "Manual update check is available on Android and web.",
-  "updateWebAvailableMessage": "A new version is ready — use the Update banner at the bottom of the page."
+  "updateWebAvailableMessage": "A new version is ready — use the Update banner at the bottom of the page.",
+  "dailyDriveBackupTitle": "Daily Drive backup",
+  "dailyDriveBackupOffSubtitle": "During multi-day recordings, each completed day is saved as its own GPX — not the whole ride.",
+  "dailyDriveBackupPickFolderTitle": "Backup folder",
+  "dailyDriveBackupPickFolderSubtitle": "Choose a Google Drive (or other) folder for daily GPX files.",
+  "dailyDriveBackupFolderSubtitle": "Saving each completed day to: {folder}",
+  "@dailyDriveBackupFolderSubtitle": {"placeholders": {"folder": {"type": "String"}}}
 }

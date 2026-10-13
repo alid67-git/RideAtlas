@@ -244,6 +244,17 @@ const _helpSectionsTr = <HelpSection>[
         'isteyebilirsiniz.',
   ),
   HelpSection(
+    title: 'Günlük Drive yedeği',
+    body:
+        'Günler süren bir kayıtta her yerel takvim günü, Analiz\'deki '
+        '"Günlük" özetle aynı sınırlarla ayrı bir GPX olarak yedeklenebilir '
+        '- dosyada yalnızca o günün noktaları vardır, tüm sürüş birikmez. '
+        'Ayarlar > Günlük Drive yedeği\'ni açıp Google Drive (veya başka '
+        'bir depolama) klasörü seçin. Gece yarısı geçen gün otomatik '
+        'yazılır; kayıt sırasında kaydettiğinizde o ana kadarki günler '
+        'de klasöre düşer. Dosya adı RideAtlas_yyyy-MM-dd.gpx.',
+  ),
+  HelpSection(
     title: 'Uygulama güncellemeleri',
     body:
         'Android\'de yeni sürüm çıkınca uygulama açılışta veya öğlen '
@@ -479,6 +490,17 @@ const _helpSectionsEn = <HelpSection>[
         'suggested by default) and share it with another app or another '
         'person. Merged routes (with an automatic "A + B" name) are a '
         'common case where you\'ll want to type something different.',
+  ),
+  HelpSection(
+    title: 'Daily Drive backup',
+    body:
+        'On a multi-day recording, each local calendar day can be backed '
+        'up as its own GPX — same day boundaries as the Daily analysis '
+        'tab — containing only that day\'s points, not the whole ride. '
+        'Turn on Settings > Daily Drive backup and pick a Google Drive '
+        '(or other) folder. When midnight passes, yesterday is written '
+        'automatically; mid-ride save also flushes completed days. Files '
+        'are named RideAtlas_yyyy-MM-dd.gpx.',
   ),
   HelpSection(
     title: 'App updates',

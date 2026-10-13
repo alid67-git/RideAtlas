@@ -1,12 +1,15 @@
 package com.rideatlas.rideatlas
 
+import android.app.Activity
 import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.provider.Settings
+import androidx.documentfile.provider.DocumentFile
 import com.rideatlas.rideatlas.car.CarRecordingBridge
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -20,6 +23,8 @@ private const val CAR_METHOD_CHANNEL = "com.rideatlas.app/car"
 private const val BATTERY_METHOD_CHANNEL = "com.rideatlas.app/battery"
 private const val SATELLITE_METHOD_CHANNEL = "com.rideatlas.app/satellites"
 private const val OPEN_FILE_METHOD_CHANNEL = "com.rideatlas.app/open_file"
+private const val BACKUP_FOLDER_METHOD_CHANNEL = "com.rideatlas.app/backup_folder"
+private const val REQ_PICK_BACKUP_TREE = 41901
 
 class MainActivity : FlutterActivity() {
 
@@ -34,6 +39,7 @@ class MainActivity : FlutterActivity() {
     private var pendingOpen: Map<String, Any>? = null
     private var openFileChannel: MethodChannel? = null
     private var dartReadyForOpens = false
+    private var pendingTreePickResult: MethodChannel.Result? = null
 
     // Deliberately NOT overriding provideFlutterEngine() here: doing so
     // previously made FlutterActivity treat the engine as host-provided,
@@ -128,6 +134,34 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // Daily backup folder (SAF tree URI) - typically a Google Drive
+        // folder the rider picks once; each completed local day writes one
+        // GPX into it (see DailyDriveBackupController).
+        val backupChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            BACKUP_FOLDER_METHOD_CHANNEL,
+        )
+        backupChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "pickFolder" -> pickBackupFolder(result)
+                "writeFile" -> {
+                    val uri = call.argument<String>("uri")
+                    val fileName = call.argument<String>("fileName")
+                    val bytes = call.argument<ByteArray>("bytes")
+                    if (uri.isNullOrEmpty() || fileName.isNullOrEmpty() || bytes == null) {
+                        result.success(false)
+                    } else {
+                        result.success(writeBackupFile(uri, fileName, bytes))
+                    }
+                }
+                "folderDisplayName" -> {
+                    val uri = call.argument<String>("uri")
+                    result.success(if (uri.isNullOrEmpty()) null else treeDisplayName(uri))
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         // Cold start: intent is already set when configureFlutterEngine runs.
         captureOpenIntent(intent)
     }
@@ -136,6 +170,85 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         captureOpenIntent(intent)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_PICK_BACKUP_TREE) return
+        val pending = pendingTreePickResult
+        pendingTreePickResult = null
+        if (pending == null) return
+        if (resultCode != Activity.RESULT_OK || data?.data == null) {
+            pending.success(null)
+            return
+        }
+        val treeUri = data.data!!
+        val flags = data.flags and
+            (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        try {
+            contentResolver.takePersistableUriPermission(treeUri, flags)
+        } catch (_: SecurityException) {
+            // Some providers grant only for this session; still usable until reboot.
+        }
+        pending.success(
+            mapOf(
+                "uri" to treeUri.toString(),
+                "name" to (treeDisplayName(treeUri.toString()) ?: "Drive"),
+            ),
+        )
+    }
+
+    private fun pickBackupFolder(result: MethodChannel.Result) {
+        if (pendingTreePickResult != null) {
+            result.error("busy", "Folder picker already open", null)
+            return
+        }
+        pendingTreePickResult = result
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                putExtra(DocumentsContract.EXTRA_INITIAL_URI, null as Uri?)
+            }
+        }
+        try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, REQ_PICK_BACKUP_TREE)
+        } catch (e: Exception) {
+            pendingTreePickResult = null
+            result.error("unavailable", e.message, null)
+        }
+    }
+
+    private fun treeDisplayName(uriString: String): String? {
+        return try {
+            val tree = DocumentFile.fromTreeUri(this, Uri.parse(uriString))
+            tree?.name
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun writeBackupFile(uriString: String, fileName: String, bytes: ByteArray): Boolean {
+        return try {
+            val tree = DocumentFile.fromTreeUri(this, Uri.parse(uriString)) ?: return false
+            if (!tree.canWrite()) return false
+            var doc = tree.findFile(fileName)
+            if (doc == null || !doc.exists()) {
+                doc = tree.createFile("application/gpx+xml", fileName)
+                    ?: tree.createFile("application/octet-stream", fileName)
+            }
+            val target = doc ?: return false
+            contentResolver.openOutputStream(target.uri, "wt")?.use { out ->
+                out.write(bytes)
+                out.flush()
+            } ?: return false
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun captureOpenIntent(intent: Intent?) {

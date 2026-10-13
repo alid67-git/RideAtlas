@@ -294,5 +294,11 @@
   "updateUpToDateMessage": "En güncel sürümü kullanıyorsunuz.",
   "updateCheckFailedMessage": "Güncelleme kontrol edilemedi. Bağlantınızı kontrol edip tekrar deneyin.",
   "updateCheckUnsupportedMessage": "Manuel güncelleme kontrolü Android ve web'de kullanılabilir.",
-  "updateWebAvailableMessage": "Yeni sürüm hazır — sayfanın altındaki Güncelle banner'ını kullanın."
+  "updateWebAvailableMessage": "Yeni sürüm hazır — sayfanın altındaki Güncelle banner'ını kullanın.",
+  "dailyDriveBackupTitle": "Günlük Drive yedeği",
+  "dailyDriveBackupOffSubtitle": "Çok günlük kayıtlarda her tamamlanan gün kendi GPX dosyası olarak yedeklenir — tüm sürüş tek dosyada değil.",
+  "dailyDriveBackupPickFolderTitle": "Yedek klasörü",
+  "dailyDriveBackupPickFolderSubtitle": "Günlük GPX dosyaları için bir Google Drive (veya başka) klasör seçin.",
+  "dailyDriveBackupFolderSubtitle": "Tamamlanan her gün şuraya yazılıyor: {folder}",
+  "@dailyDriveBackupFolderSubtitle": {"placeholders": {"folder": {"type": "String"}}}
 }

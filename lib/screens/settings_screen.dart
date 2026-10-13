@@ -5,11 +5,13 @@ import 'package:provider/provider.dart';
 
 import '../build_info.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../repositories/daily_drive_backup_controller.dart';
 import '../repositories/locale_controller.dart';
 import '../repositories/satellite_visibility_controller.dart';
 import '../repositories/stat_icon_settings_controller.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/app_update_controller.dart';
+import '../services/backup_folder_bridge.dart';
 import '../services/battery_optimization.dart';
 import '../services/update_checker.dart';
 import '../services/web_update_check.dart';
@@ -90,6 +92,10 @@ class SettingsScreen extends StatelessWidget {
               value: satelliteController.visible,
               onChanged: satelliteController.setVisible,
             ),
+            if (BackupFolderBridge.isSupported) ...[
+              const Divider(height: 1),
+              const _DailyDriveBackupSettings(),
+            ],
           ],
           const Divider(height: 1),
           ListTile(
@@ -305,6 +311,77 @@ class _CheckForUpdatesTileState extends State<_CheckForUpdatesTile> {
               color: theme.colorScheme.onSurfaceVariant,
             ),
       onTap: _webChecking ? null : _onTap,
+    );
+  }
+}
+
+/// Android-only: enable daily Drive/SAF backup and pick the destination
+/// folder (Google Drive is offered by the system folder picker).
+class _DailyDriveBackupSettings extends StatelessWidget {
+  const _DailyDriveBackupSettings();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final backup = context.watch<DailyDriveBackupController>();
+    final folderLabel = backup.folderName;
+    final subtitle = !backup.enabled
+        ? l10n.dailyDriveBackupOffSubtitle
+        : folderLabel == null || folderLabel.isEmpty
+        ? l10n.dailyDriveBackupPickFolderSubtitle
+        : l10n.dailyDriveBackupFolderSubtitle(folderLabel);
+
+    return Column(
+      children: [
+        SwitchListTile(
+          secondary: const Icon(Icons.cloud_upload_outlined),
+          title: Text(l10n.dailyDriveBackupTitle),
+          subtitle: Text(subtitle),
+          value: backup.enabled,
+          onChanged: backup.isLoading
+              ? null
+              : (value) async {
+                  await backup.setEnabled(value);
+                  if (value &&
+                      (backup.folderUri == null || backup.folderUri!.isEmpty) &&
+                      context.mounted) {
+                    final ok = await backup.pickFolder();
+                    if (!ok && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(l10n.dailyDriveBackupPickFolderSubtitle),
+                        ),
+                      );
+                    }
+                  }
+                },
+        ),
+        if (backup.enabled)
+          ListTile(
+            leading: const Icon(Icons.folder_outlined),
+            title: Text(l10n.dailyDriveBackupPickFolderTitle),
+            subtitle: Text(
+              folderLabel == null || folderLabel.isEmpty
+                  ? l10n.dailyDriveBackupPickFolderSubtitle
+                  : folderLabel,
+            ),
+            trailing: backup.isBusy
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.chevron_right),
+            onTap: backup.isBusy
+                ? null
+                : () async {
+                    final ok = await backup.pickFolder();
+                    if (!ok && context.mounted) {
+                      // Cancelled - leave previous folder as-is.
+                    }
+                  },
+          ),
+      ],
     );
   }
 }
