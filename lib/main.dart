@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 
 import 'l10n/gen/app_localizations.dart';
+import 'repositories/daily_drive_backup_controller.dart';
 import 'repositories/live_stats_layout_controller.dart';
 import 'repositories/locale_controller.dart';
 import 'repositories/photo_repository.dart';
@@ -51,6 +54,10 @@ class RideAtlasApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => GpsRecorder()),
         // Shared so home + recording/info screens all see the same update.
         ChangeNotifierProvider(create: (_) => AppUpdateController()),
+        // Multi-day recording → one GPX per local day into a Drive/SAF folder.
+        ChangeNotifierProvider(
+          create: (_) => DailyDriveBackupController()..load(),
+        ),
       ],
       child: _CarBridgeGate(
         child: IncomingTrackGate(
@@ -95,9 +102,13 @@ class RideAtlasApp extends StatelessWidget {
               ),
               // Arms the daily-noon update probe with a navigator context
               // so a long-lived session (recording left open overnight) can
-              // still silently install when GitHub gets a newer APK.
-              builder: (context, child) =>
-                  _DailyNoonUpdateHost(child: child ?? const SizedBox.shrink()),
+              // still silently install when GitHub gets a newer APK. Also
+              // watches the live recorder for completed local days to back up.
+              builder: (context, child) => _DailyNoonUpdateHost(
+                child: _DailyDriveBackupHost(
+                  child: child ?? const SizedBox.shrink(),
+                ),
+              ),
               home: const HomeMapScreen(),
             );
           },
@@ -133,6 +144,50 @@ class _DailyNoonUpdateHostState extends State<_DailyNoonUpdateHost> {
         await installAppUpdate(context);
       },
     );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// While a multi-day recording runs, uploads each **completed** local day
+/// (not the full cumulative track) into the user-picked Drive/SAF folder.
+class _DailyDriveBackupHost extends StatefulWidget {
+  const _DailyDriveBackupHost({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_DailyDriveBackupHost> createState() => _DailyDriveBackupHostState();
+}
+
+class _DailyDriveBackupHostState extends State<_DailyDriveBackupHost> {
+  GpsRecorder? _recorder;
+  var _listening = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final recorder = context.read<GpsRecorder>();
+    if (_recorder == recorder && _listening) return;
+    _recorder?.removeListener(_onRecorder);
+    _recorder = recorder;
+    _recorder!.addListener(_onRecorder);
+    _listening = true;
+  }
+
+  void _onRecorder() {
+    final recorder = _recorder;
+    if (recorder == null || !mounted) return;
+    unawaited(
+      context.read<DailyDriveBackupController>().syncFromRecorder(recorder),
+    );
+  }
+
+  @override
+  void dispose() {
+    _recorder?.removeListener(_onRecorder);
+    super.dispose();
   }
 
   @override

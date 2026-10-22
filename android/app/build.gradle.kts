@@ -70,6 +70,9 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.3.0")
     // WGS84 ellipsoid → Mean Sea Level altitude (see RecordingLocationService).
     implementation("androidx.core:core-location-altitude:1.0.0")
+    // Daily Drive/SAF backup: DocumentFile over a persistable tree URI
+    // (user-picked Google Drive folder) - see MainActivity backup_folder.
+    implementation("androidx.documentfile:documentfile:1.0.1")
 }
 
 flutter {
