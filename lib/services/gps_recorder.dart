@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/track_point.dart';
 import 'battery_info.dart';
+import 'gps_fix_filter.dart';
 import 'gpx_parser.dart';
 import 'native_recording.dart';
 
@@ -55,6 +56,8 @@ class GpsRecorder extends ChangeNotifier {
   static const _autoPauseResumeThresholdKmh = 2.5;
   // Phone GPS often reports speed ≈ 0 while walking; treat a real move away
   // from the pause spot as resume even when Doppler speed stays low.
+  // Indoor hops of this size are still noise when accuracy is worse — see
+  // [isGpsHopARealMoveAway].
   static const _autoPauseResumeDisplacementMeters = 20.0;
   // Just a visual "waiting" cue while genuinely stationary (traffic light,
   // junction) - separate from what counts as a "mola" (see
@@ -641,18 +644,37 @@ class GpsRecorder extends ChangeNotifier {
         ? pos.speed * 3.6
         : 0.0;
     final speedKmh = _plausibleSpeedKmh(rawSpeedKmh, pos.timestamp);
-    final smoothedDopplerKmh = _smoothedSpeedKmh(speedKmh);
-    final displacementKmh = _displacementSpeedKmh(here, pos.timestamp);
+    // A hop still inside the reported accuracy circle is indoor/urban
+    // wander, not ground covered — the 6 km / 72 km/h "ride" while sitting
+    // at home. Zero both Doppler and displacement so auto-pause can engage
+    // and the HUD reads 0.
+    final motionRef = _autoPauseOrigin ??
+        (_points.isNotEmpty ? _points.last.latLng : null);
+    final hopFromRef =
+        motionRef == null ? 0.0 : _distance(motionRef, here);
+    final hopIsNoise = motionRef != null &&
+        isGpsHopWithinNoise(
+          meters: hopFromRef,
+          accuracyMeters: pos.accuracy,
+        );
+    final smoothedDopplerKmh =
+        _smoothedSpeedKmh(hopIsNoise ? 0.0 : speedKmh);
+    final displacementKmh =
+        hopIsNoise ? 0.0 : _displacementSpeedKmh(here, pos.timestamp);
     final smoothedSpeedKmh = effectiveRecordingSpeedKmh(
       dopplerKmh: smoothedDopplerKmh,
       displacementKmh: displacementKmh,
     );
     // HUD uses the same capped value so indoor phantom crawls read as ~0.
-    _currentSpeedKmh = effectiveRecordingSpeedKmh(
-      dopplerKmh: speedKmh,
-      displacementKmh: displacementKmh,
-    );
-    _currentAltitude = pos.altitude;
+    _currentSpeedKmh = hopIsNoise
+        ? 0.0
+        : effectiveRecordingSpeedKmh(
+            dopplerKmh: speedKmh,
+            displacementKmh: displacementKmh,
+          );
+    if (!hopIsNoise) {
+      _currentAltitude = pos.altitude;
+    }
     if (pos.heading.isFinite && pos.heading >= 0 && smoothedSpeedKmh > 3) {
       _currentHeading = pos.heading;
     }
@@ -684,13 +706,21 @@ class GpsRecorder extends ChangeNotifier {
 
       final movedMeters = _distance(_autoPauseOrigin!, here);
       // Speed alone used to resume from indoor Doppler noise (2–5 km/h)
-      // the moment auto-pause engaged. Require a little ground coverage with
-      // the speed signal; a clear walk-away (≥20 m) still resumes even when
-      // Doppler stays near zero.
+      // the moment auto-pause engaged. Require a hop clearly outside the
+      // GPS accuracy circle (at least 20 m outdoors; 2× accuracy indoors)
+      // so a 20–40 m home-multipath jump cannot restart the ride.
       final shouldResume =
-          movedMeters >= _autoPauseResumeDisplacementMeters ||
+          isGpsHopARealMoveAway(
+            meters: movedMeters,
+            accuracyMeters: pos.accuracy,
+            minMeters: _autoPauseResumeDisplacementMeters,
+          ) ||
           (smoothedSpeedKmh >= _autoPauseResumeThresholdKmh &&
-              movedMeters >= 5.0);
+              movedMeters >= 5.0 &&
+              !isGpsHopWithinNoise(
+                meters: movedMeters,
+                accuracyMeters: pos.accuracy,
+              ));
       if (shouldResume) {
         _isAutoPaused = false;
         _stationarySince = null;
@@ -735,7 +765,7 @@ class GpsRecorder extends ChangeNotifier {
       _stationarySince = null;
     }
 
-    if (_isPlausiblePoint(here, pos.timestamp)) {
+    if (_isPlausiblePoint(here, pos.timestamp) && !hopIsNoise) {
       _points.add(
         TrackPoint(
           latLng: here,
@@ -812,9 +842,10 @@ class GpsRecorder extends ChangeNotifier {
   }
 
   void _rebuildPointsFromNative(List<Map<Object?, Object?>> batch) {
-    // Take every native fix as-is. Re-running live auto-pause against a
-    // burst of historical points would use wall-clock delays incorrectly
-    // and drop real movement that happened while the screen was off.
+    // Do not re-run live auto-pause on a historical burst (wall-clock
+    // delays would be wrong). Still drop hops inside the GPS accuracy
+    // circle — the same indoor-wander gate as [_onPosition] — so saving
+    // after a screen-off session cannot restore kilometres of home jitter.
     _points.clear();
     _distanceMeters = 0;
     _seenNativeTimeMs.clear();
@@ -834,9 +865,14 @@ class GpsRecorder extends ChangeNotifier {
       if (timeMs != null && !_seenNativeTimeMs.add(timeMs)) continue;
       final altitude = (raw['altitude'] as num?)?.toDouble();
       final speedMs = (raw['speed'] as num?)?.toDouble() ?? 0;
+      final accuracy = (raw['accuracy'] as num?)?.toDouble() ?? 0;
       final latLng = LatLng(lat, lng);
       if (_points.isNotEmpty) {
-        _distanceMeters += _distance(_points.last.latLng, latLng);
+        final hop = _distance(_points.last.latLng, latLng);
+        if (isGpsHopWithinNoise(meters: hop, accuracyMeters: accuracy)) {
+          continue;
+        }
+        _distanceMeters += hop;
       }
       _points.add(
         TrackPoint(
