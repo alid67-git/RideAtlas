@@ -4,8 +4,6 @@ import 'package:rideatlas/services/gps_fix_filter.dart';
 void main() {
   group('isGpsHopWithinNoise', () {
     test('indoor 40 m hop with 40 m accuracy is still sitting at home', () {
-      // ~40 m in 2 s is the 72 km/h "max speed" from a phone that never left
-      // the house — inside the reported accuracy circle, so not a ride.
       expect(
         isGpsHopWithinNoise(meters: 40, accuracyMeters: 40),
         isTrue,
@@ -16,9 +14,22 @@ void main() {
       );
     });
 
-    test('same 25 m hop outdoors (8 m accuracy) is real movement', () {
+    test('optimistic 8 m accuracy still ignores a 12 m indoor hop', () {
+      // v1.4.127 used 1× accuracy (gate 8 m), so this hop was recorded and
+      // showed up as ~10.8 km/h while the phone sat at home.
       expect(
-        isGpsHopWithinNoise(meters: 25, accuracyMeters: 8),
+        isGpsHopWithinNoise(meters: 12, accuracyMeters: 8),
+        isTrue,
+      );
+      expect(
+        isGpsHopWithinNoise(meters: 6, accuracyMeters: 8),
+        isTrue,
+      );
+    });
+
+    test('a 30 m hop outdoors (8 m accuracy) is real movement', () {
+      expect(
+        isGpsHopWithinNoise(meters: 30, accuracyMeters: 8),
         isFalse,
       );
     });
@@ -29,7 +40,11 @@ void main() {
         isTrue,
       );
       expect(
-        isGpsHopWithinNoise(meters: 20, accuracyMeters: 0),
+        isGpsHopWithinNoise(meters: 25, accuracyMeters: 0),
+        isTrue,
+      );
+      expect(
+        isGpsHopWithinNoise(meters: 31, accuracyMeters: 0),
         isFalse,
       );
     });
