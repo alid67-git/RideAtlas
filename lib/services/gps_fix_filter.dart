@@ -15,15 +15,19 @@ double gpsNoiseRadiusMeters(
   return accuracyMeters;
 }
 
-/// True when [meters] is still inside the fix's uncertainty (plus a small
-/// floor so an over-optimistic 2 m indoor accuracy cannot count wobble).
+/// True when [meters] is still GPS wander, not a ride.
+///
+/// Fused location often reports 5–10 m accuracy indoors while the fix
+/// actually jumps 10–25 m (v1.4.127 still let ~100 m and a 10.8 km/h
+/// "max" through in six minutes at home). Gate is the larger of a 25 m
+/// floor and 2× the reported accuracy.
 bool isGpsHopWithinNoise({
   required double meters,
   required double accuracyMeters,
-  double minMeters = 5,
+  double minMeters = 25,
 }) {
   if (!meters.isFinite || meters < 0) return true;
-  final gate = max(minMeters, gpsNoiseRadiusMeters(accuracyMeters));
+  final gate = max(minMeters, 2 * gpsNoiseRadiusMeters(accuracyMeters));
   return meters <= gate;
 }
 

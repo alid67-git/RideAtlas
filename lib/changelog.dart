@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.128 beta',
+    date: '2026-11-04',
+    note:
+        'Evde dururken v1.4.127 hâlâ ~100 m ve 10 km/s bırakabiliyordu: '
+        'telefon doğruluğu 8 m deyince 12 m’lik iç mekân zıplaması gerçek '
+        'sanılıyordu. Artık hop en az 25 m ve 2× bildirilen doğruluk '
+        'dışındaysa hareket sayılır; otomatik duraklama daha erken tutar.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.127 beta',
     date: '2026-11-04',
     note:
