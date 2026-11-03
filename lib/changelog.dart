@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.127 beta',
+    date: '2026-11-04',
+    note:
+        'Evde dururken GPS sapması (ör. 6 km, 72 km/s, irtifa inip çıkması) '
+        'artık mesafe/hız yazmaz. İç mekân 20–40 m zıplamaları hem izi '
+        'şişiriyor hem otomatik duraklatmayı kaldırıyordu; bildirilen '
+        'doğruluk çemberinin içindeki hop hareket sayılmaz, duraklama '
+        'ancak çemberin belirgin dışına çıkınca açılır. Kaydetmede native '
+        'iz de aynı süzgeçten geçer.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.126 beta',
     date: '2026-10-13',
     note:
