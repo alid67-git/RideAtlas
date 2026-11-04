@@ -209,6 +209,7 @@ class _CarBridgeGate extends StatefulWidget {
 
 class _CarBridgeGateState extends State<_CarBridgeGate> {
   late final CarBridge _carBridge;
+  LocaleController? _locale;
 
   @override
   void initState() {
@@ -217,10 +218,13 @@ class _CarBridgeGateState extends State<_CarBridgeGate> {
       recorder: context.read<GpsRecorder>(),
       routeRepository: context.read<RouteRepository>(),
     );
+    _locale = context.read<LocaleController>();
+    _locale!.addListener(_carBridge.refresh);
   }
 
   @override
   void dispose() {
+    _locale?.removeListener(_carBridge.refresh);
     _carBridge.dispose();
     super.dispose();
   }

@@ -640,7 +640,13 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
             ],
           ),
         RichAttributionWidget(
-          attributions: [TextSourceAttribution(_mapStyle.attribution)],
+          attributions: [
+            TextSourceAttribution(
+              _mapStyle.localizedAttribution(
+                Localizations.localeOf(context).languageCode,
+              ),
+            ),
+          ],
         ),
       ],
     );

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
+import '../l10n/resolved_language.dart';
 import '../models/gpx_route.dart';
 import '../services/gpx_parser.dart';
 import '../services/track_io.dart';
@@ -184,7 +185,7 @@ class RouteRepository extends ChangeNotifier {
     // before the map screen even opened.
     final parsed = await compute(parseTrackXml, xml);
     if (parsed.points.isEmpty) {
-      throw const FormatException('Dosyada rota/track noktası bulunamadı.');
+      throw const FormatException('No route/track points found in this file.');
     }
 
     final fingerprint = trackFingerprint(parsed.points);
@@ -205,7 +206,7 @@ class RouteRepository extends ChangeNotifier {
         ? baseName
         : (parsed.suggestedName?.isNotEmpty == true
               ? cleanRouteName(parsed.suggestedName!)
-              : 'Adsız rota');
+              : unnamedRouteLabel());
 
     final route = buildRouteMetadata(
       id: id,
@@ -269,7 +270,7 @@ class RouteRepository extends ChangeNotifier {
     final box = await _openBox();
     final content = box.get(_contentKey(route.id));
     if (content == null) {
-      throw StateError('Rota içeriği bulunamadı: ${route.name}');
+      throw StateError('Route content not found: ${route.name}');
     }
     return content;
   }

@@ -275,5 +275,6 @@
   "dailyDriveBackupPickFolderTitle": "Backup-Ordner",
   "dailyDriveBackupPickFolderSubtitle": "Wählen Sie einen Google-Drive- (oder anderen) Ordner für tägliche GPX-Dateien.",
   "dailyDriveBackupFolderSubtitle": "Jeder abgeschlossene Tag wird gespeichert in: {folder}",
-  "@dailyDriveBackupFolderSubtitle": {"placeholders": {"folder": {"type": "String"}}}
+  "@dailyDriveBackupFolderSubtitle": {"placeholders": {"folder": {"type": "String"}}},
+  "kmzMissingKml": "In diesem KMZ-Archiv wurde keine KML-Datei gefunden."
 }

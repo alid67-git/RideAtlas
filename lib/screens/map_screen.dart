@@ -1168,7 +1168,13 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           ],
         ),
         RichAttributionWidget(
-          attributions: [TextSourceAttribution(_mapStyle.attribution)],
+          attributions: [
+            TextSourceAttribution(
+              _mapStyle.localizedAttribution(
+                Localizations.localeOf(context).languageCode,
+              ),
+            ),
+          ],
         ),
       ],
     );

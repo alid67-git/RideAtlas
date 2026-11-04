@@ -36,6 +36,12 @@ object CarRecordingBridge {
         private set
     var headingDegrees: Double? = null
         private set
+    var idleHint: String = "Kayda başlamak için dokunun"
+        private set
+    var startTitle: String = "Kayda başla"
+        private set
+    var speedUnit: String = "km/s"
+        private set
 
     private const val MAX_TRAIL_POINTS = 2000
 
@@ -79,6 +85,9 @@ object CarRecordingBridge {
         latitude = (call.argument<Number>("lat"))?.toDouble()
         longitude = (call.argument<Number>("lng"))?.toDouble()
         headingDegrees = (call.argument<Number>("headingDegrees"))?.toDouble()
+        idleHint = call.argument<String>("idleHint") ?: idleHint
+        startTitle = call.argument<String>("startTitle") ?: startTitle
+        speedUnit = call.argument<String>("speedUnit") ?: speedUnit
 
         val lat = latitude
         val lng = longitude

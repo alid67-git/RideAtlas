@@ -44,7 +44,13 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
               ),
               RichAttributionWidget(
-                attributions: [TextSourceAttribution(style.attribution)],
+                attributions: [
+                  TextSourceAttribution(
+                    style.localizedAttribution(
+                      Localizations.localeOf(context).languageCode,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

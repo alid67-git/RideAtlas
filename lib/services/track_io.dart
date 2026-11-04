@@ -13,6 +13,14 @@ import 'kml_parser.dart';
 
 export 'track_file_pick.dart' show pickTrackFiles;
 
+/// Stable [FormatException.message] when a KMZ archive has no KML inside.
+/// UI maps this to [AppLocalizations.kmzMissingKml] instead of showing the
+/// raw exception text.
+const kKmzMissingKmlMessage = 'kmz-missing-kml';
+
+bool isKmzMissingKml(Object error) =>
+    error is FormatException && error.message == kKmzMissingKmlMessage;
+
 enum TrackFormat {
   gpx('gpx', 'GPX', 'application/gpx+xml'),
   kml('kml', 'KML', 'application/vnd.google-earth.kml+xml'),
@@ -78,7 +86,7 @@ String _extractKmlFromKmz(Uint8List bytes) {
 
   final chosen = docKml ?? anyKml;
   if (chosen == null) {
-    throw const FormatException('KMZ arşivinde KML dosyası bulunamadı.');
+    throw const FormatException(kKmzMissingKmlMessage);
   }
 
   final content = chosen.content;

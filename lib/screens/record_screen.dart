@@ -16,6 +16,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/import_errors.dart';
 import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
 import '../models/route_photo.dart';
@@ -610,11 +611,11 @@ class _RecordScreenState extends State<RecordScreen>
       );
     } on DuplicateRouteException catch (e) {
       route = e.existing;
-    } on FormatException catch (_) {
+    } on FormatException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.trackHasNoPoints)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(importFormatErrorMessage(l10n, e))),
+        );
       }
       return;
     } catch (e) {
@@ -2917,7 +2918,13 @@ class _RecordScreenState extends State<RecordScreen>
           ),
 
         RichAttributionWidget(
-          attributions: [TextSourceAttribution(style.attribution)],
+          attributions: [
+            TextSourceAttribution(
+              style.localizedAttribution(
+                Localizations.localeOf(context).languageCode,
+              ),
+            ),
+          ],
         ),
       ],
     );
