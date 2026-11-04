@@ -43,3 +43,54 @@ bool isGpsHopARealMoveAway({
   final gate = max(minMeters, 2 * gpsNoiseRadiusMeters(accuracyMeters));
   return meters >= gate;
 }
+
+/// Overnight indoor GPS walks 30–80 m then back around one building (the
+/// red scribble, kilometres of "ride" from evening to morning). A single
+/// hop past 25 m is not leaving. Stay locked until [kStickyOriginConfirmCount]
+/// consecutive fixes are each a real move away of at least
+/// [kStickyOriginRadiusMeters] (or 2× accuracy if larger).
+const kStickyOriginRadiusMeters = 80.0;
+const kStickyOriginConfirmCount = 3;
+
+class StickyStay {
+  int awayStreak = 0;
+  bool locked = true;
+
+  void reset() {
+    awayStreak = 0;
+    locked = true;
+  }
+
+  void lock() {
+    awayStreak = 0;
+    locked = true;
+  }
+
+  void unlock() {
+    locked = false;
+    awayStreak = 0;
+  }
+
+  /// True while we should treat [metersFromOrigin] as still parked.
+  /// Unlocks after [kStickyOriginConfirmCount] consecutive real leaves.
+  bool consider({
+    required double metersFromOrigin,
+    required double accuracyMeters,
+  }) {
+    if (!locked) return false;
+    if (isGpsHopARealMoveAway(
+      meters: metersFromOrigin,
+      accuracyMeters: accuracyMeters,
+      minMeters: kStickyOriginRadiusMeters,
+    )) {
+      awayStreak++;
+      if (awayStreak >= kStickyOriginConfirmCount) {
+        unlock();
+        return false;
+      }
+      return true;
+    }
+    awayStreak = 0;
+    return true;
+  }
+}

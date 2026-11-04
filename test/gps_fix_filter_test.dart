@@ -66,6 +66,19 @@ void main() {
       );
     });
 
+    test('overnight scribble stays parked until three 80 m leaves', () {
+      final stay = StickyStay();
+      expect(stay.consider(metersFromOrigin: 40, accuracyMeters: 8), isTrue);
+      expect(stay.consider(metersFromOrigin: 70, accuracyMeters: 8), isTrue);
+      expect(stay.consider(metersFromOrigin: 90, accuracyMeters: 8), isTrue);
+      expect(stay.consider(metersFromOrigin: 20, accuracyMeters: 8), isTrue);
+      expect(stay.locked, isTrue);
+      expect(stay.consider(metersFromOrigin: 90, accuracyMeters: 8), isTrue);
+      expect(stay.consider(metersFromOrigin: 95, accuracyMeters: 8), isTrue);
+      expect(stay.consider(metersFromOrigin: 100, accuracyMeters: 8), isFalse);
+      expect(stay.locked, isFalse);
+    });
+
     test('outdoor walk still resumes at 20 m', () {
       expect(
         isGpsHopARealMoveAway(meters: 20, accuracyMeters: 8),
