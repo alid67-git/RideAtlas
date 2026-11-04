@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
+import '../widgets/map_attribution.dart';
 
 /// Lets the user manually pick a point on the map - used when a photo or
 /// video has no usable location of its own (no EXIF GPS, or a video, which
@@ -43,15 +44,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 maxNativeZoom: style.maxNativeZoom,
                 evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
               ),
-              RichAttributionWidget(
-                attributions: [
-                  TextSourceAttribution(
-                    style.localizedAttribution(
-                      Localizations.localeOf(context).languageCode,
-                    ),
-                  ),
-                ],
-              ),
+              rideAtlasMapAttribution(context, style),
             ],
           ),
           const IgnorePointer(

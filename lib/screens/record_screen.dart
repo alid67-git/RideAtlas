@@ -42,6 +42,7 @@ import '../services/track_display_loader.dart';
 import '../services/track_display_simplify.dart';
 import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';
+import '../widgets/map_attribution.dart';
 import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/route_picker_dialog.dart';
@@ -2917,15 +2918,7 @@ class _RecordScreenState extends State<RecordScreen>
             ],
           ),
 
-        RichAttributionWidget(
-          attributions: [
-            TextSourceAttribution(
-              style.localizedAttribution(
-                Localizations.localeOf(context).languageCode,
-              ),
-            ),
-          ],
-        ),
+        rideAtlasMapAttribution(context, style),
       ],
     );
   }

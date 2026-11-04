@@ -26,6 +26,22 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.131 beta',
+    date: '2026-11-04',
+    noteTr:
+        'Samsung Android’de kayıt / yakınlaştır / konum ikonları alt sistem '
+        'çubuğunun (geri veya açık uygulamalar) üzerine biniyordu. Arayüz '
+        'MedyaAtlas’taki gibi sistem çubuğunun üstüne alındı. Haritadaki (i) '
+        'kimlik metni de artık seçilen dili izliyor — İngilizcede '
+        '“contributors”, Türkçe “katkıda bulunanlar”.',
+    noteEn:
+        'On Samsung Android the record / zoom / locate icons sat on the '
+        'system back or recents bar. The UI is lifted above that bar the '
+        'same way MedyaAtlas does. Tapping the map (i) credit now follows '
+        'the selected language — “contributors” in English, “katkıda '
+        'bulunanlar” in Turkish.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.130 beta',
     date: '2026-11-04',
     noteTr:

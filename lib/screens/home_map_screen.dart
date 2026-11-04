@@ -21,6 +21,7 @@ import '../services/map_camera_fit.dart';
 import '../services/native_recording.dart';
 import '../services/track_display_loader.dart';
 import '../widgets/app_update_ui.dart';
+import '../widgets/map_attribution.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
@@ -905,15 +906,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
             ],
           ),
-        RichAttributionWidget(
-          attributions: [
-            TextSourceAttribution(
-              _mapStyle.localizedAttribution(
-                Localizations.localeOf(context).languageCode,
-              ),
-            ),
-          ],
-        ),
+        rideAtlasMapAttribution(context, _mapStyle),
       ],
     );
   }

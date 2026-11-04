@@ -10,15 +10,18 @@ void main() {
   });
 
   test('version history and what’s-new follow the selected language', () {
-    final latest = kChangelog.first;
-    expect(latest.noteFor('tr'), contains('İngilizce'));
-    expect(latest.noteFor('en'), contains('English'));
-    expect(latest.noteFor('de'), latest.noteFor('en'));
-    expect(latest.noteFor('en'), isNot(contains('Türkçe')));
+    final englishUi = kChangelog.firstWhere(
+      (e) => e.version == 'v1.4.130 beta',
+    );
+    expect(englishUi.noteFor('tr'), contains('İngilizce'));
+    expect(englishUi.noteFor('en'), contains('English'));
+    expect(englishUi.noteFor('de'), englishUi.noteFor('en'));
+    expect(englishUi.noteFor('en'), isNot(contains('Türkçe')));
 
     expect(localizedBuildNote('tr'), kAppBuildNoteTr);
     expect(localizedBuildNote('en'), kAppBuildNoteEn);
     expect(localizedBuildNote('de'), kAppBuildNoteEn);
+    expect(localizedBuildNote('en'), isNot(contains('katkıda')));
   });
 
   test('every changelog row has both Turkish and English notes', () {
