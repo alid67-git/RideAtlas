@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.129 beta',
+    date: '2026-11-04',
+    note:
+        'Evde akşamdan sabaha kayıt ~2.4 km ve 7 saat “aktif” yazıyordu: '
+        '25 m eşiği gece GPS yumağını tek tek kabul edip duraklatmayı '
+        'açıyordu. Artık durulan noktaya kilit: üst üste 3 fix her biri '
+        '≥80 m uzaklaşmadan iz büyümez, otomatik duraklama kalkmaz.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.128 beta',
     date: '2026-11-04',
     note:

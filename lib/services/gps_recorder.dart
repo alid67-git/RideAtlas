@@ -51,14 +51,8 @@ class GpsRecorder extends ChangeNotifier {
   // [effectiveRecordingSpeedKmh]), so indoor phantom 2–5 km/h crawls still
   // fall under this threshold once the phone isn't covering ground.
   static const _autoPauseSpeedThresholdKmh = 1.5;
-  // Resume as soon as motion is clearly above a crawl. Was 6 km/h, which
-  // left walkers stuck on "Otomatik duraklatıldı" the whole way.
-  static const _autoPauseResumeThresholdKmh = 2.5;
-  // Phone GPS often reports speed ≈ 0 while walking; treat a real move away
-  // from the pause spot as resume even when Doppler speed stays low.
-  // Indoor hops of this size are still noise when accuracy is worse — see
-  // [isGpsHopARealMoveAway].
-  static const _autoPauseResumeDisplacementMeters = 20.0;
+  // Resume is [StickyStay]: three consecutive fixes each ≥80 m from the
+  // parked spot. A single 20–40 m indoor hop must not restart the ride.
   // Just a visual "waiting" cue while genuinely stationary (traffic light,
   // junction) - separate from what counts as a "mola" (see
   // _minMolaDuration below), so making this quick doesn't affect rest
@@ -108,6 +102,11 @@ class GpsRecorder extends ChangeNotifier {
   DateTime? _stationarySince;
   /// Fix where auto-pause engaged - used for displacement-based resume.
   LatLng? _autoPauseOrigin;
+  /// Parked spot (first fix / auto-pause). Overnight GPS walks 30–80 m
+  /// around the building; we stay locked here until [StickyStay] sees a
+  /// confirmed leave, so evening-to-morning at home is not a 2 km "ride".
+  LatLng? _stickyOrigin;
+  final StickyStay _stay = StickyStay();
   /// Previous fix while auto-paused - lets the resume check reject a single
   /// glitchy fix (a multipath reflection or a moment in a pocket reporting a
   /// 1-2 km jump) that would otherwise look like real movement and end a
@@ -263,6 +262,8 @@ class GpsRecorder extends ChangeNotifier {
     _isAutoPaused = false;
     _stationarySince = null;
     _autoPauseOrigin = null;
+    _stickyOrigin = null;
+    _stay.reset();
     _lastAutoPauseFixLatLng = null;
     _lastAutoPauseFixTime = null;
     _recentSpeedsKmh.clear();
@@ -435,6 +436,8 @@ class GpsRecorder extends ChangeNotifier {
               : DateTime.now();
           if (_points.isNotEmpty) {
             _autoPauseOrigin = _points.last.latLng;
+            _stickyOrigin = _autoPauseOrigin;
+            _stay.lock();
           }
         } else {
           _pauseStartedAt = null;
@@ -644,19 +647,22 @@ class GpsRecorder extends ChangeNotifier {
         ? pos.speed * 3.6
         : 0.0;
     final speedKmh = _plausibleSpeedKmh(rawSpeedKmh, pos.timestamp);
-    // A hop still inside the reported accuracy circle is indoor/urban
-    // wander, not ground covered — the 6 km / 72 km/h "ride" while sitting
-    // at home. Zero both Doppler and displacement so auto-pause can engage
-    // and the HUD reads 0.
-    final motionRef = _autoPauseOrigin ??
-        (_points.isNotEmpty ? _points.last.latLng : null);
-    final hopFromRef =
-        motionRef == null ? 0.0 : _distance(motionRef, here);
-    final hopIsNoise = motionRef != null &&
-        isGpsHopWithinNoise(
-          meters: hopFromRef,
-          accuracyMeters: pos.accuracy,
-        );
+    // Sticky origin: first fix / auto-pause spot. Overnight indoor GPS
+    // walks 30–80 m around the building all night; that is still "here"
+    // until three consecutive fixes are each ≥80 m away.
+    _stickyOrigin ??= here;
+    final parked = _stay.consider(
+      metersFromOrigin: _distance(_stickyOrigin!, here),
+      accuracyMeters: pos.accuracy,
+    );
+    final hopFromLast =
+        _points.isEmpty ? 0.0 : _distance(_points.last.latLng, here);
+    final hopIsNoise = parked ||
+        (_points.isNotEmpty &&
+            isGpsHopWithinNoise(
+              meters: hopFromLast,
+              accuracyMeters: pos.accuracy,
+            ));
     final smoothedDopplerKmh =
         _smoothedSpeedKmh(hopIsNoise ? 0.0 : speedKmh);
     final displacementKmh =
@@ -704,44 +710,29 @@ class GpsRecorder extends ChangeNotifier {
         }
       }
 
-      final movedMeters = _distance(_autoPauseOrigin!, here);
-      // Speed alone used to resume from indoor Doppler noise (2–5 km/h)
-      // the moment auto-pause engaged. Require a hop clearly outside the
-      // GPS accuracy circle (at least 20 m outdoors; 2× accuracy indoors)
-      // so a 20–40 m home-multipath jump cannot restart the ride.
-      final shouldResume =
-          isGpsHopARealMoveAway(
-            meters: movedMeters,
-            accuracyMeters: pos.accuracy,
-            minMeters: _autoPauseResumeDisplacementMeters,
-          ) ||
-          (smoothedSpeedKmh >= _autoPauseResumeThresholdKmh &&
-              movedMeters >= 5.0 &&
-              !isGpsHopWithinNoise(
-                meters: movedMeters,
-                accuracyMeters: pos.accuracy,
-              ));
-      if (shouldResume) {
-        _isAutoPaused = false;
-        _stationarySince = null;
-        _autoPauseOrigin = null;
-        _lastAutoPauseFixLatLng = null;
-        _lastAutoPauseFixTime = null;
-        final pauseStarted = _pauseStartedAt;
-        if (pauseStarted != null) {
-          final now = DateTime.now();
-          _completedPauses.add((duration: now.difference(pauseStarted), end: now));
-          _pauseStartedAt = null;
-        }
-        // Back to the fast/high-accuracy GPS cadence now that the ride
-        // has actually resumed - see the matching setPaused(true) below.
-        if (NativeRecording.isSupported) {
-          unawaited(NativeRecording.setPaused(false, manualPaused: false));
-          unawaited(_persistSession());
-        }
-      } else {
+      // A single 20–40 m hop used to resume and then write the overnight
+      // scribble. Only a confirmed leave (StickyStay unlocked) resumes.
+      if (parked) {
         notifyListeners();
         return;
+      }
+      _isAutoPaused = false;
+      _stationarySince = null;
+      _autoPauseOrigin = null;
+      _stickyOrigin = here;
+      _lastAutoPauseFixLatLng = null;
+      _lastAutoPauseFixTime = null;
+      final pauseStarted = _pauseStartedAt;
+      if (pauseStarted != null) {
+        final now = DateTime.now();
+        _completedPauses.add((duration: now.difference(pauseStarted), end: now));
+        _pauseStartedAt = null;
+      }
+      // Back to the fast/high-accuracy GPS cadence now that the ride
+      // has actually resumed - see the matching setPaused(true) below.
+      if (NativeRecording.isSupported) {
+        unawaited(NativeRecording.setPaused(false, manualPaused: false));
+        unawaited(_persistSession());
       }
     } else if (smoothedSpeedKmh < _autoPauseSpeedThresholdKmh) {
       _stationarySince ??= DateTime.now();
@@ -749,6 +740,8 @@ class GpsRecorder extends ChangeNotifier {
         _isAutoPaused = true;
         _pauseStartedAt = DateTime.now();
         _autoPauseOrigin = LatLng(pos.latitude, pos.longitude);
+        _stickyOrigin = _autoPauseOrigin;
+        _stay.lock();
         // Slows the native GPS request cadence while genuinely stationary
         // (see RecordingLocationService.buildLocationRequest) - auto-pause
         // was previously a display-only/recording filter that left GPS
@@ -765,7 +758,8 @@ class GpsRecorder extends ChangeNotifier {
       _stationarySince = null;
     }
 
-    if (_isPlausiblePoint(here, pos.timestamp) && !hopIsNoise) {
+    if (_isPlausiblePoint(here, pos.timestamp) &&
+        (_points.isEmpty || !hopIsNoise)) {
       _points.add(
         TrackPoint(
           latLng: here,
@@ -791,6 +785,10 @@ class GpsRecorder extends ChangeNotifier {
     if (_state != RecordingState.recording) return;
     _state = RecordingState.paused;
     _pauseStartedAt ??= DateTime.now();
+    if (_points.isNotEmpty) {
+      _stickyOrigin = _points.last.latLng;
+      _stay.lock();
+    }
     if (NativeRecording.isSupported) {
       unawaited(NativeRecording.setPaused(true, manualPaused: true));
       unawaited(_persistSession());
@@ -809,6 +807,8 @@ class GpsRecorder extends ChangeNotifier {
     _isAutoPaused = false;
     _stationarySince = null;
     _autoPauseOrigin = null;
+    _stickyOrigin = null;
+    _stay.unlock();
     _lastAutoPauseFixLatLng = null;
     _lastAutoPauseFixTime = null;
     _dispSpeedOrigin = null;
@@ -852,6 +852,8 @@ class GpsRecorder extends ChangeNotifier {
     _isAutoPaused = false;
     _stationarySince = null;
     _autoPauseOrigin = null;
+    _stickyOrigin = null;
+    _stay.reset();
     _lastAutoPauseFixLatLng = null;
     _lastAutoPauseFixTime = null;
     _recentSpeedsKmh.clear();
@@ -867,7 +869,13 @@ class GpsRecorder extends ChangeNotifier {
       final speedMs = (raw['speed'] as num?)?.toDouble() ?? 0;
       final accuracy = (raw['accuracy'] as num?)?.toDouble() ?? 0;
       final latLng = LatLng(lat, lng);
+      _stickyOrigin ??= latLng;
+      final parked = _stay.consider(
+        metersFromOrigin: _distance(_stickyOrigin!, latLng),
+        accuracyMeters: accuracy,
+      );
       if (_points.isNotEmpty) {
+        if (parked) continue;
         final hop = _distance(_points.last.latLng, latLng);
         if (isGpsHopWithinNoise(meters: hop, accuracyMeters: accuracy)) {
           continue;
@@ -924,6 +932,8 @@ class GpsRecorder extends ChangeNotifier {
     _isAutoPaused = false;
     _stationarySince = null;
     _autoPauseOrigin = null;
+    _stickyOrigin = null;
+    _stay.reset();
     _lastAutoPauseFixLatLng = null;
     _lastAutoPauseFixTime = null;
     _recentSpeedsKmh.clear();
