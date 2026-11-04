@@ -181,7 +181,7 @@ Future<void> downloadAndInstallUpdate(
     }
 
     if (!await file.exists() || await file.length() < 1024) {
-      throw const HttpException('İndirilen dosya geçersiz veya boş.');
+      throw const HttpException('Downloaded file is invalid or empty.');
     }
 
     onProgress?.call(received, total ?? received);

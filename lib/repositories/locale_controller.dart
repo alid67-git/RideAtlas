@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 
-const _metaBoxName = 'rideatlas_meta';
-const _localeKey = 'locale_code';
+import '../l10n/resolved_language.dart';
+import '../web/web_locale_sync.dart';
+
+const _metaBoxName = metaBoxName;
+const _localeKey = localeCodeKey;
 
 /// Holds the user's chosen app language (tr/en/de), persisted in Hive. Null
 /// means "follow the device's language" (falling back to Turkish if the
@@ -14,6 +17,7 @@ class LocaleController extends ChangeNotifier {
   Future<void> load() async {
     final box = await Hive.openBox<String>(_metaBoxName);
     final code = box.get(_localeKey);
+    syncWebLocale(code);
     if (code == null) return;
     _locale = Locale(code);
     notifyListeners();
@@ -25,8 +29,10 @@ class LocaleController extends ChangeNotifier {
     final box = await Hive.openBox<String>(_metaBoxName);
     if (locale == null) {
       await box.delete(_localeKey);
+      syncWebLocale(null);
     } else {
       await box.put(_localeKey, locale.languageCode);
+      syncWebLocale(locale.languageCode);
     }
   }
 }

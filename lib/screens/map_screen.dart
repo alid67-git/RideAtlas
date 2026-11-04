@@ -27,6 +27,7 @@ import '../services/map_camera_fit.dart';
 import '../services/route_geography.dart';
 import '../services/track_display_simplify.dart';
 import '../services/track_io.dart';
+import '../widgets/map_attribution.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/route_photo_strip.dart';
 import 'analysis_sheet.dart';
@@ -1167,9 +1168,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 ),
           ],
         ),
-        RichAttributionWidget(
-          attributions: [TextSourceAttribution(_mapStyle.attribution)],
-        ),
+        rideAtlasMapAttribution(context, _mapStyle),
       ],
     );
   }

@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../build_info.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/import_errors.dart';
 import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
 import '../repositories/vehicle_icon_controller.dart';
@@ -20,6 +21,7 @@ import '../services/map_camera_fit.dart';
 import '../services/native_recording.dart';
 import '../services/track_display_loader.dart';
 import '../widgets/app_update_ui.dart';
+import '../widgets/map_attribution.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
@@ -171,7 +173,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: Text(l10n.appRunningVersion(kAppBuildLabel)),
-        content: Text(kAppBuildNote),
+        content: Text(
+          localizedBuildNote(Localizations.localeOf(context).languageCode),
+        ),
         actions: [
           FilledButton(
             onPressed: () => Navigator.pop(context),
@@ -902,9 +906,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
             ],
           ),
-        RichAttributionWidget(
-          attributions: [TextSourceAttribution(_mapStyle.attribution)],
-        ),
+        rideAtlasMapAttribution(context, _mapStyle),
       ],
     );
   }
@@ -989,9 +991,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           importedIds.add(e.existing.id);
         }
         lastError = l10n.duplicateRouteMessage(e.existing.name);
-      } on FormatException {
+      } on FormatException catch (e) {
         skipped++;
-        lastError = l10n.trackHasNoPoints;
+        lastError = importFormatErrorMessage(l10n, e);
       } catch (e) {
         skipped++;
         lastError = l10n.importFailedGeneric('$e');
