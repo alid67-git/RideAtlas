@@ -16,6 +16,10 @@ Tarayıcıdan açılır; kurulum gerekmez. İçe aktardığın GPX/KML dosyalar�
 - Sekmeli analiz: mesafe, süre, yükseklik profili, geçilen ülkeler, molalar, günlük hava
 - Rotayı GPX, KML veya KMZ olarak paylaşma
 
+## Yan uygulama: GoPro Remote
+
+`gopro_remote/` — Android-only Open GoPro BLE kumandası (HERO10–13 Black). RideAtlas’tan bağımsız; ileride modül olarak bağlanacak. Ayrıntı: [`gopro_remote/README.md`](gopro_remote/README.md).
+
 ## Geliştirme
 
 ```bash
