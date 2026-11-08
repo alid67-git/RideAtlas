@@ -275,5 +275,6 @@
   "dailyDriveBackupPickFolderTitle": "Backup folder",
   "dailyDriveBackupPickFolderSubtitle": "Choose a Google Drive (or other) folder for daily GPX files.",
   "dailyDriveBackupFolderSubtitle": "Saving each completed day to: {folder}",
-  "@dailyDriveBackupFolderSubtitle": {"placeholders": {"folder": {"type": "String"}}}
+  "@dailyDriveBackupFolderSubtitle": {"placeholders": {"folder": {"type": "String"}}},
+  "kmzMissingKml": "No KML file found in this KMZ archive."
 }

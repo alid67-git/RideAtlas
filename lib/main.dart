@@ -21,6 +21,7 @@ import 'services/gps_recorder.dart';
 import 'navigation/root_navigator.dart';
 import 'widgets/app_update_ui.dart';
 import 'widgets/incoming_track_gate.dart';
+import 'widgets/system_nav_bar_lift.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -106,7 +107,9 @@ class RideAtlasApp extends StatelessWidget {
               // watches the live recorder for completed local days to back up.
               builder: (context, child) => _DailyNoonUpdateHost(
                 child: _DailyDriveBackupHost(
-                  child: child ?? const SizedBox.shrink(),
+                  child: SystemNavBarLift(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
               home: const HomeMapScreen(),
@@ -209,6 +212,7 @@ class _CarBridgeGate extends StatefulWidget {
 
 class _CarBridgeGateState extends State<_CarBridgeGate> {
   late final CarBridge _carBridge;
+  LocaleController? _locale;
 
   @override
   void initState() {
@@ -217,10 +221,13 @@ class _CarBridgeGateState extends State<_CarBridgeGate> {
       recorder: context.read<GpsRecorder>(),
       routeRepository: context.read<RouteRepository>(),
     );
+    _locale = context.read<LocaleController>();
+    _locale!.addListener(_carBridge.refresh);
   }
 
   @override
   void dispose() {
+    _locale?.removeListener(_carBridge.refresh);
     _carBridge.dispose();
     super.dispose();
   }

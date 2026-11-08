@@ -6,7 +6,7 @@ class AppUpdateProgressStrip extends StatelessWidget {
     super.key,
     required this.received,
     required this.total,
-    this.title = 'Güncelleme indiriliyor',
+    this.title = 'Downloading update',
   });
 
   final int received;
@@ -21,7 +21,7 @@ class AppUpdateProgressStrip extends StatelessWidget {
         ? (received / total).clamp(0.0, 1.0)
         : null;
     final percentLabel = hasTotal
-        ? '%${(fraction! * 100).round()}'
+        ? '${(fraction! * 100).round()}%'
         : '${(received / (1024 * 1024)).toStringAsFixed(1)} MB';
 
     return Column(

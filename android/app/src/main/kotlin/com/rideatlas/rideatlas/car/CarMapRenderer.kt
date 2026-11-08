@@ -214,7 +214,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback {
             statsBgPaint,
         )
         val speed = CarRecordingBridge.speedKmh.roundToInt()
-        canvas.drawText("$speed km/s", left + 24f, top + 58f, statsTitlePaint)
+        canvas.drawText("$speed ${CarRecordingBridge.speedUnit}", left + 24f, top + 58f, statsTitlePaint)
         val duration = formatDuration(CarRecordingBridge.durationSeconds)
         val distance =
             String.format(Locale.getDefault(), "%.2f km", CarRecordingBridge.distanceKm)

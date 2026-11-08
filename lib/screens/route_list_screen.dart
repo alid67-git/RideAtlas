@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/import_errors.dart';
 import '../models/gpx_route.dart';
 import '../models/track_point.dart';
 import '../repositories/photo_repository.dart';
@@ -181,8 +182,12 @@ class _RouteListScreenState extends State<RouteListScreen> {
           builder: (_) => RouteMapScreen(routeId: e.existing.id),
         ),
       );
-    } on FormatException catch (_) {
-      if (mounted) _showError(AppLocalizations.of(context)!.trackHasNoPoints);
+    } on FormatException catch (e) {
+      if (mounted) {
+        _showError(
+          importFormatErrorMessage(AppLocalizations.of(context)!, e),
+        );
+      }
     } catch (e) {
       if (mounted) {
         _showError(AppLocalizations.of(context)!.importFailedGeneric('$e'));

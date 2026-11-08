@@ -23,7 +23,11 @@
   };
 
   function strings() {
-    var lang = (navigator.language || 'tr').slice(0, 2).toLowerCase();
+    var stored = null;
+    try {
+      stored = localStorage.getItem('rideatlas_locale');
+    } catch (_) {}
+    var lang = (stored || navigator.language || 'tr').slice(0, 2).toLowerCase();
     return STRINGS[lang] || STRINGS.en;
   }
 

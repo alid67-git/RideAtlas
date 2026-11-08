@@ -300,5 +300,6 @@
   "dailyDriveBackupPickFolderTitle": "Yedek klasörü",
   "dailyDriveBackupPickFolderSubtitle": "Günlük GPX dosyaları için bir Google Drive (veya başka) klasör seçin.",
   "dailyDriveBackupFolderSubtitle": "Tamamlanan her gün şuraya yazılıyor: {folder}",
-  "@dailyDriveBackupFolderSubtitle": {"placeholders": {"folder": {"type": "String"}}}
+  "@dailyDriveBackupFolderSubtitle": {"placeholders": {"folder": {"type": "String"}}},
+  "kmzMissingKml": "KMZ arşivinde KML dosyası bulunamadı."
 }
