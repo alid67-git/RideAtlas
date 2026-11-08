@@ -44,6 +44,11 @@ class GoProBleClient extends ChangeNotifier {
   bool _autoConnectInFlight = false;
   Completer<GoProDeviceInfo>? _firstDeviceCompleter;
 
+  /// Local session flag — encoding status notifications can lag or miss,
+  /// so the single record button must not rely only on [status.encoding].
+  bool _sessionRecording = false;
+  bool get isSessionRecording => _sessionRecording || status.encoding;
+
   bool get isConnected =>
       _state == GoProConnectionState.connected && _device != null;
 
@@ -274,32 +279,87 @@ class GoProBleClient extends ChangeNotifier {
     _setState(GoProConnectionState.disconnected);
   }
 
-  Future<void> startRecording() =>
-      _writeCommand(GoProProtocol.setShutter(on: true));
+  Future<void> startRecording() async {
+    await _writeCommand(GoProProtocol.setShutter(on: true));
+    _sessionRecording = true;
+    status = status.copyWith(encoding: true);
+    notifyListeners();
+  }
 
-  Future<void> stopRecording() =>
-      _writeCommand(GoProProtocol.setShutter(on: false));
+  Future<void> stopRecording() async {
+    await _writeCommand(GoProProtocol.setShutter(on: false));
+    _sessionRecording = false;
+  }
 
   Future<void> setWifiAp(bool on) =>
       _writeCommand(GoProProtocol.setWifiAp(on: on));
 
-  Future<void> sleepCamera() => _writeCommand(GoProProtocol.sleep());
+  /// Sleep / power-down without waiting for a BLE notify — the camera often
+  /// drops the link before a response arrives, which used to look like failure.
+  Future<void> sleepCamera() async {
+    await _fireAndForgetCommand(GoProProtocol.sleep());
+  }
+
+  Future<void> powerDownCamera() async {
+    await _fireAndForgetCommand(GoProProtocol.powerDown());
+  }
+
+  Future<void> _fireAndForgetCommand(Uint8List bytes) async {
+    final char = _commandReq;
+    if (char == null) throw StateError('Bağlı değil');
+    try {
+      // Write Command (no ATT response) — survives the camera going away.
+      await char.write(bytes, withoutResponse: true);
+    } catch (e) {
+      debugPrint('fire-and-forget write: $e');
+      try {
+        await char.write(bytes, withoutResponse: false);
+      } catch (e2) {
+        debugPrint('fallback write: $e2');
+      }
+    }
+  }
+
+  Future<void> _waitUntilNotEncoding({
+    Duration timeout = const Duration(seconds: 6),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (status.encoding && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    }
+    // Brief settle even if status never flipped (some FW skip the notify).
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+  }
 
   /// Single control: start = ensure BLE + shutter on;
-  /// stop = shutter off + camera sleep (BLE drops after sleep).
+  /// stop = shutter off, wait for encode end, then sleep (+ power-down fallback).
   Future<void> toggleRecording() async {
-    if (status.encoding) {
-      await stopRecording();
-      await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (isSessionRecording) {
+      try {
+        await stopRecording();
+      } catch (e) {
+        debugPrint('stopRecording: $e');
+        _sessionRecording = false;
+      }
+
+      await _waitUntilNotEncoding();
+
+      // Camera rejects sleep while still busy; after encode settles, sleep
+      // then force power-down as a second shot for stubborn firmware.
       try {
         await sleepCamera();
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        if (_commandReq != null) {
+          await powerDownCamera();
+        }
       } catch (e) {
-        debugPrint('Sleep after stop: $e');
+        debugPrint('Sleep/power-down after stop: $e');
       }
-      // Sleep ends the BLE session; clear local link state.
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+
+      await Future<void>.delayed(const Duration(milliseconds: 300));
       await _teardownLink();
       connectedDevice = null;
+      _sessionRecording = false;
       status = const GoProCameraStatus();
       _setState(GoProConnectionState.disconnected);
       return;

@@ -266,15 +266,16 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                 stateLabel: _stateLabel,
                 deviceName: _client.connectedDevice?.name,
                 status: st,
+                sessionRecording: _client.isSessionRecording,
               ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: _RecordToggleButton(
                 busy: _busy,
-                encoding: st.encoding,
+                encoding: _client.isSessionRecording,
                 onPressed: () => _run(() async {
-                  final wasRecording = _client.status.encoding;
+                  final wasRecording = _client.isSessionRecording;
                   setState(() {
                     _banner = wasRecording
                         ? 'Durduruluyor, kamera uykuya alınıyor…'
@@ -293,7 +294,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Text(
-                st.encoding
+                _client.isSessionRecording
                     ? 'Tekrar basınca kayıt durur ve kamera uykuya geçer.'
                     : 'Tek tuş: gerekirse BLE bağlanır ve kayıt başlar.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -334,11 +335,13 @@ class _StatusCard extends StatelessWidget {
     required this.stateLabel,
     required this.deviceName,
     required this.status,
+    required this.sessionRecording,
   });
 
   final String stateLabel;
   final String? deviceName;
   final GoProCameraStatus status;
+  final bool sessionRecording;
 
   @override
   Widget build(BuildContext context) {
@@ -369,10 +372,13 @@ class _StatusCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                _Dot(active: status.encoding, color: const Color(0xFFE5383B)),
+                _Dot(
+                  active: sessionRecording,
+                  color: const Color(0xFFE5383B),
+                ),
                 const SizedBox(width: 8),
                 Text(
-                  status.encoding ? 'KAYIT' : stateLabel,
+                  sessionRecording ? 'KAYIT' : stateLabel,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
