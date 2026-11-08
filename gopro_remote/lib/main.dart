@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
 
+import 'build_info.dart';
 import 'gopro/client.dart';
 import 'gopro/models.dart';
+import 'services/app_update_controller.dart';
+import 'services/update_checker.dart';
+import 'widgets/app_update_ui.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,20 +23,23 @@ class GoProRemoteApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'GoPro Remote',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFE85D04),
+    return ChangeNotifierProvider(
+      create: (_) => AppUpdateController(),
+      child: MaterialApp(
+        title: 'GoPro Remote',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
           brightness: Brightness.dark,
-          surface: const Color(0xFF121418),
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFFE85D04),
+            brightness: Brightness.dark,
+            surface: const Color(0xFF121418),
+          ),
+          scaffoldBackgroundColor: const Color(0xFF0B0D10),
         ),
-        scaffoldBackgroundColor: const Color(0xFF0B0D10),
+        home: const RemoteHomePage(),
       ),
-      home: const RemoteHomePage(),
     );
   }
 }
@@ -52,8 +60,9 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   void initState() {
     super.initState();
     _client = GoProBleClient()..addListener(_onClient);
-    // Open → izin → tara → ilk GoPro’ya otomatik bağlan.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _autoConnect());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _checkForUpdatesThenConnect();
+    });
   }
 
   void _onClient() {
@@ -68,6 +77,30 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     super.dispose();
   }
 
+  Future<void> _checkForUpdatesThenConnect() async {
+    if (!mounted) return;
+    final updates = context.read<AppUpdateController>();
+    updates.startDailyNoonChecks(
+      onUpdateFound: () async {
+        if (!mounted) return;
+        await installAppUpdate(context);
+      },
+    );
+
+    // RideAtlas modeli: yeni sürüm varsa hemen indir/kur (Android onay ekranı kalır).
+    if (AppUpdateController.isSupported) {
+      await updates.check();
+      if (!mounted) return;
+      if (updates.available != null) {
+        await installAppUpdate(context);
+        // Installer açıldıysa süreç kapanabilir; bağlanmayı denemeye devam etme.
+        return;
+      }
+    }
+
+    await _autoConnect();
+  }
+
   Future<bool> _ensurePermissions() async {
     final asked = <Permission>[
       Permission.bluetoothScan,
@@ -77,7 +110,6 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     final statuses = await asked.request();
     final scanOk = statuses[Permission.bluetoothScan]?.isGranted ?? false;
     final connectOk = statuses[Permission.bluetoothConnect]?.isGranted ?? false;
-    // Location still required on many Android builds for BLE scan results.
     final locOk = statuses[Permission.locationWhenInUse]?.isGranted ?? false;
     if (!scanOk || !connectOk) {
       _banner = 'Bluetooth izinleri gerekli (Scan + Connect).';
@@ -119,7 +151,6 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
 
   Future<void> _scan() async {
     if (!await _ensurePermissions()) return;
-    // Manuel Tara da otomatik bağlanır (en güçlü sinyal).
     await _run(() async {
       setState(() => _banner = 'Kamera aranıyor, otomatik bağlanılacak…');
       await _client.autoConnect();
@@ -134,6 +165,24 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       await _client.connect(info);
       _banner = 'Bağlandı: ${info.name}';
     });
+  }
+
+  Future<void> _manualUpdateCheck() async {
+    final updates = context.read<AppUpdateController>();
+    final status = await updates.checkNow();
+    if (!mounted) return;
+    switch (status) {
+      case AndroidUpdateProbeStatus.upToDate:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Güncelsin ($kAppBuildLabel)')),
+        );
+      case AndroidUpdateProbeStatus.updateAvailable:
+        await installAppUpdate(context);
+      case AndroidUpdateProbeStatus.failed:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Güncelleme kontrolü başarısız.')),
+        );
+    }
   }
 
   String get _stateLabel {
@@ -164,29 +213,49 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Column(
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'GoPro Remote',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.5,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'GoPro Remote',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.5,
+                              ),
                         ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'HERO10–13 · $kAppBuildLabel',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: cs.onSurface.withValues(alpha: 0.65),
+                                  ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'HERO10–13 · otomatik tara + bağlan · Android',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.65),
-                        ),
+                  IconButton(
+                    tooltip: 'Güncelleme kontrol et',
+                    onPressed: _manualUpdateCheck,
+                    icon: const Icon(Icons.system_update_alt),
                   ),
                 ],
               ),
             ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: AppUpdateBanner(),
+            ),
             if (_banner != null || _client.error != null)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Material(
                   color: cs.errorContainer.withValues(alpha: 0.35),
                   borderRadius: BorderRadius.circular(10),

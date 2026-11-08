@@ -4,12 +4,13 @@ RideAtlas’tan **ayrı** bir Flutter Android uygulaması. GoPro **HERO10–13 B
 
 iOS ve Insta360 (X4+) sonraki adım. RideAtlas entegrasyonu bu modül oturunca yapılacak.
 
-## Ne yapar (v0.1.1)
+## Ne yapar (v0.1.2)
 
 - Açılışta otomatik tara + en güçlü GoPro’ya bağlan (Android GATT 133 için retry)
 - Kayıt **başlat / durdur** (Wi‑Fi şart değil)
 - Encoding, süre, batarya durumu (status bildirimleri)
 - Kamera Wi‑Fi AP aç/kapa + SSID/şifre okuma (ileride medya indirme için)
+- **Otomatik güncelleme** (RideAtlas modeli): `gopro-remote-latest` release’ini kontrol eder, yeni APK’yı indirip kurar
 
 ## Desteklenen kameralar
 
@@ -42,9 +43,16 @@ flutter build apk --release
 ## Kullanım
 
 1. Kamerayı aç, Bluetooth açık olsun.
-2. Uygulamada **Tara** → kamerayı seç.
+2. Uygulama açılınca otomatik bağlanır (veya **Otomatik bağlan**).
 3. GoPro ekranında eşleştirme isteğini onayla (ilk sefer).
 4. **KAYDI BAŞLAT** / **DURDUR**.
+
+## Güncelleme
+
+- Rolling release: tag `gopro-remote-latest`, asset `GoProRemote.apk`
+- Release adı: `GoPro Remote (latest) - vX.Y.Z` (`lib/build_info.dart` ile aynı)
+- CI: `.github/workflows/build-gopro-remote.yml` (`gopro_remote/**` değişince)
+- Stabil imza: `android/app/gopro-remote-debug.keystore` (eski debug-imzalı APK’ların üstüne yazılmaz; bir kez kaldırıp yeniden kur)
 
 ## Mimari not
 
