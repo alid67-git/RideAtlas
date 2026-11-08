@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -87,18 +89,16 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       },
     );
 
-    // RideAtlas modeli: yeni sürüm varsa hemen indir/kur (Android onay ekranı kalır).
+    // Connect first (fast) — don't make the rider wait on update probe.
+    unawaited(_autoConnect());
+
     if (AppUpdateController.isSupported) {
       await updates.check();
       if (!mounted) return;
       if (updates.available != null) {
         await installAppUpdate(context);
-        // Installer açıldıysa süreç kapanabilir; bağlanmayı denemeye devam etme.
-        return;
       }
     }
-
-    await _autoConnect();
   }
 
   Future<bool> _ensurePermissions() async {
@@ -142,8 +142,12 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   Future<void> _autoConnect() async {
     if (!await _ensurePermissions()) return;
     await _run(() async {
-      setState(() => _banner = 'Kamera aranıyor, otomatik bağlanılacak…');
-      await _client.autoConnect();
+      setState(() => _banner = 'Hızlı bağlanılıyor…');
+      await _client.autoConnect(
+        scanTimeout: const Duration(seconds: 6),
+        connectRetries: 3,
+        fastRecord: true,
+      );
       final name = _client.connectedDevice?.name;
       setState(() => _banner = name == null ? null : 'Bağlandı: $name');
     });
@@ -152,8 +156,12 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   Future<void> _scan() async {
     if (!await _ensurePermissions()) return;
     await _run(() async {
-      setState(() => _banner = 'Kamera aranıyor, otomatik bağlanılacak…');
-      await _client.autoConnect();
+      setState(() => _banner = 'Hızlı bağlanılıyor…');
+      await _client.autoConnect(
+        scanTimeout: const Duration(seconds: 6),
+        connectRetries: 3,
+        fastRecord: true,
+      );
       final name = _client.connectedDevice?.name;
       setState(() => _banner = name == null ? null : 'Bağlandı: $name');
     });

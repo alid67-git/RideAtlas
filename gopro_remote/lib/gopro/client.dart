@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
 import 'protocol.dart';
@@ -52,9 +53,32 @@ class GoProBleClient extends ChangeNotifier {
   /// Last successful camera — used to skip scan and wake via direct connect.
   String? _lastRemoteId;
   String? _lastName;
+  static const _prefsIdKey = 'gopro_last_remote_id';
+  static const _prefsNameKey = 'gopro_last_name';
+  bool _prefsLoaded = false;
 
   bool get isConnected =>
       _state == GoProConnectionState.connected && _device != null;
+
+  Future<void> ensurePrefsLoaded() async {
+    if (_prefsLoaded) return;
+    _prefsLoaded = true;
+    try {
+      final p = await SharedPreferences.getInstance();
+      _lastRemoteId = p.getString(_prefsIdKey);
+      _lastName = p.getString(_prefsNameKey);
+    } catch (_) {}
+  }
+
+  Future<void> _persistLastDevice(GoProDeviceInfo info) async {
+    _lastRemoteId = info.remoteId;
+    _lastName = info.name;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_prefsIdKey, info.remoteId);
+      await p.setString(_prefsNameKey, info.name);
+    } catch (_) {}
+  }
 
   Future<void> ensureAdapterOn() async {
     final supported = await FlutterBluePlus.isSupported;
@@ -71,9 +95,9 @@ class GoProBleClient extends ChangeNotifier {
 
   /// Scan, then automatically connect to the strongest GoPro found.
   Future<void> autoConnect({
-    Duration scanTimeout = const Duration(seconds: 15),
-    int connectRetries = 5,
-    bool fastRecord = false,
+    Duration scanTimeout = const Duration(seconds: 8),
+    int connectRetries = 3,
+    bool fastRecord = true,
   }) async {
     if (isConnected || _autoConnectInFlight) return;
     _autoConnectInFlight = true;
@@ -81,18 +105,21 @@ class GoProBleClient extends ChangeNotifier {
     notifyListeners();
 
     try {
+      await ensurePrefsLoaded();
       await ensureAdapterOn();
 
-      // Prefer waking a known/bonded camera without a full scan.
-      if (fastRecord) {
-        final known = await _resolveKnownDevice();
-        if (known != null) {
+      // Prefer known/bonded camera — no scan (also wakes a sleeping cam).
+      final known = await _resolveKnownDevice();
+      if (known != null) {
+        try {
           await connect(
             known,
             retries: connectRetries,
-            fastRecord: true,
+            fastRecord: fastRecord,
           );
           return;
+        } catch (e) {
+          debugPrint('known-device connect failed, scanning: $e');
         }
       }
 
@@ -134,7 +161,7 @@ class GoProBleClient extends ChangeNotifier {
     bool isCandidate(BluetoothDevice d) {
       final id = d.remoteId.str;
       if (_lastRemoteId != null && id == _lastRemoteId) return true;
-      return _looksLikeGoPro(d.platformName);
+      return _looksLikeGoPro(d.platformName) || _looksLikeGoPro(d.advName);
     }
 
     try {
@@ -172,7 +199,7 @@ class GoProBleClient extends ChangeNotifier {
   }
 
   Future<void> startScan({
-    Duration timeout = const Duration(seconds: 12),
+    Duration timeout = const Duration(seconds: 8),
     bool autoConnectFirst = false,
   }) async {
     _error = null;
@@ -183,21 +210,38 @@ class GoProBleClient extends ChangeNotifier {
     await ensureAdapterOn();
     await _scanSub?.cancel();
 
-    // Flush stale results from a previous scan.
     try {
       await FlutterBluePlus.stopScan();
     } catch (_) {}
 
+    final controlGuid = Guid(GoProUuids.controlService);
+
     _scanSub = FlutterBluePlus.onScanResults.listen((results) {
+      var foundNew = false;
       for (final r in results) {
-        final name = r.device.platformName;
-        if (name.isEmpty) continue;
-        if (!_looksLikeGoPro(name)) continue;
+        final platformName = r.device.platformName;
+        final advName = r.advertisementData.advName;
+        final name = platformName.isNotEmpty
+            ? platformName
+            : (advName.isNotEmpty ? advName : '');
+        final hasGoProService = r.advertisementData.serviceUuids.any(
+          (u) =>
+              u == controlGuid ||
+              u.str128.toLowerCase() == GoProUuids.controlService,
+        );
+        final nameMatch = name.isNotEmpty && _looksLikeGoPro(name);
+        final knownId =
+            _lastRemoteId != null && r.device.remoteId.str == _lastRemoteId;
+        if (!nameMatch && !hasGoProService && !knownId) continue;
+
         final id = r.device.remoteId.str;
+        final displayName = name.isNotEmpty
+            ? name
+            : (_lastName ?? (knownId ? 'GoPro' : 'GoPro'));
         final existing = discovered.indexWhere((d) => d.remoteId == id);
         final info = GoProDeviceInfo(
           device: r.device,
-          name: name,
+          name: displayName,
           remoteId: id,
           rssi: r.rssi,
         );
@@ -205,6 +249,7 @@ class GoProBleClient extends ChangeNotifier {
           discovered[existing] = info;
         } else {
           discovered.add(info);
+          foundNew = true;
           final pending = _firstDeviceCompleter;
           if (pending != null && !pending.isCompleted) {
             pending.complete(info);
@@ -213,24 +258,28 @@ class GoProBleClient extends ChangeNotifier {
       }
       discovered.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
       notifyListeners();
+      // Stop ASAP so we don't sit on "Taranıyor…" after the camera is seen.
+      if (autoConnectFirst && foundNew) {
+        unawaited(FlutterBluePlus.stopScan());
+      }
     });
 
+    // Don't filter withServices here — some firmware omits FEA6 from the
+    // advertising packet and only puts it in the scan response / GATT.
     await FlutterBluePlus.startScan(
       timeout: timeout,
       androidUsesFineLocation: true,
-      // Continuous updates help auto-connect as soon as the camera appears.
+      androidScanMode: AndroidScanMode.lowLatency,
       continuousUpdates: true,
     );
 
-    // Wait until first camera or scan ends.
     if (autoConnectFirst) {
       try {
         await _firstDeviceCompleter!.future.timeout(timeout);
       } on TimeoutException {
-        // fall through — caller handles empty list
+        // caller handles empty list
       }
-    } else {
-      // startScan returns when timeout ends for non-auto mode.
+      await FlutterBluePlus.stopScan();
     }
 
     if (_state == GoProConnectionState.scanning && !_autoConnectInFlight) {
@@ -270,8 +319,7 @@ class GoProBleClient extends ChangeNotifier {
           fastRecord: fastRecord,
         );
         connectedDevice = info;
-        _lastRemoteId = info.remoteId;
-        _lastName = info.name;
+        unawaited(_persistLastDevice(info));
         _error = null;
         _setState(GoProConnectionState.connected);
         return;
