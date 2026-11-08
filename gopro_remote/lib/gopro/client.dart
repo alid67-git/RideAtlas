@@ -49,6 +49,10 @@ class GoProBleClient extends ChangeNotifier {
   bool _sessionRecording = false;
   bool get isSessionRecording => _sessionRecording || status.encoding;
 
+  /// Last successful camera — used to skip scan and wake via direct connect.
+  String? _lastRemoteId;
+  String? _lastName;
+
   bool get isConnected =>
       _state == GoProConnectionState.connected && _device != null;
 
@@ -69,6 +73,7 @@ class GoProBleClient extends ChangeNotifier {
   Future<void> autoConnect({
     Duration scanTimeout = const Duration(seconds: 15),
     int connectRetries = 5,
+    bool fastRecord = false,
   }) async {
     if (isConnected || _autoConnectInFlight) return;
     _autoConnectInFlight = true;
@@ -77,6 +82,20 @@ class GoProBleClient extends ChangeNotifier {
 
     try {
       await ensureAdapterOn();
+
+      // Prefer waking a known/bonded camera without a full scan.
+      if (fastRecord) {
+        final known = await _resolveKnownDevice();
+        if (known != null) {
+          await connect(
+            known,
+            retries: connectRetries,
+            fastRecord: true,
+          );
+          return;
+        }
+      }
+
       await startScan(
         timeout: scanTimeout,
         autoConnectFirst: true,
@@ -89,11 +108,67 @@ class GoProBleClient extends ChangeNotifier {
                   StateError('GoPro bulunamadı. Kamerayı açıp tekrar dene.'),
                 ));
 
-      await connect(target, retries: connectRetries);
+      await stopScan();
+      await connect(
+        target,
+        retries: connectRetries,
+        fastRecord: fastRecord,
+      );
     } finally {
       _autoConnectInFlight = false;
       notifyListeners();
     }
+  }
+
+  /// Bonded / last-used GoPro — connect wakes a sleeping camera.
+  Future<GoProDeviceInfo?> _resolveKnownDevice() async {
+    GoProDeviceInfo wrap(BluetoothDevice d) {
+      final name = d.platformName;
+      return GoProDeviceInfo(
+        device: d,
+        name: name.isNotEmpty ? name : (_lastName ?? 'GoPro'),
+        remoteId: d.remoteId.str,
+      );
+    }
+
+    bool isCandidate(BluetoothDevice d) {
+      final id = d.remoteId.str;
+      if (_lastRemoteId != null && id == _lastRemoteId) return true;
+      return _looksLikeGoPro(d.platformName);
+    }
+
+    try {
+      final bonded = await FlutterBluePlus.bondedDevices;
+      GoProDeviceInfo? fallback;
+      for (final d in bonded) {
+        if (!isCandidate(d)) continue;
+        final info = wrap(d);
+        if (_lastRemoteId != null && d.remoteId.str == _lastRemoteId) {
+          return info;
+        }
+        fallback ??= info;
+      }
+      if (fallback != null) return fallback;
+    } catch (e) {
+      debugPrint('bondedDevices: $e');
+    }
+
+    try {
+      final sys = await FlutterBluePlus.systemDevices([
+        Guid(GoProUuids.controlService),
+      ]);
+      for (final d in sys) {
+        if (!isCandidate(d)) continue;
+        final info = wrap(d);
+        if (_lastRemoteId != null && d.remoteId.str == _lastRemoteId) {
+          return info;
+        }
+        return info;
+      }
+    } catch (e) {
+      debugPrint('systemDevices: $e');
+    }
+    return null;
   }
 
   Future<void> startScan({
@@ -175,27 +250,38 @@ class GoProBleClient extends ChangeNotifier {
   Future<void> connect(
     GoProDeviceInfo info, {
     int retries = 5,
+    bool fastRecord = false,
   }) async {
     _error = null;
     await stopScan();
     // Android GATT 133 is common if we connect immediately after stopScan.
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    await Future<void>.delayed(
+      Duration(milliseconds: fastRecord ? 120 : 400),
+    );
     _setState(GoProConnectionState.connecting);
 
     Object? lastError;
-    for (var attempt = 1; attempt <= retries; attempt++) {
+    final attempts = fastRecord ? retries.clamp(1, 3) : retries;
+    for (var attempt = 1; attempt <= attempts; attempt++) {
       try {
-        await _connectOnce(info, attempt: attempt);
+        await _connectOnce(
+          info,
+          attempt: attempt,
+          fastRecord: fastRecord,
+        );
         connectedDevice = info;
+        _lastRemoteId = info.remoteId;
+        _lastName = info.name;
         _error = null;
         _setState(GoProConnectionState.connected);
         return;
       } catch (e) {
         lastError = e;
-        debugPrint('GoPro connect attempt $attempt/$retries failed: $e');
+        debugPrint('GoPro connect attempt $attempt/$attempts failed: $e');
         await _teardownLink(keepState: true);
-        // Progressive backoff — helps clear Android GATT 133.
-        await Future<void>.delayed(Duration(milliseconds: 500 * attempt));
+        await Future<void>.delayed(
+          Duration(milliseconds: fastRecord ? 250 * attempt : 500 * attempt),
+        );
       }
     }
 
@@ -204,7 +290,11 @@ class GoProBleClient extends ChangeNotifier {
     throw StateError(_error!);
   }
 
-  Future<void> _connectOnce(GoProDeviceInfo info, {required int attempt}) async {
+  Future<void> _connectOnce(
+    GoProDeviceInfo info, {
+    required int attempt,
+    bool fastRecord = false,
+  }) async {
     final device = info.device;
     _device = device;
 
@@ -212,33 +302,35 @@ class GoProBleClient extends ChangeNotifier {
     try {
       await device.disconnect();
     } catch (_) {}
-    await Future<void>.delayed(const Duration(milliseconds: 250));
+    await Future<void>.delayed(
+      Duration(milliseconds: fastRecord ? 80 : 250),
+    );
 
-    if (attempt >= 3) {
+    if (!fastRecord && attempt >= 3) {
       try {
         await device.clearGattCache();
       } catch (_) {}
     }
 
+    // Connecting while asleep wakes the GoPro over BLE.
     await device.connect(
-      timeout: const Duration(seconds: 25),
+      timeout: Duration(seconds: fastRecord ? 15 : 25),
       autoConnect: false,
-      mtu: null, // negotiate after connect; avoids some OEM 133 races
+      mtu: null,
     );
 
-    // Wait until Android reports connected.
     await device.connectionState
         .firstWhere((s) => s == BluetoothConnectionState.connected)
-        .timeout(const Duration(seconds: 20));
+        .timeout(Duration(seconds: fastRecord ? 12 : 20));
 
-    // Pairing is required by Open GoPro before most commands succeed.
-    // Skip createBond if already bonded to avoid extra 133s.
+    // Skip createBond when already paired — biggest delay after wake.
     try {
-      final bond = await device.bondState
-          .first
-          .timeout(const Duration(seconds: 2), onTimeout: () => BluetoothBondState.none);
+      final bond = await device.bondState.first.timeout(
+        const Duration(milliseconds: 800),
+        onTimeout: () => BluetoothBondState.none,
+      );
       if (bond != BluetoothBondState.bonded) {
-        await device.createBond(timeout: 45);
+        await device.createBond(timeout: fastRecord ? 20 : 45);
       }
     } catch (e) {
       debugPrint('Bond/pair note: $e');
@@ -247,28 +339,47 @@ class GoProBleClient extends ChangeNotifier {
     await _connSub?.cancel();
     _connSub = device.connectionState.listen((s) {
       if (s == BluetoothConnectionState.disconnected &&
-          _state == GoProConnectionState.connected) {
+          (_state == GoProConnectionState.connected || _sessionRecording)) {
         _error = 'Bağlantı koptu';
         connectedDevice = null;
-        _setState(GoProConnectionState.disconnected);
+        if (!_sessionRecording) {
+          _setState(GoProConnectionState.disconnected);
+        }
       }
     });
 
-    try {
-      await device.requestMtu(512);
-    } catch (_) {}
+    if (!fastRecord) {
+      try {
+        await device.requestMtu(512);
+      } catch (_) {}
+    }
 
     await device.discoverServices();
     await _bindCharacteristics(device);
-    await _enableNotifications(device);
+    // Command (+ query) notifies only — enough to start shutter immediately.
+    await _enableNotifications(device, minimal: fastRecord);
 
-    // Open GoPro init sequence (mirrors official C# / Python demos).
     await _writeCommand(GoProProtocol.setThirdPartyClientInfo(), wait: false);
+
+    if (fastRecord) {
+      // Status registration after shutter — don't block wake→record.
+      unawaited(_finishInitAfterRecordReady());
+      return;
+    }
+
     await Future<void>.delayed(const Duration(milliseconds: 100));
     await _writeQuery(GoProProtocol.registerAllSettings(), wait: false);
     await _writeQuery(GoProProtocol.registerAllStatuses(), wait: false);
-    // Wi‑Fi AP credentials are optional (media download later); not needed
-    // for BLE shutter control, so we skip reading them on every connect.
+  }
+
+  Future<void> _finishInitAfterRecordReady() async {
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await _writeQuery(GoProProtocol.registerAllSettings(), wait: false);
+      await _writeQuery(GoProProtocol.registerAllStatuses(), wait: false);
+    } catch (e) {
+      debugPrint('deferred init: $e');
+    }
   }
 
   Future<void> disconnect() async {
@@ -280,7 +391,16 @@ class GoProBleClient extends ChangeNotifier {
   }
 
   Future<void> startRecording() async {
-    await _writeCommand(GoProProtocol.setShutter(on: true));
+    // Don't block forever on notify — wake path may be busy settling.
+    try {
+      await _writeCommand(
+        GoProProtocol.setShutter(on: true),
+        wait: true,
+      ).timeout(const Duration(seconds: 3));
+    } catch (e) {
+      // Write often still landed; keep going so the UI isn't stuck on connect.
+      debugPrint('shutter start: $e');
+    }
     _sessionRecording = true;
     status = status.copyWith(encoding: true);
     notifyListeners();
@@ -331,7 +451,7 @@ class GoProBleClient extends ChangeNotifier {
     await Future<void>.delayed(const Duration(milliseconds: 400));
   }
 
-  /// Single control: start = ensure BLE + shutter on;
+  /// Single control: start = wake/connect fast + shutter;
   /// stop = shutter off, wait for encode end, then sleep (+ power-down fallback).
   Future<void> toggleRecording() async {
     if (isSessionRecording) {
@@ -365,8 +485,13 @@ class GoProBleClient extends ChangeNotifier {
       return;
     }
 
+    // Wake (via BLE connect) + shutter ASAP — skip full status init.
     if (!isConnected) {
-      await autoConnect();
+      await autoConnect(
+        scanTimeout: const Duration(seconds: 12),
+        connectRetries: 3,
+        fastRecord: true,
+      );
     }
     await startRecording();
   }
@@ -411,7 +536,10 @@ class GoProBleClient extends ChangeNotifier {
     }
   }
 
-  Future<void> _enableNotifications(BluetoothDevice device) async {
+  Future<void> _enableNotifications(
+    BluetoothDevice device, {
+    bool minimal = false,
+  }) async {
     for (final sub in _notifySubs) {
       await sub.cancel();
     }
@@ -421,6 +549,11 @@ class GoProBleClient extends ChangeNotifier {
       for (final c in service.characteristics) {
         if (!c.properties.notify && !c.properties.indicate) continue;
         final u = c.uuid.str128.toLowerCase();
+        if (minimal &&
+            u != GoProUuids.commandRsp &&
+            u != GoProUuids.queryRsp) {
+          continue;
+        }
         await c.setNotifyValue(true);
         final sub = c.onValueReceived.listen((value) {
           _onNotify(u, Uint8List.fromList(value));
