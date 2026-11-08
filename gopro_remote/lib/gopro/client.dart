@@ -41,6 +41,9 @@ class GoProBleClient extends ChangeNotifier {
 
   Completer<bool>? _pendingCommand;
 
+  bool _autoConnectInFlight = false;
+  Completer<GoProDeviceInfo>? _firstDeviceCompleter;
+
   bool get isConnected =>
       _state == GoProConnectionState.connected && _device != null;
 
@@ -57,13 +60,53 @@ class GoProBleClient extends ChangeNotifier {
     }
   }
 
-  Future<void> startScan({Duration timeout = const Duration(seconds: 12)}) async {
+  /// Scan, then automatically connect to the strongest GoPro found.
+  Future<void> autoConnect({
+    Duration scanTimeout = const Duration(seconds: 15),
+    int connectRetries = 5,
+  }) async {
+    if (isConnected || _autoConnectInFlight) return;
+    _autoConnectInFlight = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await ensureAdapterOn();
+      await startScan(
+        timeout: scanTimeout,
+        autoConnectFirst: true,
+      );
+
+      final target = discovered.isNotEmpty
+          ? discovered.first
+          : await (_firstDeviceCompleter?.future ??
+                Future<GoProDeviceInfo>.error(
+                  StateError('GoPro bulunamadı. Kamerayı açıp tekrar dene.'),
+                ));
+
+      await connect(target, retries: connectRetries);
+    } finally {
+      _autoConnectInFlight = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> startScan({
+    Duration timeout = const Duration(seconds: 12),
+    bool autoConnectFirst = false,
+  }) async {
     _error = null;
     discovered.clear();
+    _firstDeviceCompleter = Completer<GoProDeviceInfo>();
     _setState(GoProConnectionState.scanning);
 
     await ensureAdapterOn();
     await _scanSub?.cancel();
+
+    // Flush stale results from a previous scan.
+    try {
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
 
     _scanSub = FlutterBluePlus.onScanResults.listen((results) {
       for (final r in results) {
@@ -82,6 +125,10 @@ class GoProBleClient extends ChangeNotifier {
           discovered[existing] = info;
         } else {
           discovered.add(info);
+          final pending = _firstDeviceCompleter;
+          if (pending != null && !pending.isCompleted) {
+            pending.complete(info);
+          }
         }
       }
       discovered.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
@@ -91,10 +138,22 @@ class GoProBleClient extends ChangeNotifier {
     await FlutterBluePlus.startScan(
       timeout: timeout,
       androidUsesFineLocation: true,
+      // Continuous updates help auto-connect as soon as the camera appears.
+      continuousUpdates: true,
     );
 
-    // If still scanning state after timeout with no connection attempt, idle.
-    if (_state == GoProConnectionState.scanning) {
+    // Wait until first camera or scan ends.
+    if (autoConnectFirst) {
+      try {
+        await _firstDeviceCompleter!.future.timeout(timeout);
+      } on TimeoutException {
+        // fall through — caller handles empty list
+      }
+    } else {
+      // startScan returns when timeout ends for non-auto mode.
+    }
+
+    if (_state == GoProConnectionState.scanning && !_autoConnectInFlight) {
       _setState(GoProConnectionState.disconnected);
     }
   }
@@ -108,57 +167,103 @@ class GoProBleClient extends ChangeNotifier {
     }
   }
 
-  Future<void> connect(GoProDeviceInfo info) async {
+  Future<void> connect(
+    GoProDeviceInfo info, {
+    int retries = 5,
+  }) async {
     _error = null;
     await stopScan();
+    // Android GATT 133 is common if we connect immediately after stopScan.
+    await Future<void>.delayed(const Duration(milliseconds: 400));
     _setState(GoProConnectionState.connecting);
 
-    try {
-      await _teardownLink(keepState: true);
-
-      final device = info.device;
-      _device = device;
-
-      await device.connect(
-        timeout: const Duration(seconds: 20),
-        autoConnect: false,
-      );
-
-      // Pairing is required by Open GoPro before most commands succeed.
+    Object? lastError;
+    for (var attempt = 1; attempt <= retries; attempt++) {
       try {
-        await device.createBond(timeout: 35);
+        await _connectOnce(info, attempt: attempt);
+        connectedDevice = info;
+        _error = null;
+        _setState(GoProConnectionState.connected);
+        return;
       } catch (e) {
-        debugPrint('Bond/pair note: $e');
+        lastError = e;
+        debugPrint('GoPro connect attempt $attempt/$retries failed: $e');
+        await _teardownLink(keepState: true);
+        // Progressive backoff — helps clear Android GATT 133.
+        await Future<void>.delayed(Duration(milliseconds: 500 * attempt));
       }
-
-      _connSub = device.connectionState.listen((s) {
-        if (s == BluetoothConnectionState.disconnected &&
-            _state == GoProConnectionState.connected) {
-          _error = 'Bağlantı koptu';
-          connectedDevice = null;
-          _setState(GoProConnectionState.disconnected);
-        }
-      });
-
-      await device.discoverServices();
-      await _bindCharacteristics(device);
-      await _enableNotifications(device);
-
-      // Open GoPro init sequence (mirrors official C# / Python demos).
-      await _writeCommand(GoProProtocol.setThirdPartyClientInfo(), wait: false);
-      await _writeQuery(GoProProtocol.registerAllSettings(), wait: false);
-      await _writeQuery(GoProProtocol.registerAllStatuses(), wait: false);
-
-      await refreshWifiCredentials();
-
-      connectedDevice = info;
-      _setState(GoProConnectionState.connected);
-    } catch (e) {
-      _error = e.toString();
-      await _teardownLink();
-      _setState(GoProConnectionState.error);
-      rethrow;
     }
+
+    _error = _friendlyError(lastError);
+    _setState(GoProConnectionState.error);
+    throw StateError(_error!);
+  }
+
+  Future<void> _connectOnce(GoProDeviceInfo info, {required int attempt}) async {
+    final device = info.device;
+    _device = device;
+
+    // Always force a clean disconnect before connect (Android 133 mitigation).
+    try {
+      await device.disconnect();
+    } catch (_) {}
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+
+    if (attempt >= 3) {
+      try {
+        await device.clearGattCache();
+      } catch (_) {}
+    }
+
+    await device.connect(
+      timeout: const Duration(seconds: 25),
+      autoConnect: false,
+      mtu: null, // negotiate after connect; avoids some OEM 133 races
+    );
+
+    // Wait until Android reports connected.
+    await device.connectionState
+        .firstWhere((s) => s == BluetoothConnectionState.connected)
+        .timeout(const Duration(seconds: 20));
+
+    // Pairing is required by Open GoPro before most commands succeed.
+    // Skip createBond if already bonded to avoid extra 133s.
+    try {
+      final bond = await device.bondState
+          .first
+          .timeout(const Duration(seconds: 2), onTimeout: () => BluetoothBondState.none);
+      if (bond != BluetoothBondState.bonded) {
+        await device.createBond(timeout: 45);
+      }
+    } catch (e) {
+      debugPrint('Bond/pair note: $e');
+    }
+
+    await _connSub?.cancel();
+    _connSub = device.connectionState.listen((s) {
+      if (s == BluetoothConnectionState.disconnected &&
+          _state == GoProConnectionState.connected) {
+        _error = 'Bağlantı koptu';
+        connectedDevice = null;
+        _setState(GoProConnectionState.disconnected);
+      }
+    });
+
+    try {
+      await device.requestMtu(512);
+    } catch (_) {}
+
+    await device.discoverServices();
+    await _bindCharacteristics(device);
+    await _enableNotifications(device);
+
+    // Open GoPro init sequence (mirrors official C# / Python demos).
+    await _writeCommand(GoProProtocol.setThirdPartyClientInfo(), wait: false);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await _writeQuery(GoProProtocol.registerAllSettings(), wait: false);
+    await _writeQuery(GoProProtocol.registerAllStatuses(), wait: false);
+
+    await refreshWifiCredentials();
   }
 
   Future<void> disconnect() async {
@@ -378,6 +483,16 @@ class GoProBleClient extends ChangeNotifier {
   void _setState(GoProConnectionState s) {
     _state = s;
     notifyListeners();
+  }
+
+  static String _friendlyError(Object? e) {
+    final text = e?.toString() ?? 'Bilinmeyen hata';
+    if (text.contains('133') || text.contains('ANDROID_SPECIFIC_ERROR')) {
+      return 'Bluetooth bağlantısı kurulamadı (Android 133). '
+          'Kamerayı yeniden başlatıp tekrar dene; ilk seferde '
+          'GoPro ekranındaki eşleştirme isteğini onayla.';
+    }
+    return text;
   }
 
   static bool _looksLikeGoPro(String name) {

@@ -52,6 +52,8 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   void initState() {
     super.initState();
     _client = GoProBleClient()..addListener(_onClient);
+    // Open → izin → tara → ilk GoPro’ya otomatik bağlan.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autoConnect());
   }
 
   void _onClient() {
@@ -105,9 +107,25 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     }
   }
 
+  Future<void> _autoConnect() async {
+    if (!await _ensurePermissions()) return;
+    await _run(() async {
+      setState(() => _banner = 'Kamera aranıyor, otomatik bağlanılacak…');
+      await _client.autoConnect();
+      final name = _client.connectedDevice?.name;
+      setState(() => _banner = name == null ? null : 'Bağlandı: $name');
+    });
+  }
+
   Future<void> _scan() async {
     if (!await _ensurePermissions()) return;
-    await _run(() => _client.startScan());
+    // Manuel Tara da otomatik bağlanır (en güçlü sinyal).
+    await _run(() async {
+      setState(() => _banner = 'Kamera aranıyor, otomatik bağlanılacak…');
+      await _client.autoConnect();
+      final name = _client.connectedDevice?.name;
+      setState(() => _banner = name == null ? null : 'Bağlandı: $name');
+    });
   }
 
   Future<void> _connect(GoProDeviceInfo info) async {
@@ -158,7 +176,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'HERO10–13 Black · Open GoPro BLE · Android',
+                    'HERO10–13 · otomatik tara + bağlan · Android',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.65),
                         ),
@@ -198,9 +216,10 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                       onPressed: _busy ? null : _scan,
                       icon: const Icon(Icons.bluetooth_searching),
                       label: Text(
-                        _client.state == GoProConnectionState.scanning
-                            ? 'Taranıyor'
-                            : 'Tara',
+                        _client.state == GoProConnectionState.scanning ||
+                                _client.state == GoProConnectionState.connecting
+                            ? 'Bağlanıyor'
+                            : 'Otomatik bağlan',
                       ),
                     ),
                   ),

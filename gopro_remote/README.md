@@ -4,9 +4,9 @@ RideAtlas’tan **ayrı** bir Flutter Android uygulaması. GoPro **HERO10–13 B
 
 iOS ve Insta360 (X4+) sonraki adım. RideAtlas entegrasyonu bu modül oturunca yapılacak.
 
-## Ne yapar (v0.1)
+## Ne yapar (v0.1.1)
 
-- BLE ile GoPro tarama / eşleştirme / bağlanma
+- Açılışta otomatik tara + en güçlü GoPro’ya bağlan (Android GATT 133 için retry)
 - Kayıt **başlat / durdur** (Wi‑Fi şart değil)
 - Encoding, süre, batarya durumu (status bildirimleri)
 - Kamera Wi‑Fi AP aç/kapa + SSID/şifre okuma (ileride medya indirme için)
