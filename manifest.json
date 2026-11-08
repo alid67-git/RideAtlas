@@ -1,0 +1,35 @@
+{
+    "name": "RideAtlas",
+    "short_name": "RideAtlas",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#E32A38",
+    "theme_color": "#E32A38",
+    "description": "GPX/KML/KMZ rotalarını haritada göster ve analiz et.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}
