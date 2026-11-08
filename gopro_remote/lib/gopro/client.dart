@@ -345,11 +345,12 @@ class GoProBleClient extends ChangeNotifier {
       } catch (_) {}
     }
 
-    await device.discoverServices();
+    await device.discoverServices(timeout: fastRecord ? 8 : 15);
     await _bindCharacteristics(device);
 
-    // RECORD FAST PATH: shutter the instant the command char exists.
+    // RECORD FAST PATH: prime CCCD + third-party, then shutter (no 15s waits).
     if (shutterOnConnect) {
+      await _primeCommandChannel(device);
       await _burstStartShutter();
       unawaited(_finishInitAfterRecordReady(device));
       return;
@@ -368,36 +369,73 @@ class GoProBleClient extends ChangeNotifier {
     await _writeQuery(GoProProtocol.registerAllStatuses(), wait: false);
   }
 
-  /// Fire shutter; only mark session recording after a successful write.
+  /// Enable command/query notifies and announce third-party client.
+  /// Failures are ignored — shutter still proceeds with a short settle.
+  Future<void> _primeCommandChannel(BluetoothDevice device) async {
+    try {
+      await _enableNotifications(device, minimal: true);
+    } catch (e) {
+      debugPrint('prime notify: $e');
+    }
+    try {
+      await _bleWrite(
+        _commandReq,
+        GoProProtocol.setThirdPartyClientInfo(),
+        withoutResponse: true,
+        timeoutSec: 2,
+      );
+    } catch (e) {
+      debugPrint('prime third-party: $e');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+  }
+
+  /// Fire shutter with short Write-Without-Response timeouts only.
+  /// Never falls back to Write-With-Response (that was the 15s hang).
   Future<void> _burstStartShutter() async {
     final char = _commandReq;
     if (char == null) throw StateError('Komut karakteristiği yok');
 
     Object? lastErr;
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < 4; i++) {
       try {
-        await char.write(
+        await _bleWrite(
+          char,
           GoProProtocol.setShutter(on: true),
           withoutResponse: true,
+          timeoutSec: 2,
         );
         lastErr = null;
         break;
       } catch (e) {
         lastErr = e;
         debugPrint('shutter burst $i: $e');
-        await Future<void>.delayed(Duration(milliseconds: 100 + i * 80));
+        await Future<void>.delayed(Duration(milliseconds: 120 + i * 60));
       }
     }
     if (lastErr != null) {
-      await char.write(
-        GoProProtocol.setShutter(on: true),
-        withoutResponse: false,
+      throw StateError(
+        'Kayıt komutu gönderilemedi. Kamerayı uyandırıp tekrar dene.',
       );
     }
 
     _sessionRecording = true;
     status = status.copyWith(encoding: true);
     notifyListeners();
+  }
+
+  Future<void> _bleWrite(
+    BluetoothCharacteristic? char,
+    Uint8List bytes, {
+    required bool withoutResponse,
+    int timeoutSec = 3,
+  }) async {
+    if (char == null) throw StateError('Bağlı değil');
+    await char.write(
+      bytes,
+      withoutResponse: withoutResponse,
+      timeout: timeoutSec,
+    );
   }
 
   void _resetSessionLocal({String? error}) {
@@ -460,18 +498,15 @@ class GoProBleClient extends ChangeNotifier {
   }
 
   Future<void> _fireAndForgetCommand(Uint8List bytes) async {
-    final char = _commandReq;
-    if (char == null) throw StateError('Bağlı değil');
     try {
-      // Write Command (no ATT response) — survives the camera going away.
-      await char.write(bytes, withoutResponse: true);
+      await _bleWrite(
+        _commandReq,
+        bytes,
+        withoutResponse: true,
+        timeoutSec: 2,
+      );
     } catch (e) {
       debugPrint('fire-and-forget write: $e');
-      try {
-        await char.write(bytes, withoutResponse: false);
-      } catch (e2) {
-        debugPrint('fallback write: $e2');
-      }
     }
   }
 
@@ -726,7 +761,12 @@ class GoProBleClient extends ChangeNotifier {
             u != GoProUuids.queryRsp) {
           continue;
         }
-        await c.setNotifyValue(true);
+        try {
+          await c.setNotifyValue(true, timeout: 3);
+        } catch (e) {
+          debugPrint('setNotifyValue $u: $e');
+          continue;
+        }
         final sub = c.onValueReceived.listen((value) {
           _onNotify(u, Uint8List.fromList(value));
         });
@@ -814,20 +854,23 @@ class GoProBleClient extends ChangeNotifier {
   }
 
   Future<void> _writeCommand(Uint8List bytes, {bool wait = true}) async {
-    final char = _commandReq;
-    if (char == null) throw StateError('Bağlı değil');
-
     Completer<bool>? completer;
     if (wait) {
       completer = Completer<bool>();
       _pendingCommand = completer;
     }
 
-    await char.write(bytes, withoutResponse: false);
+    // Prefer withoutResponse so we never sit on FBP's 15s ATT timeout.
+    await _bleWrite(
+      _commandReq,
+      bytes,
+      withoutResponse: true,
+      timeoutSec: wait ? 3 : 2,
+    );
 
     if (completer != null) {
       final ok = await completer.future.timeout(
-        const Duration(seconds: 5),
+        const Duration(seconds: 3),
         onTimeout: () => false,
       );
       if (_pendingCommand == completer) _pendingCommand = null;
@@ -840,7 +883,11 @@ class GoProBleClient extends ChangeNotifier {
   Future<void> _writeQuery(Uint8List bytes, {bool wait = false}) async {
     final char = _queryReq;
     if (char == null) return;
-    await char.write(bytes, withoutResponse: false);
+    try {
+      await _bleWrite(char, bytes, withoutResponse: true, timeoutSec: 2);
+    } catch (e) {
+      debugPrint('query write: $e');
+    }
     if (wait) {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     }
@@ -882,6 +929,13 @@ class GoProBleClient extends ChangeNotifier {
       return 'Bluetooth bağlantısı kurulamadı (Android 133). '
           'Kamerayı yeniden başlatıp tekrar dene; ilk seferde '
           'GoPro ekranındaki eşleştirme isteğini onayla.';
+    }
+    if (text.contains('writeCharacteristic') ||
+        text.contains('Timed out') ||
+        text.contains('zaman aşımı') ||
+        text.contains('gönderilemedi')) {
+      return 'Kamera komutu zaman aşımına uğradı. '
+          'Kamerayı açıp tekrar KAYIT’a bas.';
     }
     return text;
   }
