@@ -262,8 +262,8 @@ class GoProBleClient extends ChangeNotifier {
     await Future<void>.delayed(const Duration(milliseconds: 100));
     await _writeQuery(GoProProtocol.registerAllSettings(), wait: false);
     await _writeQuery(GoProProtocol.registerAllStatuses(), wait: false);
-
-    await refreshWifiCredentials();
+    // Wi‑Fi AP credentials are optional (media download later); not needed
+    // for BLE shutter control, so we skip reading them on every connect.
   }
 
   Future<void> disconnect() async {
@@ -284,6 +284,32 @@ class GoProBleClient extends ChangeNotifier {
       _writeCommand(GoProProtocol.setWifiAp(on: on));
 
   Future<void> sleepCamera() => _writeCommand(GoProProtocol.sleep());
+
+  /// Single control: start = ensure BLE + shutter on;
+  /// stop = shutter off + camera sleep (BLE drops after sleep).
+  Future<void> toggleRecording() async {
+    if (status.encoding) {
+      await stopRecording();
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      try {
+        await sleepCamera();
+      } catch (e) {
+        debugPrint('Sleep after stop: $e');
+      }
+      // Sleep ends the BLE session; clear local link state.
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await _teardownLink();
+      connectedDevice = null;
+      status = const GoProCameraStatus();
+      _setState(GoProConnectionState.disconnected);
+      return;
+    }
+
+    if (!isConnected) {
+      await autoConnect();
+    }
+    await startRecording();
+  }
 
   Future<void> refreshWifiCredentials() async {
     final ssidChar = _wifiSsid;
