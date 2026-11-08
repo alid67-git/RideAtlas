@@ -250,15 +250,22 @@ class GoProBleClient extends ChangeNotifier {
       } catch (e) {
         lastError = e;
         debugPrint('GoPro connect attempt $attempt/$attempts failed: $e');
+        // Never leave the UI stuck on "KAYIT" after a failed connect.
+        _sessionRecording = false;
+        status = const GoProCameraStatus();
         await _teardownLink(keepState: true);
         await Future<void>.delayed(
-          Duration(milliseconds: fastRecord ? 200 * attempt : 500 * attempt),
+          Duration(milliseconds: fastRecord ? 350 * attempt : 500 * attempt),
         );
       }
     }
 
+    _sessionRecording = false;
+    status = const GoProCameraStatus();
+    connectedDevice = null;
     _error = _friendlyError(lastError);
     _setState(GoProConnectionState.error);
+    notifyListeners();
     throw StateError(_error!);
   }
 
@@ -277,27 +284,32 @@ class GoProBleClient extends ChangeNotifier {
         await device.disconnect();
       } catch (_) {}
       await Future<void>.delayed(
-        Duration(milliseconds: fastRecord ? 40 : 250),
+        Duration(milliseconds: fastRecord ? 80 : 250),
       );
     }
 
-    if (!fastRecord && attempt >= 3) {
+    // GATT 133 mitigation: clear cache on retry.
+    if (attempt >= 2) {
       try {
         await device.clearGattCache();
       } catch (_) {}
+      await Future<void>.delayed(const Duration(milliseconds: 200));
     }
 
-    // Fresh scan result + short timeout. Long timeouts were causing ~20s hangs
-    // when connecting to a bonded device without a recent advertisement.
+    // Brief settle after scan stop before GATT connect (helps 133).
+    if (fastRecord && attempt == 1) {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    }
+
     await device.connect(
-      timeout: Duration(seconds: fastRecord ? 5 : 20),
+      timeout: Duration(seconds: fastRecord ? 8 : 20),
       autoConnect: false,
       mtu: null,
     );
 
     await device.connectionState
         .firstWhere((s) => s == BluetoothConnectionState.connected)
-        .timeout(Duration(seconds: fastRecord ? 5 : 15));
+        .timeout(Duration(seconds: fastRecord ? 8 : 15));
 
     // Never block the record path on bonding.
     if (!fastRecord) {
@@ -320,9 +332,10 @@ class GoProBleClient extends ChangeNotifier {
           (_state == GoProConnectionState.connected || _sessionRecording)) {
         _error = 'Bağlantı koptu';
         connectedDevice = null;
-        if (!_sessionRecording) {
-          _setState(GoProConnectionState.disconnected);
-        }
+        // Drop phantom "KAYIT" UI if the link dies mid-session.
+        _sessionRecording = false;
+        status = const GoProCameraStatus();
+        _setState(GoProConnectionState.disconnected);
       }
     });
 
@@ -336,7 +349,6 @@ class GoProBleClient extends ChangeNotifier {
     await _bindCharacteristics(device);
 
     // RECORD FAST PATH: shutter the instant the command char exists.
-    // Camera is awake from connect; do not wait for status/third-party.
     if (shutterOnConnect) {
       await _burstStartShutter();
       unawaited(_finishInitAfterRecordReady(device));
@@ -356,17 +368,13 @@ class GoProBleClient extends ChangeNotifier {
     await _writeQuery(GoProProtocol.registerAllStatuses(), wait: false);
   }
 
-  /// Fire shutter immediately; retry while the camera finishes waking.
+  /// Fire shutter; only mark session recording after a successful write.
   Future<void> _burstStartShutter() async {
     final char = _commandReq;
     if (char == null) throw StateError('Komut karakteristiği yok');
 
-    _sessionRecording = true;
-    status = status.copyWith(encoding: true);
-    notifyListeners();
-
     Object? lastErr;
-    for (var i = 0; i < 6; i++) {
+    for (var i = 0; i < 5; i++) {
       try {
         await char.write(
           GoProProtocol.setShutter(on: true),
@@ -377,16 +385,27 @@ class GoProBleClient extends ChangeNotifier {
       } catch (e) {
         lastErr = e;
         debugPrint('shutter burst $i: $e');
-        await Future<void>.delayed(Duration(milliseconds: 120 + i * 80));
+        await Future<void>.delayed(Duration(milliseconds: 100 + i * 80));
       }
     }
     if (lastErr != null) {
-      // One last attempt with ATT response.
       await char.write(
         GoProProtocol.setShutter(on: true),
         withoutResponse: false,
       );
     }
+
+    _sessionRecording = true;
+    status = status.copyWith(encoding: true);
+    notifyListeners();
+  }
+
+  void _resetSessionLocal({String? error}) {
+    _sessionRecording = false;
+    status = const GoProCameraStatus();
+    connectedDevice = null;
+    if (error != null) _error = error;
+    _setState(GoProConnectionState.disconnected);
   }
 
   Future<void> _finishInitAfterRecordReady(BluetoothDevice device) async {
@@ -403,9 +422,7 @@ class GoProBleClient extends ChangeNotifier {
   Future<void> disconnect() async {
     await stopScan();
     await _teardownLink();
-    connectedDevice = null;
-    status = const GoProCameraStatus();
-    _setState(GoProConnectionState.disconnected);
+    _resetSessionLocal();
   }
 
   Future<void> startRecording() async {
@@ -469,10 +486,17 @@ class GoProBleClient extends ChangeNotifier {
     await Future<void>.delayed(const Duration(milliseconds: 400));
   }
 
-  /// Single control: start = wake + shutter the moment GATT is ready;
-  /// stop = shutter off, wait for encode end, then sleep (+ power-down fallback).
+  /// Single control: start = wake + shutter; stop = stop + sleep.
+  /// If link is already dead, STOP just clears local phantom "KAYIT" state.
   Future<void> toggleRecording() async {
     if (isSessionRecording) {
+      // Phantom session after GATT 133 / drop — don't require a live link.
+      if (!isConnected || _commandReq == null) {
+        await _teardownLink();
+        _resetSessionLocal();
+        return;
+      }
+
       try {
         await stopRecording();
       } catch (e) {
@@ -494,14 +518,16 @@ class GoProBleClient extends ChangeNotifier {
 
       await Future<void>.delayed(const Duration(milliseconds: 300));
       await _teardownLink();
-      connectedDevice = null;
-      _sessionRecording = false;
-      status = const GoProCameraStatus();
-      _setState(GoProConnectionState.disconnected);
+      _resetSessionLocal();
       return;
     }
 
-    await wakeAndRecord();
+    try {
+      await wakeAndRecord();
+    } catch (e) {
+      _resetSessionLocal(error: _friendlyError(e));
+      rethrow;
+    }
   }
 
   /// Press-path: short scan for a *fresh* advertisement → connect → shutter.
