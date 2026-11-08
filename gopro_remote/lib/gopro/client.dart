@@ -108,34 +108,8 @@ class GoProBleClient extends ChangeNotifier {
       await ensurePrefsLoaded();
       await ensureAdapterOn();
 
-      // Prefer known/bonded camera — no scan (also wakes a sleeping cam).
-      final known = await _resolveKnownDevice();
-      if (known != null) {
-        try {
-          await connect(
-            known,
-            retries: connectRetries,
-            fastRecord: fastRecord,
-          );
-          return;
-        } catch (e) {
-          debugPrint('known-device connect failed, scanning: $e');
-        }
-      }
-
-      await startScan(
-        timeout: scanTimeout,
-        autoConnectFirst: true,
-      );
-
-      final target = discovered.isNotEmpty
-          ? discovered.first
-          : await (_firstDeviceCompleter?.future ??
-                Future<GoProDeviceInfo>.error(
-                  StateError('GoPro bulunamadı. Kamerayı açıp tekrar dene.'),
-                ));
-
-      await stopScan();
+      // Always scan for a fresh advertisement before connect (Android).
+      final target = await _scanForFreshGoPro(timeout: scanTimeout);
       await connect(
         target,
         retries: connectRetries,
@@ -145,57 +119,6 @@ class GoProBleClient extends ChangeNotifier {
       _autoConnectInFlight = false;
       notifyListeners();
     }
-  }
-
-  /// Bonded / last-used GoPro — connect wakes a sleeping camera.
-  Future<GoProDeviceInfo?> _resolveKnownDevice() async {
-    GoProDeviceInfo wrap(BluetoothDevice d) {
-      final name = d.platformName;
-      return GoProDeviceInfo(
-        device: d,
-        name: name.isNotEmpty ? name : (_lastName ?? 'GoPro'),
-        remoteId: d.remoteId.str,
-      );
-    }
-
-    bool isCandidate(BluetoothDevice d) {
-      final id = d.remoteId.str;
-      if (_lastRemoteId != null && id == _lastRemoteId) return true;
-      return _looksLikeGoPro(d.platformName) || _looksLikeGoPro(d.advName);
-    }
-
-    try {
-      final bonded = await FlutterBluePlus.bondedDevices;
-      GoProDeviceInfo? fallback;
-      for (final d in bonded) {
-        if (!isCandidate(d)) continue;
-        final info = wrap(d);
-        if (_lastRemoteId != null && d.remoteId.str == _lastRemoteId) {
-          return info;
-        }
-        fallback ??= info;
-      }
-      if (fallback != null) return fallback;
-    } catch (e) {
-      debugPrint('bondedDevices: $e');
-    }
-
-    try {
-      final sys = await FlutterBluePlus.systemDevices([
-        Guid(GoProUuids.controlService),
-      ]);
-      for (final d in sys) {
-        if (!isCandidate(d)) continue;
-        final info = wrap(d);
-        if (_lastRemoteId != null && d.remoteId.str == _lastRemoteId) {
-          return info;
-        }
-        return info;
-      }
-    } catch (e) {
-      debugPrint('systemDevices: $e');
-    }
-    return null;
   }
 
   Future<void> startScan({
@@ -364,18 +287,19 @@ class GoProBleClient extends ChangeNotifier {
       } catch (_) {}
     }
 
-    // BLE connect wakes a sleeping GoPro.
+    // Fresh scan result + short timeout. Long timeouts were causing ~20s hangs
+    // when connecting to a bonded device without a recent advertisement.
     await device.connect(
-      timeout: Duration(seconds: fastRecord ? 12 : 25),
+      timeout: Duration(seconds: fastRecord ? 5 : 20),
       autoConnect: false,
       mtu: null,
     );
 
     await device.connectionState
         .firstWhere((s) => s == BluetoothConnectionState.connected)
-        .timeout(Duration(seconds: fastRecord ? 10 : 20));
+        .timeout(Duration(seconds: fastRecord ? 5 : 15));
 
-    // Already-paired cameras: never block on createBond during record.
+    // Never block the record path on bonding.
     if (!fastRecord) {
       try {
         final bond = await device.bondState.first.timeout(
@@ -388,19 +312,6 @@ class GoProBleClient extends ChangeNotifier {
       } catch (e) {
         debugPrint('Bond/pair note: $e');
       }
-    } else {
-      // Best-effort non-blocking bond for first-time pair.
-      unawaited(() async {
-        try {
-          final bond = await device.bondState.first.timeout(
-            const Duration(milliseconds: 300),
-            onTimeout: () => BluetoothBondState.none,
-          );
-          if (bond != BluetoothBondState.bonded) {
-            await device.createBond(timeout: 20);
-          }
-        } catch (_) {}
-      }());
     }
 
     await _connSub?.cancel();
@@ -593,7 +504,10 @@ class GoProBleClient extends ChangeNotifier {
     await wakeAndRecord();
   }
 
-  /// Press-path: find camera → BLE connect (wakes it) → shutter immediately.
+  /// Press-path: short scan for a *fresh* advertisement → connect → shutter.
+  ///
+  /// Android is very slow (10–20s+) if you connect to a bonded device without
+  /// a recent scan result. Always scan first; never hang on bonded-only connect.
   Future<void> wakeAndRecord() async {
     _error = null;
     await ensurePrefsLoaded();
@@ -604,25 +518,128 @@ class GoProBleClient extends ChangeNotifier {
       return;
     }
 
-    GoProDeviceInfo? target = await _resolveKnownDevice();
-    if (target == null) {
-      await startScan(
-        timeout: const Duration(seconds: 5),
-        autoConnectFirst: true,
-      );
-      if (discovered.isEmpty) {
-        throw StateError('GoPro bulunamadı. Kamerayı yakına alıp tekrar dene.');
-      }
-      target = discovered.first;
+    // Abort any leftover scan / connect attempt.
+    try {
       await stopScan();
-    }
+    } catch (_) {}
+
+    final target = await _scanForFreshGoPro(
+      timeout: const Duration(seconds: 4),
+    );
 
     await connect(
       target,
-      retries: 3,
+      retries: 2,
       fastRecord: true,
       shutterOnConnect: true,
     );
+  }
+
+  /// Low-latency scan; prefers last camera id, otherwise first GoPro seen.
+  Future<GoProDeviceInfo> _scanForFreshGoPro({
+    required Duration timeout,
+  }) async {
+    discovered.clear();
+    _setState(GoProConnectionState.scanning);
+
+    final done = Completer<GoProDeviceInfo>();
+    GoProDeviceInfo? fallback;
+    await _scanSub?.cancel();
+
+    try {
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
+
+    final controlGuid = Guid(GoProUuids.controlService);
+
+    _scanSub = FlutterBluePlus.onScanResults.listen((results) {
+      for (final r in results) {
+        final platformName = r.device.platformName;
+        final advName = r.advertisementData.advName;
+        final name = platformName.isNotEmpty
+            ? platformName
+            : (advName.isNotEmpty ? advName : '');
+        final hasGoProService = r.advertisementData.serviceUuids.any(
+          (u) =>
+              u == controlGuid ||
+              u.str128.toLowerCase() == GoProUuids.controlService,
+        );
+        final nameMatch = name.isNotEmpty && _looksLikeGoPro(name);
+        final knownId =
+            _lastRemoteId != null && r.device.remoteId.str == _lastRemoteId;
+        if (!nameMatch && !hasGoProService && !knownId) continue;
+
+        final info = GoProDeviceInfo(
+          device: r.device,
+          name: name.isNotEmpty ? name : (_lastName ?? 'GoPro'),
+          remoteId: r.device.remoteId.str,
+          rssi: r.rssi,
+        );
+        final existing =
+            discovered.indexWhere((d) => d.remoteId == info.remoteId);
+        if (existing >= 0) {
+          discovered[existing] = info;
+        } else {
+          discovered.add(info);
+        }
+        discovered.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
+        notifyListeners();
+
+        // Prefer remembered id, otherwise first GoPro wins — never wait around.
+        if (knownId || !done.isCompleted) {
+          if (knownId || fallback == null) {
+            fallback = info;
+          }
+          if (knownId) {
+            if (!done.isCompleted) done.complete(info);
+            unawaited(FlutterBluePlus.stopScan());
+            return;
+          }
+          if (!done.isCompleted) {
+            done.complete(info);
+            unawaited(FlutterBluePlus.stopScan());
+          }
+        }
+      }
+    });
+
+    Future<void> beginScan({List<String> remoteIds = const []}) {
+      return FlutterBluePlus.startScan(
+        withRemoteIds: remoteIds,
+        timeout: timeout,
+        androidUsesFineLocation: true,
+        androidScanMode: AndroidScanMode.lowLatency,
+        continuousUpdates: true,
+      );
+    }
+
+    // Narrow scan to last camera when known — much faster on Android.
+    if (_lastRemoteId != null) {
+      await beginScan(remoteIds: [_lastRemoteId!]);
+      try {
+        return await done.future.timeout(timeout);
+      } on TimeoutException {
+        if (discovered.isNotEmpty) return discovered.first;
+        // Fall through to wide scan.
+        await FlutterBluePlus.stopScan();
+      }
+    }
+
+    await beginScan();
+    try {
+      return await done.future.timeout(timeout);
+    } on TimeoutException {
+      if (discovered.isNotEmpty) return discovered.first;
+      if (fallback != null) return fallback!;
+      throw StateError(
+        'GoPro bulunamadı (tarama ${timeout.inSeconds}sn). '
+        'Kamerayı aç/yakına al, Bluetooth açık olsun.',
+      );
+    } finally {
+      await FlutterBluePlus.stopScan();
+      await _scanSub?.cancel();
+      _scanSub = null;
+    }
   }
 
   Future<void> refreshWifiCredentials() async {

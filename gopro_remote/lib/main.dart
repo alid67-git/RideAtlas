@@ -276,7 +276,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                   setState(() {
                     _banner = wasRecording
                         ? 'Durduruluyor, kamera uykuya alınıyor…'
-                        : 'Açılıyor → kayıt…';
+                        : 'Tarama → bağlan → kayıt…';
                   });
                   await _client.toggleRecording();
                   setState(() {
@@ -293,7 +293,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
               child: Text(
                 _client.isSessionRecording
                     ? 'Tekrar basınca kayıt durur ve kamera uykuya geçer.'
-                    : 'KAYIT: kamerayı uyandırır ve açılır açılmaz kayda başlar.',
+                    : 'KAYIT: kısa BLE tarama, bağlanınca anında shutter.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: cs.onSurface.withValues(alpha: 0.55),
                     ),
