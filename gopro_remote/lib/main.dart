@@ -62,8 +62,10 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   void initState() {
     super.initState();
     _client = GoProBleClient()..addListener(_onClient);
+    // Do NOT auto-connect on launch — that held _busy and delayed KAYIT.
+    // Record button owns wake→shutter. Only probe updates + ask permissions.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _checkForUpdatesThenConnect();
+      await _bootstrap();
     });
   }
 
@@ -79,8 +81,11 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     super.dispose();
   }
 
-  Future<void> _checkForUpdatesThenConnect() async {
+  Future<void> _bootstrap() async {
     if (!mounted) return;
+    // Warm permissions so the first KAYIT isn't blocked on dialogs.
+    unawaited(_ensurePermissions());
+
     final updates = context.read<AppUpdateController>();
     updates.startDailyNoonChecks(
       onUpdateFound: () async {
@@ -88,9 +93,6 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         await installAppUpdate(context);
       },
     );
-
-    // Connect first (fast) — don't make the rider wait on update probe.
-    unawaited(_autoConnect());
 
     if (AppUpdateController.isSupported) {
       await updates.check();
@@ -139,26 +141,12 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     }
   }
 
-  Future<void> _autoConnect() async {
-    if (!await _ensurePermissions()) return;
-    await _run(() async {
-      setState(() => _banner = 'Hızlı bağlanılıyor…');
-      await _client.autoConnect(
-        scanTimeout: const Duration(seconds: 6),
-        connectRetries: 3,
-        fastRecord: true,
-      );
-      final name = _client.connectedDevice?.name;
-      setState(() => _banner = name == null ? null : 'Bağlandı: $name');
-    });
-  }
-
   Future<void> _scan() async {
     if (!await _ensurePermissions()) return;
     await _run(() async {
-      setState(() => _banner = 'Hızlı bağlanılıyor…');
+      setState(() => _banner = 'Bağlanıyor…');
       await _client.autoConnect(
-        scanTimeout: const Duration(seconds: 6),
+        scanTimeout: const Duration(seconds: 5),
         connectRetries: 3,
         fastRecord: true,
       );
@@ -283,11 +271,12 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                 busy: _busy,
                 encoding: _client.isSessionRecording,
                 onPressed: () => _run(() async {
+                  if (!await _ensurePermissions()) return;
                   final wasRecording = _client.isSessionRecording;
                   setState(() {
                     _banner = wasRecording
                         ? 'Durduruluyor, kamera uykuya alınıyor…'
-                        : 'Uyandırılıyor → kayıt…';
+                        : 'Açılıyor → kayıt…';
                   });
                   await _client.toggleRecording();
                   setState(() {
@@ -304,7 +293,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
               child: Text(
                 _client.isSessionRecording
                     ? 'Tekrar basınca kayıt durur ve kamera uykuya geçer.'
-                    : 'Tek tuş: gerekirse BLE bağlanır ve kayıt başlar.',
+                    : 'KAYIT: kamerayı uyandırır ve açılır açılmaz kayda başlar.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: cs.onSurface.withValues(alpha: 0.55),
                     ),

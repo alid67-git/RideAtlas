@@ -300,13 +300,13 @@ class GoProBleClient extends ChangeNotifier {
     GoProDeviceInfo info, {
     int retries = 5,
     bool fastRecord = false,
+    bool shutterOnConnect = false,
   }) async {
     _error = null;
     await stopScan();
-    // Android GATT 133 is common if we connect immediately after stopScan.
-    await Future<void>.delayed(
-      Duration(milliseconds: fastRecord ? 120 : 400),
-    );
+    if (!fastRecord) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
     _setState(GoProConnectionState.connecting);
 
     Object? lastError;
@@ -317,6 +317,7 @@ class GoProBleClient extends ChangeNotifier {
           info,
           attempt: attempt,
           fastRecord: fastRecord,
+          shutterOnConnect: shutterOnConnect,
         );
         connectedDevice = info;
         unawaited(_persistLastDevice(info));
@@ -328,7 +329,7 @@ class GoProBleClient extends ChangeNotifier {
         debugPrint('GoPro connect attempt $attempt/$attempts failed: $e');
         await _teardownLink(keepState: true);
         await Future<void>.delayed(
-          Duration(milliseconds: fastRecord ? 250 * attempt : 500 * attempt),
+          Duration(milliseconds: fastRecord ? 200 * attempt : 500 * attempt),
         );
       }
     }
@@ -342,17 +343,20 @@ class GoProBleClient extends ChangeNotifier {
     GoProDeviceInfo info, {
     required int attempt,
     bool fastRecord = false,
+    bool shutterOnConnect = false,
   }) async {
     final device = info.device;
     _device = device;
 
-    // Always force a clean disconnect before connect (Android 133 mitigation).
-    try {
-      await device.disconnect();
-    } catch (_) {}
-    await Future<void>.delayed(
-      Duration(milliseconds: fastRecord ? 80 : 250),
-    );
+    // Only disconnect if already linked — avoid extra wake delay.
+    if (device.isConnected) {
+      try {
+        await device.disconnect();
+      } catch (_) {}
+      await Future<void>.delayed(
+        Duration(milliseconds: fastRecord ? 40 : 250),
+      );
+    }
 
     if (!fastRecord && attempt >= 3) {
       try {
@@ -360,28 +364,43 @@ class GoProBleClient extends ChangeNotifier {
       } catch (_) {}
     }
 
-    // Connecting while asleep wakes the GoPro over BLE.
+    // BLE connect wakes a sleeping GoPro.
     await device.connect(
-      timeout: Duration(seconds: fastRecord ? 15 : 25),
+      timeout: Duration(seconds: fastRecord ? 12 : 25),
       autoConnect: false,
       mtu: null,
     );
 
     await device.connectionState
         .firstWhere((s) => s == BluetoothConnectionState.connected)
-        .timeout(Duration(seconds: fastRecord ? 12 : 20));
+        .timeout(Duration(seconds: fastRecord ? 10 : 20));
 
-    // Skip createBond when already paired — biggest delay after wake.
-    try {
-      final bond = await device.bondState.first.timeout(
-        const Duration(milliseconds: 800),
-        onTimeout: () => BluetoothBondState.none,
-      );
-      if (bond != BluetoothBondState.bonded) {
-        await device.createBond(timeout: fastRecord ? 20 : 45);
+    // Already-paired cameras: never block on createBond during record.
+    if (!fastRecord) {
+      try {
+        final bond = await device.bondState.first.timeout(
+          const Duration(milliseconds: 800),
+          onTimeout: () => BluetoothBondState.none,
+        );
+        if (bond != BluetoothBondState.bonded) {
+          await device.createBond(timeout: 45);
+        }
+      } catch (e) {
+        debugPrint('Bond/pair note: $e');
       }
-    } catch (e) {
-      debugPrint('Bond/pair note: $e');
+    } else {
+      // Best-effort non-blocking bond for first-time pair.
+      unawaited(() async {
+        try {
+          final bond = await device.bondState.first.timeout(
+            const Duration(milliseconds: 300),
+            onTimeout: () => BluetoothBondState.none,
+          );
+          if (bond != BluetoothBondState.bonded) {
+            await device.createBond(timeout: 20);
+          }
+        } catch (_) {}
+      }());
     }
 
     await _connSub?.cancel();
@@ -404,14 +423,20 @@ class GoProBleClient extends ChangeNotifier {
 
     await device.discoverServices();
     await _bindCharacteristics(device);
-    // Command (+ query) notifies only — enough to start shutter immediately.
-    await _enableNotifications(device, minimal: fastRecord);
 
+    // RECORD FAST PATH: shutter the instant the command char exists.
+    // Camera is awake from connect; do not wait for status/third-party.
+    if (shutterOnConnect) {
+      await _burstStartShutter();
+      unawaited(_finishInitAfterRecordReady(device));
+      return;
+    }
+
+    await _enableNotifications(device, minimal: fastRecord);
     await _writeCommand(GoProProtocol.setThirdPartyClientInfo(), wait: false);
 
     if (fastRecord) {
-      // Status registration after shutter — don't block wake→record.
-      unawaited(_finishInitAfterRecordReady());
+      unawaited(_finishInitAfterRecordReady(device));
       return;
     }
 
@@ -420,9 +445,43 @@ class GoProBleClient extends ChangeNotifier {
     await _writeQuery(GoProProtocol.registerAllStatuses(), wait: false);
   }
 
-  Future<void> _finishInitAfterRecordReady() async {
+  /// Fire shutter immediately; retry while the camera finishes waking.
+  Future<void> _burstStartShutter() async {
+    final char = _commandReq;
+    if (char == null) throw StateError('Komut karakteristiği yok');
+
+    _sessionRecording = true;
+    status = status.copyWith(encoding: true);
+    notifyListeners();
+
+    Object? lastErr;
+    for (var i = 0; i < 6; i++) {
+      try {
+        await char.write(
+          GoProProtocol.setShutter(on: true),
+          withoutResponse: true,
+        );
+        lastErr = null;
+        break;
+      } catch (e) {
+        lastErr = e;
+        debugPrint('shutter burst $i: $e');
+        await Future<void>.delayed(Duration(milliseconds: 120 + i * 80));
+      }
+    }
+    if (lastErr != null) {
+      // One last attempt with ATT response.
+      await char.write(
+        GoProProtocol.setShutter(on: true),
+        withoutResponse: false,
+      );
+    }
+  }
+
+  Future<void> _finishInitAfterRecordReady(BluetoothDevice device) async {
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await _enableNotifications(device, minimal: true);
+      await _writeCommand(GoProProtocol.setThirdPartyClientInfo(), wait: false);
       await _writeQuery(GoProProtocol.registerAllSettings(), wait: false);
       await _writeQuery(GoProProtocol.registerAllStatuses(), wait: false);
     } catch (e) {
@@ -499,7 +558,7 @@ class GoProBleClient extends ChangeNotifier {
     await Future<void>.delayed(const Duration(milliseconds: 400));
   }
 
-  /// Single control: start = wake/connect fast + shutter;
+  /// Single control: start = wake + shutter the moment GATT is ready;
   /// stop = shutter off, wait for encode end, then sleep (+ power-down fallback).
   Future<void> toggleRecording() async {
     if (isSessionRecording) {
@@ -512,8 +571,6 @@ class GoProBleClient extends ChangeNotifier {
 
       await _waitUntilNotEncoding();
 
-      // Camera rejects sleep while still busy; after encode settles, sleep
-      // then force power-down as a second shot for stubborn firmware.
       try {
         await sleepCamera();
         await Future<void>.delayed(const Duration(milliseconds: 500));
@@ -533,15 +590,39 @@ class GoProBleClient extends ChangeNotifier {
       return;
     }
 
-    // Wake (via BLE connect) + shutter ASAP — skip full status init.
-    if (!isConnected) {
-      await autoConnect(
-        scanTimeout: const Duration(seconds: 12),
-        connectRetries: 3,
-        fastRecord: true,
-      );
+    await wakeAndRecord();
+  }
+
+  /// Press-path: find camera → BLE connect (wakes it) → shutter immediately.
+  Future<void> wakeAndRecord() async {
+    _error = null;
+    await ensurePrefsLoaded();
+    await ensureAdapterOn();
+
+    if (isConnected && _commandReq != null) {
+      await _burstStartShutter();
+      return;
     }
-    await startRecording();
+
+    GoProDeviceInfo? target = await _resolveKnownDevice();
+    if (target == null) {
+      await startScan(
+        timeout: const Duration(seconds: 5),
+        autoConnectFirst: true,
+      );
+      if (discovered.isEmpty) {
+        throw StateError('GoPro bulunamadı. Kamerayı yakına alıp tekrar dene.');
+      }
+      target = discovered.first;
+      await stopScan();
+    }
+
+    await connect(
+      target,
+      retries: 3,
+      fastRecord: true,
+      shutterOnConnect: true,
+    );
   }
 
   Future<void> refreshWifiCredentials() async {
