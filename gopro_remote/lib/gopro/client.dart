@@ -57,6 +57,10 @@ class GoProBleClient extends ChangeNotifier {
   static const _prefsNameKey = 'gopro_last_name';
   bool _prefsLoaded = false;
 
+  /// After sleep the camera needs a short cool-down before the next GATT
+  /// connect, otherwise Android frequently returns status 133.
+  DateTime? _lastSleepAt;
+
   bool get isConnected =>
       _state == GoProConnectionState.connected && _device != null;
 
@@ -227,6 +231,7 @@ class GoProBleClient extends ChangeNotifier {
   }) async {
     _error = null;
     await stopScan();
+    await _awaitPostSleepCooldown();
     if (!fastRecord) {
       await Future<void>.delayed(const Duration(milliseconds: 400));
     }
@@ -245,6 +250,7 @@ class GoProBleClient extends ChangeNotifier {
         connectedDevice = info;
         unawaited(_persistLastDevice(info));
         _error = null;
+        _lastSleepAt = null;
         _setState(GoProConnectionState.connected);
         return;
       } catch (e) {
@@ -253,13 +259,17 @@ class GoProBleClient extends ChangeNotifier {
         // Never leave the UI stuck on "KAYIT" after a failed connect.
         _sessionRecording = false;
         status = const GoProCameraStatus();
-        // Stale Android↔GoPro bond after power-cycle: drop and re-pair next try.
-        if (attempt < attempts) {
+        await _teardownLink(keepState: true);
+        try {
+          await info.device.clearGattCache();
+        } catch (_) {}
+        // Do NOT removeBond on early 133s after sleep — the bond is usually
+        // fine; the camera is still booting. Only clear on the final retry.
+        if (attempt >= attempts) {
           await _clearStaleBondIfNeeded(info.device);
         }
-        await _teardownLink(keepState: true);
         await Future<void>.delayed(
-          Duration(milliseconds: fastRecord ? 350 * attempt : 500 * attempt),
+          Duration(milliseconds: fastRecord ? 900 * attempt : 500 * attempt),
         );
       }
     }
@@ -271,6 +281,16 @@ class GoProBleClient extends ChangeNotifier {
     _setState(GoProConnectionState.error);
     notifyListeners();
     throw StateError(_error!);
+  }
+
+  Future<void> _awaitPostSleepCooldown() async {
+    final slept = _lastSleepAt;
+    if (slept == null) return;
+    const coolDown = Duration(milliseconds: 1800);
+    final elapsed = DateTime.now().difference(slept);
+    if (elapsed < coolDown) {
+      await Future<void>.delayed(coolDown - elapsed);
+    }
   }
 
   Future<void> _connectOnce(
@@ -292,28 +312,31 @@ class GoProBleClient extends ChangeNotifier {
       );
     }
 
-    // GATT 133 mitigation: clear cache on retry.
-    if (attempt >= 2) {
-      try {
-        await device.clearGattCache();
-      } catch (_) {}
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    }
-
-    // Brief settle after scan stop before GATT connect (helps 133).
-    if (fastRecord && attempt == 1) {
-      await Future<void>.delayed(const Duration(milliseconds: 150));
-    }
+    // Always clear GATT cache before reconnect — especially after sleep.
+    try {
+      await device.clearGattCache();
+    } catch (_) {}
+    await Future<void>.delayed(
+      Duration(milliseconds: attempt == 1 ? 200 : 400),
+    );
 
     await device.connect(
-      timeout: Duration(seconds: fastRecord ? 8 : 20),
+      timeout: Duration(seconds: fastRecord ? 10 : 20),
       autoConnect: false,
       mtu: null,
     );
 
     await device.connectionState
         .firstWhere((s) => s == BluetoothConnectionState.connected)
-        .timeout(Duration(seconds: fastRecord ? 8 : 15));
+        .timeout(Duration(seconds: fastRecord ? 10 : 15));
+
+    // Sleep→wake: link is up before firmware finishes booting. Brief settle
+    // before service discovery / bonding dramatically cuts 133s.
+    if (shutterOnConnect || _lastSleepAt != null) {
+      await Future<void>.delayed(
+        Duration(milliseconds: 500 + (attempt - 1) * 300),
+      );
+    }
 
     await _connSub?.cancel();
     _connSub = device.connectionState.listen((s) {
@@ -334,7 +357,7 @@ class GoProBleClient extends ChangeNotifier {
       } catch (_) {}
     }
 
-    await device.discoverServices(timeout: fastRecord ? 8 : 15);
+    await device.discoverServices(timeout: fastRecord ? 10 : 15);
     await _bindCharacteristics(device);
 
     // Bonding is required for reliable CQ_COMMAND writes on Android.
@@ -634,18 +657,30 @@ class GoProBleClient extends ChangeNotifier {
 
       await _waitUntilNotEncoding();
 
+      // Sleep ONLY — power-down after the first take was preventing reliable
+      // BLE wake (ads/bond OK once, then Android 133 on the next KAYIT).
+      final sleeping = _device;
       try {
         await sleepCamera();
-        await Future<void>.delayed(const Duration(milliseconds: 500));
-        if (_commandReq != null) {
-          await powerDownCamera();
-        }
       } catch (e) {
-        debugPrint('Sleep/power-down after stop: $e');
+        debugPrint('Sleep after stop: $e');
       }
 
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      if (sleeping != null) {
+        try {
+          await sleeping.connectionState
+              .firstWhere((s) => s == BluetoothConnectionState.disconnected)
+              .timeout(const Duration(seconds: 3));
+        } catch (_) {
+          try {
+            await sleeping.disconnect();
+          } catch (_) {}
+        }
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
       await _teardownLink();
+      _lastSleepAt = DateTime.now();
       _resetSessionLocal();
       return;
     }
@@ -658,10 +693,10 @@ class GoProBleClient extends ChangeNotifier {
     }
   }
 
-  /// Press-path: short scan for a *fresh* advertisement → connect → shutter.
+  /// Press-path: fresh scan → connect → shutter.
   ///
-  /// Android is very slow (10–20s+) if you connect to a bonded device without
-  /// a recent scan result. Always scan first; never hang on bonded-only connect.
+  /// After sleep, each retry must re-scan. Reusing a pre-sleep scan result is
+  /// a common source of Android GATT 133 on the second wake.
   Future<void> wakeAndRecord() async {
     _error = null;
     await ensurePrefsLoaded();
@@ -672,21 +707,49 @@ class GoProBleClient extends ChangeNotifier {
       return;
     }
 
-    // Abort any leftover scan / connect attempt.
     try {
       await stopScan();
     } catch (_) {}
 
-    final target = await _scanForFreshGoPro(
-      timeout: const Duration(seconds: 4),
-    );
+    await _awaitPostSleepCooldown();
 
-    await connect(
-      target,
-      retries: 3,
-      fastRecord: true,
-      shutterOnConnect: true,
-    );
+    Object? lastError;
+    GoProDeviceInfo? lastTarget;
+    const attempts = 3;
+    for (var attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        final target = await _scanForFreshGoPro(
+          timeout: Duration(seconds: attempt == 1 ? 5 : 6),
+        );
+        lastTarget = target;
+        await connect(
+          target,
+          retries: 1,
+          fastRecord: true,
+          shutterOnConnect: true,
+        );
+        return;
+      } catch (e) {
+        lastError = e;
+        debugPrint('wakeAndRecord attempt $attempt/$attempts: $e');
+        _sessionRecording = false;
+        status = const GoProCameraStatus();
+        await _teardownLink(keepState: true);
+        if (attempt == attempts && lastTarget != null) {
+          await _clearStaleBondIfNeeded(lastTarget.device);
+        } else if (lastTarget != null) {
+          try {
+            await lastTarget.device.clearGattCache();
+          } catch (_) {}
+        }
+        await Future<void>.delayed(Duration(milliseconds: 700 * attempt));
+      }
+    }
+
+    _error = _friendlyError(lastError);
+    _setState(GoProConnectionState.error);
+    notifyListeners();
+    throw StateError(_error!);
   }
 
   /// Low-latency scan; prefers last camera id, otherwise first GoPro seen.
@@ -1020,8 +1083,8 @@ class GoProBleClient extends ChangeNotifier {
     final text = e?.toString() ?? 'Bilinmeyen hata';
     if (text.contains('133') || text.contains('ANDROID_SPECIFIC_ERROR')) {
       return 'Bluetooth bağlantısı kurulamadı (Android 133). '
-          'Kamerayı yeniden başlatıp tekrar dene; ilk seferde '
-          'GoPro ekranındaki eşleştirme isteğini onayla.';
+          'Birkaç saniye bekleyip tekrar KAYIT’a bas. Hâlâ olmazsa '
+          'kamerayı kapat-aç; ilk seferde eşleştirmeyi onayla.';
     }
     if (text.contains('writeCharacteristic') ||
         text.contains('Timed out') ||

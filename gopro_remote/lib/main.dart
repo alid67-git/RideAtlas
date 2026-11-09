@@ -298,7 +298,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
               child: Text(
                 _client.isSessionRecording
                     ? 'Tekrar basınca kayıt durur ve kamera uykuya geçer.'
-                    : 'KAYIT: bağlan → eşleştir → uyan → shutter. Hata olursa tekrar bas.',
+                    : 'KAYIT: uyandır → kaydet. Durdurunca uyku; tekrar basınca yeniden uyanır.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: cs.onSurface.withValues(alpha: 0.55),
                     ),
