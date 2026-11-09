@@ -293,7 +293,10 @@ class _AddCameraSheetState extends State<_AddCameraSheet> {
 
   Future<void> _save(GoProDeviceInfo info) async {
     if (_saving) return;
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
       await _client.stopScan();
       await _client.saveDevice(
@@ -301,6 +304,27 @@ class _AddCameraSheetState extends State<_AddCameraSheet> {
         name: info.name,
         select: true,
       );
+      // Connect once while adding so Android completes pairing before KAYIT.
+      // Ignore shutter — user only asked to register the camera.
+      try {
+        await _client.connect(
+          info,
+          retries: 4,
+          fastRecord: true,
+          shutterOnConnect: false,
+        );
+      } catch (e) {
+        // Still keep the saved entry; user can retry KAYIT / Bağlan.
+        debugPrint('add-connect: $e');
+        if (mounted) {
+          setState(() {
+            _error =
+                'Kaydedildi ama ilk bağlantı başarısız. Ana ekranda '
+                '“Sadece bağlan” veya KAYIT ile tekrar dene.\n$e';
+          });
+        }
+        return;
+      }
       widget.onSaved();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
@@ -332,7 +356,7 @@ class _AddCameraSheetState extends State<_AddCameraSheet> {
             Text(
               _scanning
                   ? 'Taranıyor… GoPro’yu aç / yakına getir.'
-                  : 'Listeden bir kamera seçerek kaydet.',
+                  : 'Seçince kaydedilir ve eşleştirme için bağlanır.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: cs.onSurface.withValues(alpha: 0.6),
                   ),
