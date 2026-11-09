@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -50,9 +51,12 @@ class GoProBleClient extends ChangeNotifier {
   bool _sessionRecording = false;
   bool get isSessionRecording => _sessionRecording || status.encoding;
 
-  /// Last successful camera — used to skip scan and wake via direct connect.
-  String? _lastRemoteId;
-  String? _lastName;
+  /// Saved cameras (multi-device). Preferred target for KAYIT / wake.
+  final List<SavedGoProDevice> _savedDevices = [];
+  String? _selectedRemoteId;
+  static const _prefsSavedKey = 'gopro_saved_devices_v1';
+  static const _prefsSelectedKey = 'gopro_selected_remote_id';
+  // Legacy single-camera keys — migrated once into the list above.
   static const _prefsIdKey = 'gopro_last_remote_id';
   static const _prefsNameKey = 'gopro_last_name';
   bool _prefsLoaded = false;
@@ -64,24 +68,157 @@ class GoProBleClient extends ChangeNotifier {
   bool get isConnected =>
       _state == GoProConnectionState.connected && _device != null;
 
+  List<SavedGoProDevice> get savedDevices =>
+      List<SavedGoProDevice>.unmodifiable(_savedDevices);
+
+  SavedGoProDevice? get selectedSaved {
+    final id = _selectedRemoteId;
+    if (id == null) return null;
+    for (final d in _savedDevices) {
+      if (d.remoteId == id) return d;
+    }
+    return _savedDevices.isEmpty ? null : _savedDevices.first;
+  }
+
+  String? get preferredRemoteId => selectedSaved?.remoteId;
+
+  String? get preferredName => selectedSaved?.name;
+
   Future<void> ensurePrefsLoaded() async {
     if (_prefsLoaded) return;
     _prefsLoaded = true;
     try {
       final p = await SharedPreferences.getInstance();
-      _lastRemoteId = p.getString(_prefsIdKey);
-      _lastName = p.getString(_prefsNameKey);
-    } catch (_) {}
+      final raw = p.getString(_prefsSavedKey);
+      if (raw != null && raw.isNotEmpty) {
+        final list = (jsonDecode(raw) as List<dynamic>)
+            .cast<Map<String, dynamic>>()
+            .map(SavedGoProDevice.fromJson)
+            .where((d) => d.remoteId.isNotEmpty)
+            .toList();
+        _savedDevices
+          ..clear()
+          ..addAll(list);
+      } else {
+        // Migrate v0 single last-camera prefs.
+        final legacyId = p.getString(_prefsIdKey);
+        final legacyName = p.getString(_prefsNameKey);
+        if (legacyId != null && legacyId.isNotEmpty) {
+          _savedDevices.add(
+            SavedGoProDevice(
+              remoteId: legacyId,
+              name: (legacyName == null || legacyName.isEmpty)
+                  ? 'GoPro'
+                  : legacyName,
+              addedAtMs: DateTime.now().millisecondsSinceEpoch,
+            ),
+          );
+          await _persistSavedDevices(p);
+        }
+      }
+      _selectedRemoteId = p.getString(_prefsSelectedKey);
+      if (_selectedRemoteId == null && _savedDevices.isNotEmpty) {
+        _selectedRemoteId = _savedDevices.first.remoteId;
+        await p.setString(_prefsSelectedKey, _selectedRemoteId!);
+      }
+      if (_selectedRemoteId != null &&
+          _savedDevices.every((d) => d.remoteId != _selectedRemoteId)) {
+        _selectedRemoteId =
+            _savedDevices.isEmpty ? null : _savedDevices.first.remoteId;
+        if (_selectedRemoteId == null) {
+          await p.remove(_prefsSelectedKey);
+        } else {
+          await p.setString(_prefsSelectedKey, _selectedRemoteId!);
+        }
+      }
+    } catch (e) {
+      debugPrint('prefs load: $e');
+    }
+    notifyListeners();
+  }
+
+  Future<void> _persistSavedDevices([SharedPreferences? prefs]) async {
+    try {
+      final p = prefs ?? await SharedPreferences.getInstance();
+      final encoded =
+          jsonEncode(_savedDevices.map((d) => d.toJson()).toList());
+      await p.setString(_prefsSavedKey, encoded);
+      if (_selectedRemoteId == null) {
+        await p.remove(_prefsSelectedKey);
+      } else {
+        await p.setString(_prefsSelectedKey, _selectedRemoteId!);
+      }
+      // Keep legacy keys in sync for older code paths / debugging.
+      final sel = selectedSaved;
+      if (sel == null) {
+        await p.remove(_prefsIdKey);
+        await p.remove(_prefsNameKey);
+      } else {
+        await p.setString(_prefsIdKey, sel.remoteId);
+        await p.setString(_prefsNameKey, sel.name);
+      }
+    } catch (e) {
+      debugPrint('prefs save: $e');
+    }
+  }
+
+  Future<void> selectSavedDevice(String remoteId) async {
+    await ensurePrefsLoaded();
+    if (_savedDevices.every((d) => d.remoteId != remoteId)) return;
+    _selectedRemoteId = remoteId;
+    await _persistSavedDevices();
+    notifyListeners();
+  }
+
+  /// Persist a camera from scan / successful connect and make it active.
+  Future<void> saveDevice({
+    required String remoteId,
+    required String name,
+    bool select = true,
+  }) async {
+    await ensurePrefsLoaded();
+    final existing = _savedDevices.indexWhere((d) => d.remoteId == remoteId);
+    if (existing >= 0) {
+      _savedDevices[existing] =
+          _savedDevices[existing].copyWith(name: name.isEmpty ? null : name);
+    } else {
+      _savedDevices.add(
+        SavedGoProDevice(
+          remoteId: remoteId,
+          name: name.isEmpty ? 'GoPro' : name,
+          addedAtMs: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+    }
+    if (select) _selectedRemoteId = remoteId;
+    await _persistSavedDevices();
+    notifyListeners();
+  }
+
+  Future<void> forgetSavedDevice(String remoteId) async {
+    await ensurePrefsLoaded();
+    _savedDevices.removeWhere((d) => d.remoteId == remoteId);
+    if (_selectedRemoteId == remoteId) {
+      _selectedRemoteId =
+          _savedDevices.isEmpty ? null : _savedDevices.first.remoteId;
+    }
+    if (connectedDevice?.remoteId == remoteId) {
+      try {
+        await disconnect();
+      } catch (_) {}
+    }
+    try {
+      final device = BluetoothDevice.fromId(remoteId);
+      await device.removeBond(timeout: 8);
+    } catch (e) {
+      debugPrint('forget removeBond: $e');
+    }
+    await _persistSavedDevices();
+    notifyListeners();
   }
 
   Future<void> _persistLastDevice(GoProDeviceInfo info) async {
-    _lastRemoteId = info.remoteId;
-    _lastName = info.name;
-    try {
-      final p = await SharedPreferences.getInstance();
-      await p.setString(_prefsIdKey, info.remoteId);
-      await p.setString(_prefsNameKey, info.name);
-    } catch (_) {}
+    await saveDevice(remoteId: info.remoteId, name: info.name, select: true);
   }
 
   Future<void> ensureAdapterOn() async {
@@ -157,14 +294,13 @@ class GoProBleClient extends ChangeNotifier {
               u.str128.toLowerCase() == GoProUuids.controlService,
         );
         final nameMatch = name.isNotEmpty && _looksLikeGoPro(name);
-        final knownId =
-            _lastRemoteId != null && r.device.remoteId.str == _lastRemoteId;
+        final id = r.device.remoteId.str;
+        final knownId = _isKnownRemoteId(id);
         if (!nameMatch && !hasGoProService && !knownId) continue;
 
-        final id = r.device.remoteId.str;
         final displayName = name.isNotEmpty
             ? name
-            : (_lastName ?? (knownId ? 'GoPro' : 'GoPro'));
+            : (_savedNameFor(id) ?? 'GoPro');
         final existing = discovered.indexWhere((d) => d.remoteId == id);
         final info = GoProDeviceInfo(
           device: r.device,
@@ -782,14 +918,16 @@ class GoProBleClient extends ChangeNotifier {
               u.str128.toLowerCase() == GoProUuids.controlService,
         );
         final nameMatch = name.isNotEmpty && _looksLikeGoPro(name);
-        final knownId =
-            _lastRemoteId != null && r.device.remoteId.str == _lastRemoteId;
+        final id = r.device.remoteId.str;
+        final knownId = _isKnownRemoteId(id);
+        final preferred =
+            preferredRemoteId != null && id == preferredRemoteId;
         if (!nameMatch && !hasGoProService && !knownId) continue;
 
         final info = GoProDeviceInfo(
           device: r.device,
-          name: name.isNotEmpty ? name : (_lastName ?? 'GoPro'),
-          remoteId: r.device.remoteId.str,
+          name: name.isNotEmpty ? name : (_savedNameFor(id) ?? 'GoPro'),
+          remoteId: id,
           rssi: r.rssi,
         );
         final existing =
@@ -802,17 +940,17 @@ class GoProBleClient extends ChangeNotifier {
         discovered.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
         notifyListeners();
 
-        // Prefer remembered id, otherwise first GoPro wins — never wait around.
-        if (knownId || !done.isCompleted) {
-          if (knownId || fallback == null) {
+        // Prefer selected saved camera; otherwise first GoPro wins.
+        if (preferred || knownId || !done.isCompleted) {
+          if (preferred || knownId || fallback == null) {
             fallback = info;
           }
-          if (knownId) {
+          if (preferred) {
             if (!done.isCompleted) done.complete(info);
             unawaited(FlutterBluePlus.stopScan());
             return;
           }
-          if (!done.isCompleted) {
+          if (!done.isCompleted && (knownId || nameMatch || hasGoProService)) {
             done.complete(info);
             unawaited(FlutterBluePlus.stopScan());
           }
@@ -830,9 +968,10 @@ class GoProBleClient extends ChangeNotifier {
       );
     }
 
-    // Narrow scan to last camera when known — much faster on Android.
-    if (_lastRemoteId != null) {
-      await beginScan(remoteIds: [_lastRemoteId!]);
+    // Narrow scan to selected camera when known — much faster on Android.
+    final preferId = preferredRemoteId;
+    if (preferId != null) {
+      await beginScan(remoteIds: [preferId]);
       try {
         return await done.future.timeout(timeout);
       } on TimeoutException {
@@ -1095,6 +1234,17 @@ class GoProBleClient extends ChangeNotifier {
           'eşleştirme isteğini onayla, sonra tekrar KAYIT’a bas.';
     }
     return text;
+  }
+
+  bool _isKnownRemoteId(String remoteId) {
+    return _savedDevices.any((d) => d.remoteId == remoteId);
+  }
+
+  String? _savedNameFor(String remoteId) {
+    for (final d in _savedDevices) {
+      if (d.remoteId == remoteId) return d.name;
+    }
+    return null;
   }
 
   static bool _looksLikeGoPro(String name) {

@@ -11,6 +11,7 @@ import 'gopro/models.dart' show GoProCameraStatus, GoProConnectionState;
 import 'services/app_update_controller.dart';
 import 'services/update_checker.dart';
 import 'widgets/app_update_ui.dart';
+import 'widgets/devices_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -85,6 +86,8 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     if (!mounted) return;
     // Warm permissions so the first KAYIT isn't blocked on dialogs.
     unawaited(_ensurePermissions());
+    await _client.ensurePrefsLoaded();
+    if (!mounted) return;
 
     final updates = context.read<AppUpdateController>();
     updates.startDailyNoonChecks(
@@ -178,6 +181,15 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     }
   }
 
+  Future<void> _openDevices() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DevicesPage(client: _client),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
   String get _stateLabel {
     switch (_client.state) {
       case GoProConnectionState.disconnected:
@@ -235,6 +247,11 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                     ),
                   ),
                   IconButton(
+                    tooltip: 'Kameralar',
+                    onPressed: _busy ? null : _openDevices,
+                    icon: const Icon(Icons.videocam_outlined),
+                  ),
+                  IconButton(
                     tooltip: 'Güncelleme kontrol et',
                     onPressed: _manualUpdateCheck,
                     icon: const Icon(Icons.system_update_alt),
@@ -265,9 +282,11 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: _StatusCard(
                 stateLabel: _stateLabel,
-                deviceName: _client.connectedDevice?.name,
+                deviceName: _client.connectedDevice?.name ??
+                    _client.preferredName,
                 status: st,
                 sessionRecording: _client.isSessionRecording,
+                onDeviceTap: _busy ? null : _openDevices,
               ),
             ),
             Padding(
@@ -338,12 +357,14 @@ class _StatusCard extends StatelessWidget {
     required this.deviceName,
     required this.status,
     required this.sessionRecording,
+    this.onDeviceTap,
   });
 
   final String stateLabel;
   final String? deviceName;
   final GoProCameraStatus status;
   final bool sessionRecording;
+  final VoidCallback? onDeviceTap;
 
   @override
   Widget build(BuildContext context) {
@@ -397,9 +418,23 @@ class _StatusCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              deviceName ?? 'Kamera seçilmedi',
-              style: Theme.of(context).textTheme.bodyLarge,
+            InkWell(
+              onTap: onDeviceTap,
+              borderRadius: BorderRadius.circular(8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      deviceName ?? 'Kamera seçilmedi',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right,
+                    color: cs.onSurface.withValues(alpha: 0.45),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             _Metric(label: 'Süre', value: durText),
