@@ -135,7 +135,12 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     try {
       await action();
     } catch (e) {
-      setState(() => _banner = e.toString());
+      final friendly = _client.error;
+      final raw = e.toString();
+      final cleaned = raw.startsWith('Bad state: ')
+          ? raw.substring('Bad state: '.length)
+          : raw;
+      setState(() => _banner = friendly ?? cleaned);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -293,7 +298,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
               child: Text(
                 _client.isSessionRecording
                     ? 'Tekrar basınca kayıt durur ve kamera uykuya geçer.'
-                    : 'KAYIT: tarama → bağlan → shutter. Hata olursa tekrar bas.',
+                    : 'KAYIT: bağlan → eşleştir → uyan → shutter. Hata olursa tekrar bas.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: cs.onSurface.withValues(alpha: 0.55),
                     ),

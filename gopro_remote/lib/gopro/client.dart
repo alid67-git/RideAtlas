@@ -253,6 +253,10 @@ class GoProBleClient extends ChangeNotifier {
         // Never leave the UI stuck on "KAYIT" after a failed connect.
         _sessionRecording = false;
         status = const GoProCameraStatus();
+        // Stale Android↔GoPro bond after power-cycle: drop and re-pair next try.
+        if (attempt < attempts) {
+          await _clearStaleBondIfNeeded(info.device);
+        }
         await _teardownLink(keepState: true);
         await Future<void>.delayed(
           Duration(milliseconds: fastRecord ? 350 * attempt : 500 * attempt),
@@ -311,21 +315,6 @@ class GoProBleClient extends ChangeNotifier {
         .firstWhere((s) => s == BluetoothConnectionState.connected)
         .timeout(Duration(seconds: fastRecord ? 8 : 15));
 
-    // Never block the record path on bonding.
-    if (!fastRecord) {
-      try {
-        final bond = await device.bondState.first.timeout(
-          const Duration(milliseconds: 800),
-          onTimeout: () => BluetoothBondState.none,
-        );
-        if (bond != BluetoothBondState.bonded) {
-          await device.createBond(timeout: 45);
-        }
-      } catch (e) {
-        debugPrint('Bond/pair note: $e');
-      }
-    }
-
     await _connSub?.cancel();
     _connSub = device.connectionState.listen((s) {
       if (s == BluetoothConnectionState.disconnected &&
@@ -348,9 +337,16 @@ class GoProBleClient extends ChangeNotifier {
     await device.discoverServices(timeout: fastRecord ? 8 : 15);
     await _bindCharacteristics(device);
 
-    // RECORD FAST PATH: prime CCCD + third-party, then shutter (no 15s waits).
+    // Bonding is required for reliable CQ_COMMAND writes on Android.
+    // Skipping it caused writeCharacteristic timeouts after "successful" connect.
+    await _ensureBonded(
+      device,
+      promptSeconds: shutterOnConnect || fastRecord ? 15 : 45,
+    );
+
     if (shutterOnConnect) {
       await _primeCommandChannel(device);
+      await _awaitCommandChannelReady();
       await _burstStartShutter();
       unawaited(_finishInitAfterRecordReady(device));
       return;
@@ -369,8 +365,67 @@ class GoProBleClient extends ChangeNotifier {
     await _writeQuery(GoProProtocol.registerAllStatuses(), wait: false);
   }
 
+  /// Open GoPro / ClipRide pattern: read Wi‑Fi password to trigger SMP pair,
+  /// then fall back to createBond. Without a bond, Android often accepts the
+  /// GATT link but stalls forever on characteristic writes.
+  Future<void> _ensureBonded(
+    BluetoothDevice device, {
+    int promptSeconds = 20,
+  }) async {
+    try {
+      var bond = await device.bondState.first.timeout(
+        const Duration(milliseconds: 600),
+        onTimeout: () => BluetoothBondState.none,
+      );
+      if (bond == BluetoothBondState.bonded) return;
+
+      // Reading WAP_PASSWORD commonly starts the system pairing dialog.
+      final wifiPw = _wifiPassword;
+      if (wifiPw != null) {
+        try {
+          await wifiPw.read(timeout: 6);
+        } catch (e) {
+          debugPrint('wap password read (pair trigger): $e');
+        }
+        try {
+          bond = await device.bondState
+              .firstWhere((b) => b == BluetoothBondState.bonded)
+              .timeout(Duration(seconds: promptSeconds.clamp(4, 20)));
+          if (bond == BluetoothBondState.bonded) return;
+        } on TimeoutException {
+          // Fall through to createBond.
+        }
+      }
+
+      bond = await device.bondState.first.timeout(
+        const Duration(milliseconds: 400),
+        onTimeout: () => BluetoothBondState.none,
+      );
+      if (bond == BluetoothBondState.bonded) return;
+
+      await device.createBond(timeout: promptSeconds);
+    } catch (e) {
+      debugPrint('bond/pair: $e');
+    }
+  }
+
+  /// If Android still thinks we're bonded but writes keep failing, drop the
+  /// stale bond so the next attempt can re-pair (common after GoPro power-cycle).
+  Future<void> _clearStaleBondIfNeeded(BluetoothDevice device) async {
+    try {
+      final bond = await device.bondState.first.timeout(
+        const Duration(milliseconds: 500),
+        onTimeout: () => BluetoothBondState.none,
+      );
+      if (bond != BluetoothBondState.bonded) return;
+      debugPrint('Clearing stale GoPro bond for retry');
+      await device.removeBond(timeout: 10);
+    } catch (e) {
+      debugPrint('removeBond: $e');
+    }
+  }
+
   /// Enable command/query notifies and announce third-party client.
-  /// Failures are ignored — shutter still proceeds with a short settle.
   Future<void> _primeCommandChannel(BluetoothDevice device) async {
     try {
       await _enableNotifications(device, minimal: true);
@@ -381,28 +436,55 @@ class GoProBleClient extends ChangeNotifier {
       await _bleWrite(
         _commandReq,
         GoProProtocol.setThirdPartyClientInfo(),
-        withoutResponse: true,
+        preferWithoutResponse: true,
         timeoutSec: 2,
       );
     } catch (e) {
       debugPrint('prime third-party: $e');
     }
-    await Future<void>.delayed(const Duration(milliseconds: 80));
   }
 
-  /// Fire shutter with short Write-Without-Response timeouts only.
-  /// Never falls back to Write-With-Response (that was the 15s hang).
+  /// After sleep→wake, GATT is up before firmware accepts commands.
+  /// Probe with third-party info until a write succeeds (or give up).
+  Future<void> _awaitCommandChannelReady({
+    Duration budget = const Duration(seconds: 8),
+  }) async {
+    final deadline = DateTime.now().add(budget);
+    Object? lastErr;
+    var i = 0;
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        await _bleWrite(
+          _commandReq,
+          GoProProtocol.setThirdPartyClientInfo(),
+          preferWithoutResponse: true,
+          timeoutSec: 2,
+        );
+        return;
+      } catch (e) {
+        lastErr = e;
+        debugPrint('command ready probe $i: $e');
+        i++;
+        await Future<void>.delayed(Duration(milliseconds: 250 + i * 100));
+      }
+    }
+    debugPrint('command channel not ready: $lastErr');
+  }
+
+  /// Fire shutter with short per-attempt timeouts over a wake window.
   Future<void> _burstStartShutter() async {
     final char = _commandReq;
     if (char == null) throw StateError('Komut karakteristiği yok');
 
     Object? lastErr;
-    for (var i = 0; i < 4; i++) {
+    final deadline = DateTime.now().add(const Duration(seconds: 6));
+    var i = 0;
+    while (DateTime.now().isBefore(deadline)) {
       try {
         await _bleWrite(
           char,
           GoProProtocol.setShutter(on: true),
-          withoutResponse: true,
+          preferWithoutResponse: true,
           timeoutSec: 2,
         );
         lastErr = null;
@@ -410,12 +492,14 @@ class GoProBleClient extends ChangeNotifier {
       } catch (e) {
         lastErr = e;
         debugPrint('shutter burst $i: $e');
-        await Future<void>.delayed(Duration(milliseconds: 120 + i * 60));
+        i++;
+        await Future<void>.delayed(Duration(milliseconds: 200 + i * 80));
       }
     }
     if (lastErr != null) {
       throw StateError(
-        'Kayıt komutu gönderilemedi. Kamerayı uyandırıp tekrar dene.',
+        'Kayıt komutu gönderilemedi. Kamerayı aç / eşleştirmeyi onayla, '
+        'sonra tekrar dene.',
       );
     }
 
@@ -427,10 +511,19 @@ class GoProBleClient extends ChangeNotifier {
   Future<void> _bleWrite(
     BluetoothCharacteristic? char,
     Uint8List bytes, {
-    required bool withoutResponse,
+    required bool preferWithoutResponse,
     int timeoutSec = 3,
   }) async {
     if (char == null) throw StateError('Bağlı değil');
+    final props = char.properties;
+    var withoutResponse = preferWithoutResponse;
+    if (withoutResponse && !props.writeWithoutResponse) {
+      // Characteristic only supports Write-With-Response.
+      withoutResponse = false;
+    }
+    if (!withoutResponse && !props.write && props.writeWithoutResponse) {
+      withoutResponse = true;
+    }
     await char.write(
       bytes,
       withoutResponse: withoutResponse,
@@ -502,7 +595,7 @@ class GoProBleClient extends ChangeNotifier {
       await _bleWrite(
         _commandReq,
         bytes,
-        withoutResponse: true,
+        preferWithoutResponse: true,
         timeoutSec: 2,
       );
     } catch (e) {
@@ -590,7 +683,7 @@ class GoProBleClient extends ChangeNotifier {
 
     await connect(
       target,
-      retries: 2,
+      retries: 3,
       fastRecord: true,
       shutterOnConnect: true,
     );
@@ -864,7 +957,7 @@ class GoProBleClient extends ChangeNotifier {
     await _bleWrite(
       _commandReq,
       bytes,
-      withoutResponse: true,
+      preferWithoutResponse: true,
       timeoutSec: wait ? 3 : 2,
     );
 
@@ -884,7 +977,7 @@ class GoProBleClient extends ChangeNotifier {
     final char = _queryReq;
     if (char == null) return;
     try {
-      await _bleWrite(char, bytes, withoutResponse: true, timeoutSec: 2);
+      await _bleWrite(char, bytes, preferWithoutResponse: true, timeoutSec: 2);
     } catch (e) {
       debugPrint('query write: $e');
     }
@@ -933,9 +1026,10 @@ class GoProBleClient extends ChangeNotifier {
     if (text.contains('writeCharacteristic') ||
         text.contains('Timed out') ||
         text.contains('zaman aşımı') ||
-        text.contains('gönderilemedi')) {
-      return 'Kamera komutu zaman aşımına uğradı. '
-          'Kamerayı açıp tekrar KAYIT’a bas.';
+        text.contains('gönderilemedi') ||
+        text.contains('eşleştirmeyi')) {
+      return 'Kamera komutu başarısız. GoPro’yu aç, telefonda Bluetooth '
+          'eşleştirme isteğini onayla, sonra tekrar KAYIT’a bas.';
     }
     return text;
   }
