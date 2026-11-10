@@ -366,19 +366,26 @@ class GoProBleClient extends ChangeNotifier {
     bool shutterOnConnect = false,
   }) async {
     _error = null;
-    await stopScan();
-    // Android often returns GATT 133 if connectGatt races the scan stop.
-    await Future<void>.delayed(const Duration(milliseconds: 550));
+    await _waitScanFullyStopped();
     await _awaitPostSleepCooldown();
-    if (!fastRecord) {
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-    }
+    await _disconnectAllBleClients();
     _setState(GoProConnectionState.connecting);
 
     Object? lastError;
-    // 133 is flaky: many short retries beat a few long ones.
-    final attempts = fastRecord ? retries.clamp(1, 6) : retries;
+    var saw133 = false;
+    var cycledBt = false;
+    // 133 is flaky: many short retries + one BT adapter cycle.
+    final attempts = fastRecord ? retries.clamp(1, 7) : retries;
     for (var attempt = 1; attempt <= attempts; attempt++) {
+      // After a couple of GATT 133s, reset the phone BT stack once.
+      if (saw133 && !cycledBt && attempt >= 3) {
+        cycledBt = true;
+        try {
+          await _cycleBluetoothAdapter();
+        } catch (e) {
+          debugPrint('BT cycle failed: $e');
+        }
+      }
       try {
         await _connectOnce(
           info,
@@ -399,15 +406,15 @@ class GoProBleClient extends ChangeNotifier {
         status = const GoProCameraStatus();
         await _teardownLink(keepState: true);
         try {
-          await info.device.disconnect();
+          await BluetoothDevice.fromId(info.remoteId).disconnect();
         } catch (_) {}
-        // Never auto-removeBond here — that undoes a fresh re-pair and
-        // makes the next KAYIT worse. User deletes bonds from Kameralar.
         final is133 = e.toString().contains('133') ||
-            e.toString().contains('ANDROID_SPECIFIC_ERROR');
+            e.toString().contains('ANDROID_SPECIFIC_ERROR') ||
+            e.toString().contains('GATT_ERROR');
+        if (is133) saw133 = true;
         await Future<void>.delayed(
           Duration(
-            milliseconds: is133 ? (450 + attempt * 350) : (500 * attempt),
+            milliseconds: is133 ? (600 + attempt * 400) : (500 * attempt),
           ),
         );
       }
@@ -420,6 +427,49 @@ class GoProBleClient extends ChangeNotifier {
     _setState(GoProConnectionState.error);
     notifyListeners();
     throw StateError(_error!);
+  }
+
+  Future<void> _waitScanFullyStopped() async {
+    try {
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
+    await _scanSub?.cancel();
+    _scanSub = null;
+    final deadline = DateTime.now().add(const Duration(seconds: 2));
+    while (FlutterBluePlus.isScanningNow &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    // Extra settle — connecting during scan teardown is a classic 133 cause.
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+  }
+
+  Future<void> _disconnectAllBleClients() async {
+    try {
+      for (final d in FlutterBluePlus.connectedDevices) {
+        try {
+          await d.disconnect();
+        } catch (_) {}
+      }
+    } catch (_) {}
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+  }
+
+  /// Nuclear option for wedged Android GATT after sleep / re-pair loops.
+  Future<void> _cycleBluetoothAdapter() async {
+    debugPrint('Cycling Bluetooth adapter (GATT 133 recovery)');
+    try {
+      // ignore: deprecated_member_use — no Android 13+ replacement; best-effort.
+      await FlutterBluePlus.turnOff(timeout: 8);
+    } catch (e) {
+      debugPrint('turnOff: $e');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 1800));
+    await FlutterBluePlus.turnOn(timeout: 45);
+    await FlutterBluePlus.adapterState
+        .firstWhere((s) => s == BluetoothAdapterState.on)
+        .timeout(const Duration(seconds: 45));
+    await Future<void>.delayed(const Duration(milliseconds: 900));
   }
 
   Future<void> _awaitPostSleepCooldown() async {
@@ -438,38 +488,37 @@ class GoProBleClient extends ChangeNotifier {
     bool fastRecord = false,
     bool shutterOnConnect = false,
   }) async {
-    final device = info.device;
+    // Fresh device handle — avoids stale GATT objects from a prior scan.
+    final device = BluetoothDevice.fromId(info.remoteId);
     _device = device;
 
-    // Only disconnect if already linked — avoid extra wake delay.
     if (device.isConnected) {
       try {
         await device.disconnect();
       } catch (_) {}
       await Future<void>.delayed(
-        Duration(milliseconds: fastRecord ? 250 : 400),
+        Duration(milliseconds: fastRecord ? 300 : 450),
       );
     }
 
-    // Do NOT clearGattCache while disconnected — Android requires an active
-    // GATT client; pre-connect refresh was contributing to status 133.
-
+    // Direct connect first; on later attempts after 133, try autoConnect once.
+    final useAuto = attempt >= 4;
     await device.connect(
-      timeout: Duration(seconds: fastRecord ? 12 : 20),
-      autoConnect: false,
+      timeout: Duration(seconds: useAuto ? 20 : (fastRecord ? 12 : 20)),
+      autoConnect: useAuto,
       mtu: null,
     );
 
     await device.connectionState
         .firstWhere((s) => s == BluetoothConnectionState.connected)
-        .timeout(Duration(seconds: fastRecord ? 12 : 15));
+        .timeout(Duration(seconds: useAuto ? 20 : (fastRecord ? 12 : 15)));
 
     // Sleep→wake / fresh pair: let firmware settle before GATT ops.
     await Future<void>.delayed(
       Duration(
         milliseconds: (shutterOnConnect || _lastSleepAt != null)
-            ? (400 + (attempt - 1) * 250)
-            : 200,
+            ? (500 + (attempt - 1) * 200)
+            : 250,
       ),
     );
 
@@ -1195,10 +1244,12 @@ class GoProBleClient extends ChangeNotifier {
 
   static String _friendlyError(Object? e) {
     final text = e?.toString() ?? 'Bilinmeyen hata';
-    if (text.contains('133') || text.contains('ANDROID_SPECIFIC_ERROR')) {
+    if (text.contains('133') ||
+        text.contains('ANDROID_SPECIFIC_ERROR') ||
+        text.contains('GATT_ERROR')) {
       return 'Bluetooth bağlantısı kurulamadı (Android 133). '
-          '2–3 sn bekleyip tekrar KAYIT’a bas. Olmazsa telefonda Bluetooth’u '
-          'kapat-aç, GoPro’yu da kapat-aç; Kameralar’dan silip yeniden ekle.';
+          'GoPro Quik / başka uygulama bağlıysa kapat. Sonra telefonda '
+          'Bluetooth’u kapat-aç, kamerayı kapat-aç, tekrar KAYIT’a bas.';
     }
     if (text.contains('writeCharacteristic') ||
         text.contains('Timed out') ||

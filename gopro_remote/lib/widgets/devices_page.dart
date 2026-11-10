@@ -314,15 +314,22 @@ class _AddCameraSheetState extends State<_AddCameraSheet> {
           shutterOnConnect: false,
         );
       } catch (e) {
-        // Still keep the saved entry; user can retry KAYIT / Bağlan.
+        // Still keep the saved entry; user can retry from the home screen.
         debugPrint('add-connect: $e');
         if (mounted) {
+          final msg = _client.error ??
+              (e.toString().startsWith('Bad state: ')
+                  ? e.toString().substring('Bad state: '.length)
+                  : e.toString());
           setState(() {
             _error =
-                'Kaydedildi ama ilk bağlantı başarısız. Ana ekranda '
-                '“Sadece bağlan” veya KAYIT ile tekrar dene.\n$e';
+                'Kaydedildi. İlk bağlanma olmadı — ana ekranda KAYIT veya '
+                '“Sadece bağlan” dene.\n$msg';
           });
         }
+        // Close after a beat so the list shows the new saved camera.
+        await Future<void>.delayed(const Duration(milliseconds: 900));
+        if (mounted) widget.onSaved();
         return;
       }
       widget.onSaved();
