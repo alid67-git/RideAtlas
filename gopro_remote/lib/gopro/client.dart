@@ -299,13 +299,77 @@ class GoProBleClient extends ChangeNotifier {
     }
   }
 
-  /// Scan, then automatically connect to the strongest GoPro found.
+  /// Wake + BLE connect only (no shutter). Used by “Sadece bağlan”.
   Future<void> autoConnect({
-    Duration scanTimeout = const Duration(seconds: 8),
-    int connectRetries = 3,
+    Duration scanTimeout = const Duration(seconds: 5),
+    int connectRetries = 2,
     bool fastRecord = true,
   }) async {
     if (isConnected || _autoConnectInFlight) return;
+    await wakeAndConnect(
+      scanTimeout: scanTimeout,
+      connectRetries: connectRetries,
+      fastRecord: fastRecord,
+    );
+  }
+
+  /// Bottom-button toggle: disconnected → wake/connect; connected → sleep/close.
+  Future<void> toggleConnectSleep() async {
+    if (isConnected || isSessionRecording) {
+      await sleepAndDisconnect();
+      return;
+    }
+    await wakeAndConnect();
+  }
+
+  /// Put camera to sleep (if linked) and clear local BLE session — no recording.
+  Future<void> sleepAndDisconnect() async {
+    _error = null;
+    _ensureNotCancelled();
+
+    if (isSessionRecording && _commandReq != null) {
+      try {
+        await stopRecording();
+      } catch (e) {
+        debugPrint('stop before sleep/disconnect: $e');
+        _sessionRecording = false;
+      }
+      await _waitUntilNotEncoding();
+    }
+
+    final sleeping = _device;
+    if (sleeping != null && _commandReq != null) {
+      try {
+        await sleepCamera();
+      } catch (e) {
+        debugPrint('sleepAndDisconnect sleep: $e');
+      }
+      try {
+        await sleeping.connectionState
+            .firstWhere((s) => s == BluetoothConnectionState.disconnected)
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {
+        if (_cancelRequested) throw const GoProCancelledException();
+        try {
+          await sleeping.disconnect();
+        } catch (_) {}
+      }
+    }
+
+    await _delayCancellable(const Duration(milliseconds: 300));
+    await _teardownLink();
+    _lastSleepAt = DateTime.now();
+    _resetSessionLocal();
+  }
+
+  /// Fresh scan → connect, without starting a recording.
+  Future<void> wakeAndConnect({
+    Duration scanTimeout = const Duration(seconds: 3),
+    int connectRetries = 2,
+    bool fastRecord = true,
+  }) async {
+    if (isConnected) return;
+    if (_autoConnectInFlight) return;
     _autoConnectInFlight = true;
     _error = null;
     notifyListeners();
@@ -313,14 +377,43 @@ class GoProBleClient extends ChangeNotifier {
     try {
       await ensurePrefsLoaded();
       await ensureAdapterOn();
+      _ensureNotCancelled();
 
-      // Always scan for a fresh advertisement before connect (Android).
-      final target = await _scanForFreshGoPro(timeout: scanTimeout);
-      await connect(
-        target,
-        retries: connectRetries,
-        fastRecord: fastRecord,
-      );
+      try {
+        await stopScan();
+      } catch (_) {}
+      await _awaitPostSleepCooldown();
+
+      Object? lastError;
+      const attempts = 2;
+      for (var attempt = 1; attempt <= attempts; attempt++) {
+        _ensureNotCancelled();
+        try {
+          final target = await _scanForFreshGoPro(
+            timeout: attempt == 1
+                ? scanTimeout
+                : Duration(seconds: scanTimeout.inSeconds + 2),
+          );
+          await connect(
+            target,
+            retries: connectRetries,
+            fastRecord: fastRecord,
+            shutterOnConnect: false,
+          );
+          return;
+        } catch (e) {
+          if (e is GoProCancelledException || _cancelRequested) rethrow;
+          lastError = e;
+          debugPrint('wakeAndConnect attempt $attempt/$attempts: $e');
+          await _teardownLink(keepState: true);
+          await _delayCancellable(Duration(milliseconds: 350 * attempt));
+        }
+      }
+
+      _error = _friendlyError(lastError);
+      _setState(GoProConnectionState.error);
+      notifyListeners();
+      throw StateError(_error!);
     } finally {
       _autoConnectInFlight = false;
       notifyListeners();

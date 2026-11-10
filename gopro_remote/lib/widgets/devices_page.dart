@@ -387,7 +387,7 @@ class _AddCameraSheetState extends State<_AddCameraSheet> {
           setState(() {
             _error =
                 'Kaydedildi. İlk bağlanma olmadı — ana ekranda KAYIT veya '
-                '“Sadece bağlan” dene.\n$msg';
+                '“Sadece bağlan (uyandır)” dene.\n$msg';
           });
         }
         await Future<void>.delayed(const Duration(milliseconds: 900));

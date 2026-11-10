@@ -163,17 +163,22 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     await _client.cancelOperation();
   }
 
-  Future<void> _scan() async {
+  Future<void> _toggleConnectSleep() async {
     if (!await _ensurePermissions()) return;
+    final closing = _client.isConnected || _client.isSessionRecording;
     await _run(() async {
-      setState(() => _banner = 'Bağlanıyor…');
-      await _client.autoConnect(
-        scanTimeout: const Duration(seconds: 5),
-        connectRetries: 3,
-        fastRecord: true,
-      );
-      final name = _client.connectedDevice?.name;
-      setState(() => _banner = name == null ? null : 'Bağlandı: $name');
+      setState(() {
+        _banner = closing ? 'Uyutuluyor / kapatılıyor…' : 'Uyandırılıyor…';
+      });
+      await _client.toggleConnectSleep();
+      if (!mounted) return;
+      setState(() {
+        _banner = closing
+            ? 'Kamera uyku · bağlantı kapandı'
+            : (_client.connectedDevice == null
+                ? null
+                : 'Bağlandı: ${_client.connectedDevice!.name}');
+      });
     });
   }
 
@@ -381,22 +386,36 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
             ),
             const Spacer(),
             Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                connected
+                    ? 'Bağlıyken bu tuş kamerayı uyutup bağlantıyı keser (kayıt yok).'
+                    : 'Kayıt istemiyorsan sadece uyandır / bağlan; açıkken “Uyut / kapat” olur.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: cs.onSurface.withValues(alpha: 0.45),
+                    ),
+              ),
+            ),
+            Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               child: TextButton.icon(
-                onPressed: _busy ? null : _scan,
+                onPressed: _busy ? null : _toggleConnectSleep,
                 icon: Icon(
                   _client.state == GoProConnectionState.scanning ||
                           _client.state == GoProConnectionState.connecting
                       ? Icons.hourglass_top
-                      : Icons.bluetooth_searching,
+                      : (connected
+                          ? Icons.power_settings_new
+                          : Icons.bluetooth_searching),
                 ),
                 label: Text(
-                  connected
-                      ? 'Yeniden bağlan'
-                      : (_client.state == GoProConnectionState.scanning ||
-                              _client.state == GoProConnectionState.connecting
-                          ? 'Bağlanıyor…'
-                          : 'Sadece bağlan (kayıtsız)'),
+                  _client.state == GoProConnectionState.scanning ||
+                          _client.state == GoProConnectionState.connecting
+                      ? 'Bağlanıyor…'
+                      : (connected
+                          ? 'Uyut / kapat'
+                          : 'Sadece bağlan (uyandır)'),
                 ),
               ),
             ),
