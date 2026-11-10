@@ -473,31 +473,21 @@ class _GoProSection extends StatelessWidget {
                   accent: const Color(0xFFE85D04),
                   onDeviceTap: onOpenDevices,
                 ),
-                const SizedBox(height: 8),
-                _RecordToggleButton(
+                const SizedBox(height: 14),
+                _ControlPad(
+                  accent: const Color(0xFFE85D04),
+                  recording: client.isSessionRecording,
                   busy: busy,
-                  encoding: client.isSessionRecording,
-                  compact: true,
-                  onPressed: onRecord,
-                ),
-                const SizedBox(height: 6),
-                TextButton.icon(
-                  onPressed: busy ? null : onConnectSleep,
-                  icon: Icon(
-                    linking
-                        ? Icons.hourglass_top
-                        : (connected
-                            ? Icons.power_settings_new
-                            : Icons.bluetooth_searching),
-                    size: 18,
-                  ),
-                  label: Text(
-                    linking
-                        ? 'Bağlanıyor…'
-                        : (connected
-                            ? 'Uyut / kapat'
-                            : 'Sadece bağlan (uyandır)'),
-                  ),
+                  enabled: true,
+                  recordLabel:
+                      client.isSessionRecording ? 'DURDUR + UYKU' : 'KAYIT',
+                  onRecord: onRecord,
+                  powerBusy: linking,
+                  powerConnected: connected,
+                  powerLabel: linking
+                      ? 'Bağlanıyor…'
+                      : (connected ? 'Uyut / kapat' : 'Bağlan'),
+                  onPower: busy ? null : onConnectSleep,
                 ),
               ],
             ),
@@ -536,22 +526,20 @@ class _Insta360Section extends StatelessWidget {
                   accent: const Color(0xFF4CC9F0),
                   onDeviceTap: onTapSoon,
                 ),
-                const SizedBox(height: 8),
-                _RecordToggleButton(
+                const SizedBox(height: 14),
+                _ControlPad(
+                  accent: const Color(0xFF4CC9F0),
+                  recording: false,
                   busy: false,
-                  encoding: false,
-                  compact: true,
                   enabled: false,
-                  labelOverride: 'KAYIT (yakında)',
-                  onPressed: onTapSoon,
+                  recordLabel: 'KAYIT',
+                  onRecord: onTapSoon,
+                  powerBusy: false,
+                  powerConnected: false,
+                  powerLabel: 'Bağlan',
+                  onPower: onTapSoon,
                 ),
-                const SizedBox(height: 6),
-                TextButton.icon(
-                  onPressed: onTapSoon,
-                  icon: const Icon(Icons.bluetooth_searching, size: 18),
-                  label: const Text('Sadece bağlan (yakında)'),
-                ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Text(
                   'X4+ BLE/Wi‑Fi kumandası sonraki sürümde.',
                   textAlign: TextAlign.center,
@@ -723,48 +711,241 @@ class _Dot extends StatelessWidget {
   }
 }
 
-class _RecordToggleButton extends StatelessWidget {
-  const _RecordToggleButton({
+class _ControlPad extends StatelessWidget {
+  const _ControlPad({
+    required this.accent,
+    required this.recording,
     required this.busy,
-    required this.encoding,
-    required this.onPressed,
-    this.compact = false,
-    this.enabled = true,
-    this.labelOverride,
+    required this.enabled,
+    required this.recordLabel,
+    required this.onRecord,
+    required this.powerBusy,
+    required this.powerConnected,
+    required this.powerLabel,
+    required this.onPower,
   });
 
+  final Color accent;
+  final bool recording;
   final bool busy;
-  final bool encoding;
-  final VoidCallback onPressed;
-  final bool compact;
   final bool enabled;
-  final String? labelOverride;
+  final String recordLabel;
+  final VoidCallback onRecord;
+  final bool powerBusy;
+  final bool powerConnected;
+  final String powerLabel;
+  final VoidCallback? onPower;
 
   @override
   Widget build(BuildContext context) {
-    final bg = encoding ? const Color(0xFF2A9D8F) : const Color(0xFFE5383B);
-    return SizedBox(
-      height: compact ? 52 : 72,
-      width: double.infinity,
-      child: FilledButton(
-        style: FilledButton.styleFrom(
-          backgroundColor: bg,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: bg.withValues(alpha: 0.28),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _ShutterButton(
+              recording: recording,
+              busy: busy,
+              enabled: enabled,
+              label: recordLabel,
+              onPressed: onRecord,
+            ),
+            const SizedBox(width: 28),
+            _PowerButton(
+              accent: accent,
+              busy: powerBusy,
+              connected: powerConnected,
+              enabled: enabled && onPower != null,
+              label: powerLabel,
+              onPressed: onPower,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Circular camera shutter: red disc to start, teal stop square while recording.
+class _ShutterButton extends StatefulWidget {
+  const _ShutterButton({
+    required this.recording,
+    required this.busy,
+    required this.enabled,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final bool recording;
+  final bool busy;
+  final bool enabled;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  State<_ShutterButton> createState() => _ShutterButtonState();
+}
+
+class _ShutterButtonState extends State<_ShutterButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final canTap = widget.enabled && !widget.busy;
+    final ring = widget.recording
+        ? const Color(0xFF2A9D8F)
+        : const Color(0xFFE5383B);
+    final face = widget.recording
+        ? const Color(0xFF1F7A6E)
+        : const Color(0xFFC81D25);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTapDown: canTap ? (_) => setState(() => _pressed = true) : null,
+          onTapUp: canTap
+              ? (_) {
+                  setState(() => _pressed = false);
+                  widget.onPressed();
+                }
+              : null,
+          onTapCancel: () => setState(() => _pressed = false),
+          child: AnimatedScale(
+            scale: _pressed ? 0.92 : 1,
+            duration: const Duration(milliseconds: 90),
+            curve: Curves.easeOut,
+            child: AnimatedOpacity(
+              opacity: canTap ? 1 : 0.38,
+              duration: const Duration(milliseconds: 160),
+              child: Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF14181F),
+                  border: Border.all(color: ring, width: 4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: ring.withValues(alpha: 0.28),
+                      blurRadius: 16,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  width: widget.recording ? 34 : 62,
+                  height: widget.recording ? 34 : 62,
+                  decoration: BoxDecoration(
+                    color: face,
+                    borderRadius: BorderRadius.circular(
+                      widget.recording ? 8 : 31,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
-        onPressed: (!enabled || busy) ? null : onPressed,
-        child: Text(
-          labelOverride ?? (encoding ? 'KAYDI DURDUR + UYKU' : 'KAYIT'),
-          style: TextStyle(
-            fontSize: compact ? 16 : 20,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
+        const SizedBox(height: 8),
+        Text(
+          widget.busy ? '…' : widget.label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: ring.withValues(alpha: canTap ? 1 : 0.45),
+              ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Round power / connect control beside the shutter.
+class _PowerButton extends StatefulWidget {
+  const _PowerButton({
+    required this.accent,
+    required this.busy,
+    required this.connected,
+    required this.enabled,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final Color accent;
+  final bool busy;
+  final bool connected;
+  final bool enabled;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  State<_PowerButton> createState() => _PowerButtonState();
+}
+
+class _PowerButtonState extends State<_PowerButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final canTap = widget.enabled && widget.onPressed != null && !widget.busy;
+    final icon = widget.busy
+        ? Icons.hourglass_top
+        : (widget.connected
+            ? Icons.power_settings_new
+            : Icons.bluetooth_searching);
+    final fill = widget.connected
+        ? widget.accent.withValues(alpha: 0.22)
+        : const Color(0xFF1A1F27);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTapDown: canTap ? (_) => setState(() => _pressed = true) : null,
+          onTapUp: canTap
+              ? (_) {
+                  setState(() => _pressed = false);
+                  widget.onPressed?.call();
+                }
+              : null,
+          onTapCancel: () => setState(() => _pressed = false),
+          child: AnimatedScale(
+            scale: _pressed ? 0.92 : 1,
+            duration: const Duration(milliseconds: 90),
+            curve: Curves.easeOut,
+            child: AnimatedOpacity(
+              opacity: canTap ? 1 : 0.38,
+              duration: const Duration(milliseconds: 160),
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: fill,
+                  border: Border.all(
+                    color: widget.accent.withValues(alpha: 0.85),
+                    width: 2.5,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, color: widget.accent, size: 28),
+              ),
+            ),
           ),
         ),
-      ),
+        const SizedBox(height: 8),
+        Text(
+          widget.label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: widget.accent.withValues(alpha: canTap ? 0.95 : 0.4),
+              ),
+        ),
+      ],
     );
   }
 }
