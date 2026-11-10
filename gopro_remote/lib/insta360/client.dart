@@ -754,7 +754,7 @@ class Insta360Client extends ChangeNotifier {
       selected,
       timeout: timeout,
       hint:
-          'Eşleştirme: X4 → Ayarlar → Bluetooth → GPS Remote → bu telefonu seç',
+          'X4 listesinde “Insta360 GPS Remote” seç (telefon adını değiştirme)',
     );
     _ensureNotCancelled();
     await _markGpsRemotePaired();
@@ -781,7 +781,7 @@ class Insta360Client extends ChangeNotifier {
       timeout: timeout,
       hint: _gpsRemotePaired
           ? 'GPS Remote bekleniyor → kapatılıyor…'
-          : 'Kapatmak için X4 menüde GPS Remote olarak bu telefonu seç (bir kez)',
+          : 'Kapatmak için X4’te “Insta360 GPS Remote” seç (bir kez)',
     );
 
     _ensureNotCancelled();

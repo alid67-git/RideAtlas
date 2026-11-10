@@ -283,7 +283,8 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       await _runInsta(() async {
         setState(() {
           _instaBanner =
-              'Eşleştirme: X4 → Ayarlar → Bluetooth → GPS Remote → bu telefon';
+              'Eşleştirme: X4 listesinde “Insta360 GPS Remote” seç '
+              '(telefon adını değiştirme)';
         });
         await _insta.pairGpsRemote();
         if (!mounted) return;
