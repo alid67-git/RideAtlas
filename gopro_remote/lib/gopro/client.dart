@@ -45,6 +45,7 @@ class GoProBleClient extends ChangeNotifier {
 
   bool _autoConnectInFlight = false;
   Completer<GoProDeviceInfo>? _firstDeviceCompleter;
+  Completer<GoProDeviceInfo>? _activeScanCompleter;
 
   /// Local session flag — encoding status notifications can lag or miss,
   /// so the single record button must not rely only on [status.encoding].
@@ -65,8 +66,72 @@ class GoProBleClient extends ChangeNotifier {
   /// connect, otherwise Android frequently returns status 133.
   DateTime? _lastSleepAt;
 
+  /// User-facing long operations (KAYIT / bağlan) can be aborted via [cancelOperation].
+  bool _cancelRequested = false;
+  bool get isCancelRequested => _cancelRequested;
+
   bool get isConnected =>
       _state == GoProConnectionState.connected && _device != null;
+
+  void beginOperation() {
+    _cancelRequested = false;
+  }
+
+  /// Abort scan/connect/wake in progress and drop any half-open GATT link.
+  Future<void> cancelOperation() async {
+    _cancelRequested = true;
+    _error = null;
+    notifyListeners();
+    try {
+      await stopScan();
+    } catch (_) {}
+    for (final pending in [_firstDeviceCompleter, _activeScanCompleter]) {
+      if (pending != null && !pending.isCompleted) {
+        pending.completeError(const GoProCancelledException());
+      }
+    }
+    final cmd = _pendingCommand;
+    if (cmd != null && !cmd.isCompleted) {
+      cmd.complete(false);
+    }
+    try {
+      await _device?.disconnect();
+    } catch (_) {}
+    try {
+      for (final d in FlutterBluePlus.connectedDevices) {
+        try {
+          await d.disconnect();
+        } catch (_) {}
+      }
+    } catch (_) {}
+    await _teardownLink(keepState: true);
+    _sessionRecording = false;
+    status = const GoProCameraStatus();
+    connectedDevice = null;
+    _setState(GoProConnectionState.disconnected);
+  }
+
+  void _ensureNotCancelled() {
+    if (_cancelRequested) {
+      throw const GoProCancelledException();
+    }
+  }
+
+  Future<void> _delayCancellable(Duration duration) async {
+    if (duration <= Duration.zero) {
+      _ensureNotCancelled();
+      return;
+    }
+    const slice = Duration(milliseconds: 100);
+    var left = duration;
+    while (left > Duration.zero) {
+      _ensureNotCancelled();
+      final step = left < slice ? left : slice;
+      await Future<void>.delayed(step);
+      left -= step;
+    }
+    _ensureNotCancelled();
+  }
 
   List<SavedGoProDevice> get savedDevices =>
       List<SavedGoProDevice>.unmodifiable(_savedDevices);
@@ -377,6 +442,7 @@ class GoProBleClient extends ChangeNotifier {
     // 133 is flaky: many short retries + one BT adapter cycle.
     final attempts = fastRecord ? retries.clamp(1, 7) : retries;
     for (var attempt = 1; attempt <= attempts; attempt++) {
+      _ensureNotCancelled();
       // After a couple of GATT 133s, reset the phone BT stack once.
       if (saw133 && !cycledBt && attempt >= 3) {
         cycledBt = true;
@@ -400,6 +466,7 @@ class GoProBleClient extends ChangeNotifier {
         _setState(GoProConnectionState.connected);
         return;
       } catch (e) {
+        if (e is GoProCancelledException || _cancelRequested) rethrow;
         lastError = e;
         debugPrint('GoPro connect attempt $attempt/$attempts failed: $e');
         _sessionRecording = false;
@@ -412,7 +479,7 @@ class GoProBleClient extends ChangeNotifier {
             e.toString().contains('ANDROID_SPECIFIC_ERROR') ||
             e.toString().contains('GATT_ERROR');
         if (is133) saw133 = true;
-        await Future<void>.delayed(
+        await _delayCancellable(
           Duration(
             milliseconds: is133 ? (600 + attempt * 400) : (500 * attempt),
           ),
@@ -430,6 +497,7 @@ class GoProBleClient extends ChangeNotifier {
   }
 
   Future<void> _waitScanFullyStopped() async {
+    _ensureNotCancelled();
     try {
       await FlutterBluePlus.stopScan();
     } catch (_) {}
@@ -438,10 +506,11 @@ class GoProBleClient extends ChangeNotifier {
     final deadline = DateTime.now().add(const Duration(seconds: 2));
     while (FlutterBluePlus.isScanningNow &&
         DateTime.now().isBefore(deadline)) {
+      _ensureNotCancelled();
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
     // Extra settle — connecting during scan teardown is a classic 133 cause.
-    await Future<void>.delayed(const Duration(milliseconds: 800));
+    await _delayCancellable(const Duration(milliseconds: 800));
   }
 
   Future<void> _disconnectAllBleClients() async {
@@ -452,11 +521,12 @@ class GoProBleClient extends ChangeNotifier {
         } catch (_) {}
       }
     } catch (_) {}
-    await Future<void>.delayed(const Duration(milliseconds: 250));
+    await _delayCancellable(const Duration(milliseconds: 250));
   }
 
   /// Nuclear option for wedged Android GATT after sleep / re-pair loops.
   Future<void> _cycleBluetoothAdapter() async {
+    _ensureNotCancelled();
     debugPrint('Cycling Bluetooth adapter (GATT 133 recovery)');
     try {
       // ignore: deprecated_member_use — no Android 13+ replacement; best-effort.
@@ -464,12 +534,13 @@ class GoProBleClient extends ChangeNotifier {
     } catch (e) {
       debugPrint('turnOff: $e');
     }
-    await Future<void>.delayed(const Duration(milliseconds: 1800));
+    await _delayCancellable(const Duration(milliseconds: 1800));
+    _ensureNotCancelled();
     await FlutterBluePlus.turnOn(timeout: 45);
     await FlutterBluePlus.adapterState
         .firstWhere((s) => s == BluetoothAdapterState.on)
         .timeout(const Duration(seconds: 45));
-    await Future<void>.delayed(const Duration(milliseconds: 900));
+    await _delayCancellable(const Duration(milliseconds: 900));
   }
 
   Future<void> _awaitPostSleepCooldown() async {
@@ -478,7 +549,7 @@ class GoProBleClient extends ChangeNotifier {
     const coolDown = Duration(milliseconds: 1800);
     final elapsed = DateTime.now().difference(slept);
     if (elapsed < coolDown) {
-      await Future<void>.delayed(coolDown - elapsed);
+      await _delayCancellable(coolDown - elapsed);
     }
   }
 
@@ -514,13 +585,14 @@ class GoProBleClient extends ChangeNotifier {
         .timeout(Duration(seconds: useAuto ? 20 : (fastRecord ? 12 : 15)));
 
     // Sleep→wake / fresh pair: let firmware settle before GATT ops.
-    await Future<void>.delayed(
+    await _delayCancellable(
       Duration(
         milliseconds: (shutterOnConnect || _lastSleepAt != null)
             ? (500 + (attempt - 1) * 200)
             : 250,
       ),
     );
+    _ensureNotCancelled();
 
     await _connSub?.cancel();
     _connSub = device.connectionState.listen((s) {
@@ -644,6 +716,7 @@ class GoProBleClient extends ChangeNotifier {
     Object? lastErr;
     var i = 0;
     while (DateTime.now().isBefore(deadline)) {
+      _ensureNotCancelled();
       try {
         await _bleWrite(
           _commandReq,
@@ -653,10 +726,11 @@ class GoProBleClient extends ChangeNotifier {
         );
         return;
       } catch (e) {
+        if (e is GoProCancelledException) rethrow;
         lastErr = e;
         debugPrint('command ready probe $i: $e');
         i++;
-        await Future<void>.delayed(Duration(milliseconds: 250 + i * 100));
+        await _delayCancellable(Duration(milliseconds: 250 + i * 100));
       }
     }
     debugPrint('command channel not ready: $lastErr');
@@ -671,6 +745,7 @@ class GoProBleClient extends ChangeNotifier {
     final deadline = DateTime.now().add(const Duration(seconds: 6));
     var i = 0;
     while (DateTime.now().isBefore(deadline)) {
+      _ensureNotCancelled();
       try {
         await _bleWrite(
           char,
@@ -681,10 +756,11 @@ class GoProBleClient extends ChangeNotifier {
         lastErr = null;
         break;
       } catch (e) {
+        if (e is GoProCancelledException) rethrow;
         lastErr = e;
         debugPrint('shutter burst $i: $e');
         i++;
-        await Future<void>.delayed(Duration(milliseconds: 200 + i * 80));
+        await _delayCancellable(Duration(milliseconds: 200 + i * 80));
       }
     }
     if (lastErr != null) {
@@ -799,10 +875,11 @@ class GoProBleClient extends ChangeNotifier {
   }) async {
     final deadline = DateTime.now().add(timeout);
     while (status.encoding && DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 150));
+      _ensureNotCancelled();
+      await _delayCancellable(const Duration(milliseconds: 150));
     }
     // Brief settle even if status never flipped (some FW skip the notify).
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    await _delayCancellable(const Duration(milliseconds: 400));
   }
 
   /// Single control: start = wake + shutter; stop = stop + sleep.
@@ -824,6 +901,7 @@ class GoProBleClient extends ChangeNotifier {
       }
 
       await _waitUntilNotEncoding();
+      _ensureNotCancelled();
 
       // Sleep ONLY — power-down after the first take was preventing reliable
       // BLE wake (ads/bond OK once, then Android 133 on the next KAYIT).
@@ -840,13 +918,14 @@ class GoProBleClient extends ChangeNotifier {
               .firstWhere((s) => s == BluetoothConnectionState.disconnected)
               .timeout(const Duration(seconds: 3));
         } catch (_) {
+          if (_cancelRequested) throw const GoProCancelledException();
           try {
             await sleeping.disconnect();
           } catch (_) {}
         }
       }
 
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await _delayCancellable(const Duration(milliseconds: 400));
       await _teardownLink();
       _lastSleepAt = DateTime.now();
       _resetSessionLocal();
@@ -856,6 +935,10 @@ class GoProBleClient extends ChangeNotifier {
     try {
       await wakeAndRecord();
     } catch (e) {
+      if (e is GoProCancelledException || _cancelRequested) {
+        _resetSessionLocal();
+        throw const GoProCancelledException();
+      }
       _resetSessionLocal(error: _friendlyError(e));
       rethrow;
     }
@@ -869,6 +952,7 @@ class GoProBleClient extends ChangeNotifier {
     _error = null;
     await ensurePrefsLoaded();
     await ensureAdapterOn();
+    _ensureNotCancelled();
 
     if (isConnected && _commandReq != null) {
       await _burstStartShutter();
@@ -884,6 +968,7 @@ class GoProBleClient extends ChangeNotifier {
     Object? lastError;
     const attempts = 3;
     for (var attempt = 1; attempt <= attempts; attempt++) {
+      _ensureNotCancelled();
       try {
         final target = await _scanForFreshGoPro(
           timeout: Duration(seconds: attempt == 1 ? 5 : 7),
@@ -897,12 +982,13 @@ class GoProBleClient extends ChangeNotifier {
         );
         return;
       } catch (e) {
+        if (e is GoProCancelledException || _cancelRequested) rethrow;
         lastError = e;
         debugPrint('wakeAndRecord attempt $attempt/$attempts: $e');
         _sessionRecording = false;
         status = const GoProCameraStatus();
         await _teardownLink(keepState: true);
-        await Future<void>.delayed(Duration(milliseconds: 800 * attempt));
+        await _delayCancellable(Duration(milliseconds: 800 * attempt));
       }
     }
 
@@ -918,8 +1004,10 @@ class GoProBleClient extends ChangeNotifier {
   }) async {
     discovered.clear();
     _setState(GoProConnectionState.scanning);
+    _ensureNotCancelled();
 
     final done = Completer<GoProDeviceInfo>();
+    _activeScanCompleter = done;
     GoProDeviceInfo? fallback;
     await _scanSub?.cancel();
 
@@ -930,6 +1018,7 @@ class GoProBleClient extends ChangeNotifier {
     final controlGuid = Guid(GoProUuids.controlService);
 
     _scanSub = FlutterBluePlus.onScanResults.listen((results) {
+      if (_cancelRequested) return;
       for (final r in results) {
         final platformName = r.device.platformName;
         final advName = r.advertisementData.advName;
@@ -1002,6 +1091,8 @@ class GoProBleClient extends ChangeNotifier {
         if (discovered.isNotEmpty) return discovered.first;
         // Fall through to wide scan.
         await FlutterBluePlus.stopScan();
+      } on GoProCancelledException {
+        rethrow;
       }
     }
 
@@ -1019,6 +1110,9 @@ class GoProBleClient extends ChangeNotifier {
       await FlutterBluePlus.stopScan();
       await _scanSub?.cancel();
       _scanSub = null;
+      if (identical(_activeScanCompleter, done)) {
+        _activeScanCompleter = null;
+      }
     }
   }
 
@@ -1243,7 +1337,9 @@ class GoProBleClient extends ChangeNotifier {
   }
 
   static String _friendlyError(Object? e) {
+    if (e is GoProCancelledException) return 'İptal edildi';
     final text = e?.toString() ?? 'Bilinmeyen hata';
+    if (text.contains('İptal edildi')) return 'İptal edildi';
     if (text.contains('133') ||
         text.contains('ANDROID_SPECIFIC_ERROR') ||
         text.contains('GATT_ERROR')) {

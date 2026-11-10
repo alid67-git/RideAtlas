@@ -8,6 +8,14 @@ enum GoProConnectionState {
   error,
 }
 
+/// Thrown when the user aborts a long BLE operation (scan / connect / wake).
+class GoProCancelledException implements Exception {
+  const GoProCancelledException();
+
+  @override
+  String toString() => 'İptal edildi';
+}
+
 /// Persisted camera the user can select / forget from the devices menu.
 class SavedGoProDevice {
   const SavedGoProDevice({

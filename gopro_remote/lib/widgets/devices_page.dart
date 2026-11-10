@@ -43,9 +43,16 @@ class _DevicesPageState extends State<DevicesPage> {
       _busy = true;
       _message = null;
     });
+    _client.beginOperation();
     try {
       await action();
+    } on GoProCancelledException {
+      if (mounted) setState(() => _message = 'İptal edildi');
     } catch (e) {
+      if (e.toString().contains('İptal edildi')) {
+        if (mounted) setState(() => _message = 'İptal edildi');
+        return;
+      }
       final raw = e.toString();
       setState(() {
         _message = raw.startsWith('Bad state: ')
@@ -55,6 +62,12 @@ class _DevicesPageState extends State<DevicesPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _cancelBusy() async {
+    if (!_busy) return;
+    setState(() => _message = 'İptal ediliyor…');
+    await _client.cancelOperation();
   }
 
   Future<void> _forget(SavedGoProDevice device) async {
@@ -110,6 +123,14 @@ class _DevicesPageState extends State<DevicesPage> {
       appBar: AppBar(
         title: const Text('Kameralar'),
         backgroundColor: Colors.transparent,
+        actions: [
+          if (_busy)
+            IconButton(
+              tooltip: 'İptal',
+              onPressed: _cancelBusy,
+              icon: const Icon(Icons.close),
+            ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _busy ? null : _openAddSheet,
@@ -119,12 +140,43 @@ class _DevicesPageState extends State<DevicesPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_message != null)
+          if (_busy || _message != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text(
-                _message!,
-                style: TextStyle(color: cs.primary),
+              child: Material(
+                color: _busy
+                    ? cs.secondaryContainer.withValues(alpha: 0.45)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                child: Row(
+                  children: [
+                    if (_busy) ...[
+                      const SizedBox(width: 12),
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ],
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          _message ?? 'İşlem sürüyor…',
+                          style: TextStyle(
+                            color: _busy ? cs.onSecondaryContainer : cs.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_busy)
+                      IconButton(
+                        tooltip: 'İptal',
+                        onPressed: _cancelBusy,
+                        icon: const Icon(Icons.close),
+                      ),
+                  ],
+                ),
               ),
             ),
           Expanded(
@@ -298,6 +350,7 @@ class _AddCameraSheetState extends State<_AddCameraSheet> {
       _error = null;
     });
     try {
+      widget.client.beginOperation();
       await _client.stopScan();
       await _client.saveDevice(
         remoteId: info.remoteId,
@@ -305,7 +358,6 @@ class _AddCameraSheetState extends State<_AddCameraSheet> {
         select: true,
       );
       // Connect once while adding so Android completes pairing before KAYIT.
-      // Ignore shutter — user only asked to register the camera.
       try {
         await _client.connect(
           info,
@@ -313,9 +365,20 @@ class _AddCameraSheetState extends State<_AddCameraSheet> {
           fastRecord: true,
           shutterOnConnect: false,
         );
+      } on GoProCancelledException {
+        if (mounted) setState(() => _error = 'İptal edildi');
+        if (mounted) widget.onSaved();
+        return;
       } catch (e) {
         // Still keep the saved entry; user can retry from the home screen.
         debugPrint('add-connect: $e');
+        if (e.toString().contains('İptal edildi')) {
+          if (mounted) {
+            setState(() => _error = 'İptal edildi');
+            widget.onSaved();
+          }
+          return;
+        }
         if (mounted) {
           final msg = _client.error ??
               (e.toString().startsWith('Bad state: ')
@@ -327,7 +390,6 @@ class _AddCameraSheetState extends State<_AddCameraSheet> {
                 '“Sadece bağlan” dene.\n$msg';
           });
         }
-        // Close after a beat so the list shows the new saved camera.
         await Future<void>.delayed(const Duration(milliseconds: 900));
         if (mounted) widget.onSaved();
         return;
@@ -353,17 +415,41 @@ class _AddCameraSheetState extends State<_AddCameraSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Yakındaki kameralar',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Yakındaki kameralar',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
+                ),
+                if (_scanning || _saving)
+                  IconButton(
+                    tooltip: 'İptal',
+                    onPressed: () async {
+                      await _client.cancelOperation();
+                      await _client.stopScan();
+                      if (mounted) {
+                        setState(() {
+                          _scanning = false;
+                          _saving = false;
+                          _error = 'İptal edildi';
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.close),
+                  ),
+              ],
             ),
             const SizedBox(height: 4),
             Text(
-              _scanning
-                  ? 'Taranıyor… GoPro’yu aç / yakına getir.'
-                  : 'Seçince kaydedilir ve eşleştirme için bağlanır.',
+              _saving
+                  ? 'Kaydediliyor / eşleştiriliyor…'
+                  : (_scanning
+                      ? 'Taranıyor… GoPro’yu aç / yakına getir.'
+                      : 'Seçince kaydedilir ve eşleştirme için bağlanır.'),
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: cs.onSurface.withValues(alpha: 0.6),
                   ),

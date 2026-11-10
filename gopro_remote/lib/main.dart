@@ -7,7 +7,8 @@ import 'package:provider/provider.dart';
 
 import 'build_info.dart';
 import 'gopro/client.dart';
-import 'gopro/models.dart' show GoProCameraStatus, GoProConnectionState;
+import 'gopro/models.dart'
+    show GoProCameraStatus, GoProCancelledException, GoProConnectionState;
 import 'services/app_update_controller.dart';
 import 'services/update_checker.dart';
 import 'widgets/app_update_ui.dart';
@@ -135,9 +136,16 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       _busy = true;
       _banner = null;
     });
+    _client.beginOperation();
     try {
       await action();
+    } on GoProCancelledException {
+      if (mounted) setState(() => _banner = 'İptal edildi');
     } catch (e) {
+      if (e.toString().contains('İptal edildi')) {
+        if (mounted) setState(() => _banner = 'İptal edildi');
+        return;
+      }
       final friendly = _client.error;
       final raw = e.toString();
       final cleaned = raw.startsWith('Bad state: ')
@@ -147,6 +155,12 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _cancelBusy() async {
+    if (!_busy) return;
+    setState(() => _banner = 'İptal ediliyor…');
+    await _client.cancelOperation();
   }
 
   Future<void> _scan() async {
@@ -246,6 +260,12 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                       ],
                     ),
                   ),
+                  if (_busy)
+                    IconButton(
+                      tooltip: 'İptal',
+                      onPressed: _cancelBusy,
+                      icon: const Icon(Icons.close),
+                    ),
                   IconButton(
                     tooltip: 'Kameralar',
                     onPressed: _busy ? null : _openDevices,
@@ -253,7 +273,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                   ),
                   IconButton(
                     tooltip: 'Güncelleme kontrol et',
-                    onPressed: _manualUpdateCheck,
+                    onPressed: _busy ? null : _manualUpdateCheck,
                     icon: const Icon(Icons.system_update_alt),
                   ),
                 ],
@@ -263,7 +283,43 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: AppUpdateBanner(),
             ),
-            if (_banner != null || _client.error != null)
+            if (_busy)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Material(
+                  color: cs.secondaryContainer.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 8),
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _banner ?? 'İşlem sürüyor…',
+                            style: TextStyle(color: cs.onSecondaryContainer),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'İptal',
+                          onPressed: _cancelBusy,
+                          icon: Icon(Icons.close, color: cs.onSecondaryContainer),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else if (_banner != null || _client.error != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Material(
