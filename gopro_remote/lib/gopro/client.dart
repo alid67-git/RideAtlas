@@ -329,9 +329,10 @@ class GoProBleClient extends ChangeNotifier {
 
   /// Put camera to sleep (if linked) and clear local BLE session — no recording.
   ///
-  /// Critical: after the sleep TLV we **force-disconnect immediately**. Waiting
-  /// for the camera to drop the link first lets Android's bonded reconnect
-  /// poke the GoPro and wake it again (screen opens with no recording).
+  /// After sleep we disconnect, clear GATT cache, and **remove the Android
+  /// bond**. Keeping the bond lets the phone dual-role stack (Insta360 GPS
+  /// remote advertising) silently reconnect and re-wake the GoPro — the
+  /// “kapanıyor, hemen açılıyor” loop. Next KAYIT / Bağlan re-pairs.
   Future<void> sleepAndDisconnect() async {
     _error = null;
     _ensureNotCancelled();
@@ -356,6 +357,7 @@ class GoProBleClient extends ChangeNotifier {
 
     final sleeping = _device;
     final cmd = _commandReq;
+    final remoteId = sleeping?.remoteId.str ?? connectedDevice?.remoteId;
 
     // Drop characteristic refs so deferred init cannot write after sleep.
     _commandReq = null;
@@ -364,27 +366,87 @@ class GoProBleClient extends ChangeNotifier {
     _wifiPassword = null;
 
     if (sleeping != null && cmd != null) {
-      try {
-        await _bleWrite(
-          cmd,
-          GoProProtocol.sleep(),
-          preferWithoutResponse: true,
-          timeoutSec: 2,
-        );
-      } catch (e) {
-        debugPrint('sleepAndDisconnect sleep: $e');
+      // Prefer with-response so the sleep TLV actually lands before we drop
+      // the link (withoutResponse + instant disconnect often loses the packet).
+      for (var i = 0; i < 2; i++) {
+        try {
+          await _bleWrite(
+            cmd,
+            GoProProtocol.sleep(),
+            preferWithoutResponse: false,
+            timeoutSec: 2,
+          );
+          break;
+        } catch (e) {
+          debugPrint('sleepAndDisconnect sleep try ${i + 1}: $e');
+          try {
+            await _bleWrite(
+              cmd,
+              GoProProtocol.sleep(),
+              preferWithoutResponse: true,
+              timeoutSec: 2,
+            );
+            break;
+          } catch (e2) {
+            debugPrint('sleepAndDisconnect sleep fallback ${i + 1}: $e2');
+          }
+        }
       }
-      // Tiny flush window, then hard disconnect — do not wait for camera
-      // disconnect (that race re-wakes bonded HERO cameras on Android).
-      await Future<void>.delayed(const Duration(milliseconds: 120));
+      await Future<void>.delayed(const Duration(milliseconds: 350));
       try {
         await sleeping.disconnect();
+      } catch (_) {}
+      try {
+        await sleeping.clearGattCache();
       } catch (_) {}
     }
 
     await _teardownLink();
+    await _disconnectAllBleClients();
+    await _purgeGoProSystemLinks(preferRemoteId: remoteId, removeBond: true);
     _lastSleepAt = DateTime.now();
     _resetSessionLocal();
+  }
+
+  /// Drop any lingering GoPro GATT links Android may still hold (dual-role).
+  Future<void> _purgeGoProSystemLinks({
+    String? preferRemoteId,
+    bool removeBond = false,
+  }) async {
+    final ids = <String>{
+      if (preferRemoteId != null && preferRemoteId.isNotEmpty) preferRemoteId,
+      for (final d in _savedDevices)
+        if (d.remoteId.isNotEmpty) d.remoteId,
+    };
+
+    try {
+      for (final d in FlutterBluePlus.connectedDevices) {
+        final name = d.platformName;
+        if (_looksLikeGoPro(name) || ids.contains(d.remoteId.str)) {
+          ids.add(d.remoteId.str);
+          try {
+            await d.disconnect();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    for (final id in ids) {
+      final device = BluetoothDevice.fromId(id);
+      try {
+        await device.disconnect();
+      } catch (_) {}
+      try {
+        await device.clearGattCache();
+      } catch (_) {}
+      if (removeBond) {
+        try {
+          await device.removeBond(timeout: 8);
+        } catch (e) {
+          debugPrint('removeBond $id: $e');
+        }
+      }
+    }
   }
 
   /// Fresh scan → connect, without starting a recording.
@@ -1402,14 +1464,20 @@ class GoProBleClient extends ChangeNotifier {
 
   /// Drop the GATT link without sleeping the camera — frees the radio for
   /// Insta360 peripheral mode on phones that struggle with dual-role BLE.
+  ///
+  /// Also purges system-level GoPro links (no bond removal) so starting the
+  /// Insta360 GPS-remote advert does not immediately re-wake a GoPro.
   Future<void> yieldRadio() async {
     try {
       await stopScan();
     } catch (_) {}
+    final remoteId = _device?.remoteId.str ?? connectedDevice?.remoteId;
     _sessionRecording = false;
     status = const GoProCameraStatus();
     await _teardownLink(keepState: true);
     connectedDevice = null;
+    await _disconnectAllBleClients();
+    await _purgeGoProSystemLinks(preferRemoteId: remoteId, removeBond: false);
     _setState(GoProConnectionState.disconnected);
   }
 
