@@ -413,7 +413,7 @@ class GoProBleClient extends ChangeNotifier {
       _error = _friendlyError(lastError);
       _setState(GoProConnectionState.error);
       notifyListeners();
-      throw StateError(_error!);
+      throw GoProUserException(_error!);
     } finally {
       _autoConnectInFlight = false;
       notifyListeners();
@@ -578,7 +578,7 @@ class GoProBleClient extends ChangeNotifier {
     _error = _friendlyError(lastError);
     _setState(GoProConnectionState.error);
     notifyListeners();
-    throw StateError(_error!);
+    throw GoProUserException(_error!);
   }
 
   Future<void> _waitScanFullyStopped({bool fastRecord = false}) async {
@@ -1021,7 +1021,7 @@ class GoProBleClient extends ChangeNotifier {
     _error = _friendlyError(lastError);
     _setState(GoProConnectionState.error);
     notifyListeners();
-    throw StateError(_error!);
+    throw GoProUserException(_error!);
   }
 
   /// Low-latency scan; prefers last camera id, otherwise first GoPro seen.
@@ -1364,7 +1364,13 @@ class GoProBleClient extends ChangeNotifier {
 
   static String _friendlyError(Object? e) {
     if (e is GoProCancelledException) return 'İptal edildi';
-    final text = e?.toString() ?? 'Bilinmeyen hata';
+    var text = e?.toString() ?? 'Bilinmeyen hata';
+    if (text.startsWith('Bad state: ')) {
+      text = text.substring('Bad state: '.length);
+    }
+    if (text.startsWith('Exception: ')) {
+      text = text.substring('Exception: '.length);
+    }
     if (text.contains('İptal edildi')) return 'İptal edildi';
     if (text.contains('133') ||
         text.contains('ANDROID_SPECIFIC_ERROR') ||
@@ -1378,11 +1384,24 @@ class GoProBleClient extends ChangeNotifier {
         text.contains('Timed out') ||
         text.contains('zaman aşımı') ||
         text.contains('gönderilemedi') ||
-        text.contains('eşleştirmeyi')) {
+        text.contains('eşleştirme')) {
       return 'Kamera komutu başarısız. GoPro’yu aç, telefonda Bluetooth '
           'eşleştirme isteğini onayla, sonra tekrar KAYIT’a bas.';
     }
     return text;
+  }
+
+  /// Drop the GATT link without sleeping the camera — frees the radio for
+  /// Insta360 peripheral mode on phones that struggle with dual-role BLE.
+  Future<void> yieldRadio() async {
+    try {
+      await stopScan();
+    } catch (_) {}
+    _sessionRecording = false;
+    status = const GoProCameraStatus();
+    await _teardownLink(keepState: true);
+    connectedDevice = null;
+    _setState(GoProConnectionState.disconnected);
   }
 
   bool _isKnownRemoteId(String remoteId) {

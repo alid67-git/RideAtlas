@@ -829,6 +829,12 @@ class Insta360Client extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Free the radio for GoPro (stop advertising / drop peripheral or central).
+  Future<void> yieldRadio() async {
+    await stopScan();
+    await _teardown(keepSaved: true);
+  }
+
   @override
   void dispose() {
     unawaited(stopScan());

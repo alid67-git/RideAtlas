@@ -16,6 +16,15 @@ class GoProCancelledException implements Exception {
   String toString() => 'İptal edildi';
 }
 
+/// User-facing failure — [toString] is the message itself (no "Bad state:" prefix).
+class GoProUserException implements Exception {
+  const GoProUserException(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// Persisted camera the user can select / forget from the devices menu.
 class SavedGoProDevice {
   const SavedGoProDevice({

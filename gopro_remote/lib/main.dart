@@ -159,6 +159,10 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       _goproBusy = true;
       _goproBanner = null;
     });
+    // Insta360 GPS-remote peripheral fights GoPro central on many phones.
+    try {
+      await _insta.yieldRadio();
+    } catch (_) {}
     _gopro.beginOperation();
     try {
       await action();
@@ -170,11 +174,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         return;
       }
       final friendly = _gopro.error;
-      final raw = e.toString();
-      final cleaned = raw.startsWith('Bad state: ')
-          ? raw.substring('Bad state: '.length)
-          : raw;
-      setState(() => _goproBanner = friendly ?? cleaned);
+      setState(() => _goproBanner = _cleanUserMessage(friendly ?? e.toString()));
     } finally {
       if (mounted) setState(() => _goproBusy = false);
     }
@@ -229,6 +229,10 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       _instaBusy = true;
       _instaBanner = null;
     });
+    // Free GoPro GATT so Insta360 can advertise / host the remote.
+    try {
+      await _gopro.yieldRadio();
+    } catch (_) {}
     _insta.beginOperation();
     try {
       await action();
@@ -240,11 +244,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         return;
       }
       final friendly = _insta.error;
-      final raw = e.toString();
-      final cleaned = raw.startsWith('Bad state: ')
-          ? raw.substring('Bad state: '.length)
-          : raw;
-      setState(() => _instaBanner = friendly ?? cleaned);
+      setState(() => _instaBanner = _cleanUserMessage(friendly ?? e.toString()));
     } finally {
       if (mounted) setState(() => _instaBusy = false);
     }
@@ -548,7 +548,6 @@ class _GoProSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final connected = client.isConnected;
     final linking = client.state == GoProConnectionState.scanning ||
         client.state == GoProConnectionState.connecting;
@@ -561,26 +560,13 @@ class _GoProSection extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (busy)
-                  _InlineBanner(
-                    color: cs.secondaryContainer.withValues(alpha: 0.45),
-                    foreground: cs.onSecondaryContainer,
-                    text: banner ?? 'İşlem sürüyor…',
-                    trailing: IconButton(
-                      tooltip: 'İptal',
-                      onPressed: onCancel,
-                      icon: Icon(
-                        Icons.close,
-                        color: cs.onSecondaryContainer,
-                        size: 20,
-                      ),
+                if (busy || banner != null || client.error != null)
+                  _ToneBanner(
+                    busy: busy,
+                    text: _cleanUserMessage(
+                      banner ?? client.error ?? 'İşlem sürüyor…',
                     ),
-                  )
-                else if (banner != null || client.error != null)
-                  _InlineBanner(
-                    color: cs.errorContainer.withValues(alpha: 0.35),
-                    foreground: cs.onErrorContainer,
-                    text: banner ?? client.error!,
+                    onCancel: busy ? onCancel : null,
                   ),
                 _CompactStatus(
                   stateLabel: stateLabel,
@@ -641,7 +627,6 @@ class _Insta360Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final connected = client.isConnected;
     final linking = client.state == Insta360ConnectionState.scanning ||
         client.state == Insta360ConnectionState.advertising ||
@@ -655,26 +640,13 @@ class _Insta360Section extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (busy)
-                  _InlineBanner(
-                    color: cs.secondaryContainer.withValues(alpha: 0.45),
-                    foreground: cs.onSecondaryContainer,
-                    text: banner ?? 'İşlem sürüyor…',
-                    trailing: IconButton(
-                      tooltip: 'İptal',
-                      onPressed: onCancel,
-                      icon: Icon(
-                        Icons.close,
-                        color: cs.onSecondaryContainer,
-                        size: 20,
-                      ),
+                if (busy || banner != null || client.error != null)
+                  _ToneBanner(
+                    busy: busy,
+                    text: _cleanUserMessage(
+                      banner ?? client.error ?? 'İşlem sürüyor…',
                     ),
-                  )
-                else if (banner != null || client.error != null)
-                  _InlineBanner(
-                    color: cs.errorContainer.withValues(alpha: 0.35),
-                    foreground: cs.onErrorContainer,
-                    text: banner ?? client.error!,
+                    onCancel: busy ? onCancel : null,
                   ),
                 _CompactStatus(
                   stateLabel: stateLabel,
@@ -710,32 +682,86 @@ class _Insta360Section extends StatelessWidget {
   }
 }
 
-class _InlineBanner extends StatelessWidget {
-  const _InlineBanner({
-    required this.color,
-    required this.foreground,
+String _cleanUserMessage(String raw) {
+  var text = raw.trim();
+  if (text.startsWith('Bad state: ')) {
+    text = text.substring('Bad state: '.length);
+  }
+  if (text.startsWith('Exception: ')) {
+    text = text.substring('Exception: '.length);
+  }
+  if (text.startsWith('StateError: ')) {
+    text = text.substring('StateError: '.length);
+  }
+  return text;
+}
+
+bool _looksLikeSuccessBanner(String text) {
+  final t = text.toLowerCase();
+  return t.contains('başladı') ||
+      t.contains('bağlandı') ||
+      t.contains('durdu') ||
+      t.contains('uyku') ||
+      t.contains('kapandı') ||
+      t.contains('kapalı') ||
+      t.contains('güncelsin');
+}
+
+class _ToneBanner extends StatelessWidget {
+  const _ToneBanner({
+    required this.busy,
     required this.text,
-    this.trailing,
+    this.onCancel,
   });
 
-  final Color color;
-  final Color foreground;
+  final bool busy;
   final String text;
-  final Widget? trailing;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final success = !busy && _looksLikeSuccessBanner(text);
+    final Color color;
+    final Color foreground;
+    if (busy) {
+      color = cs.secondaryContainer.withValues(alpha: 0.45);
+      foreground = cs.onSecondaryContainer;
+    } else if (success) {
+      color = const Color(0xFF2A9D8F).withValues(alpha: 0.28);
+      foreground = const Color(0xFFB8F2E6);
+    } else {
+      color = cs.errorContainer.withValues(alpha: 0.35);
+      foreground = cs.onErrorContainer;
+    }
+
+    final trailing = onCancel == null
+        ? null
+        : IconButton(
+            tooltip: 'İptal',
+            onPressed: onCancel,
+            icon: Icon(Icons.close, color: foreground, size: 20),
+          );
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: color,
         borderRadius: BorderRadius.circular(10),
         child: Padding(
-          padding: EdgeInsets.fromLTRB(12, trailing == null ? 10 : 2, 4, trailing == null ? 10 : 2),
+          padding: EdgeInsets.fromLTRB(
+            12,
+            trailing == null ? 10 : 2,
+            4,
+            trailing == null ? 10 : 2,
+          ),
           child: Row(
             children: [
               Expanded(
-                child: Text(text, style: TextStyle(color: foreground, fontSize: 13)),
+                child: Text(
+                  text,
+                  style: TextStyle(color: foreground, fontSize: 13),
+                ),
               ),
               ?trailing,
             ],
