@@ -10,10 +10,13 @@ import 'gopro/client.dart';
 import 'gopro/models.dart'
     show GoProCancelledException, GoProConnectionState;
 import 'insta360/client.dart';
+import 'insta360/models.dart'
+    show Insta360CancelledException, Insta360ConnectionState;
 import 'services/app_update_controller.dart';
 import 'services/update_checker.dart';
 import 'widgets/app_update_ui.dart';
 import 'widgets/devices_page.dart';
+import 'widgets/insta_devices_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,7 +63,9 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   late final GoProBleClient _gopro;
   late final Insta360Client _insta;
   bool _goproBusy = false;
+  bool _instaBusy = false;
   String? _goproBanner;
+  String? _instaBanner;
 
   @override
   void initState() {
@@ -91,6 +96,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     if (!mounted) return;
     unawaited(_ensurePermissions());
     await _gopro.ensurePrefsLoaded();
+    await _insta.ensurePrefsLoaded();
     if (!mounted) return;
 
     final updates = context.read<AppUpdateController>();
@@ -110,24 +116,38 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     }
   }
 
-  Future<bool> _ensurePermissions() async {
+  Future<bool> _ensurePermissions({bool forInsta = false}) async {
     final asked = <Permission>[
       Permission.bluetoothScan,
       Permission.bluetoothConnect,
+      Permission.bluetoothAdvertise,
       Permission.locationWhenInUse,
     ];
     final statuses = await asked.request();
     final scanOk = statuses[Permission.bluetoothScan]?.isGranted ?? false;
     final connectOk = statuses[Permission.bluetoothConnect]?.isGranted ?? false;
+    final advertiseOk =
+        statuses[Permission.bluetoothAdvertise]?.isGranted ?? false;
     final locOk = statuses[Permission.locationWhenInUse]?.isGranted ?? false;
-    if (!scanOk || !connectOk) {
-      _goproBanner = 'Bluetooth izinleri gerekli (Scan + Connect).';
+    void setBanner(String msg) {
+      if (forInsta) {
+        _instaBanner = msg;
+      } else {
+        _goproBanner = msg;
+      }
       setState(() {});
+    }
+
+    if (!scanOk || !connectOk) {
+      setBanner('Bluetooth izinleri gerekli (Scan + Connect).');
+      return false;
+    }
+    if (forInsta && !advertiseOk) {
+      setBanner('Bluetooth Advertise izni gerekli (Insta360 kumanda).');
       return false;
     }
     if (!locOk) {
-      _goproBanner = 'Konum izni BLE taraması için gerekli (Android kısıtı).';
-      setState(() {});
+      setBanner('Konum izni BLE taraması için gerekli (Android kısıtı).');
       return false;
     }
     return true;
@@ -203,10 +223,72 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     }
   }
 
+  Future<void> _runInsta(Future<void> Function() action) async {
+    if (_instaBusy) return;
+    setState(() {
+      _instaBusy = true;
+      _instaBanner = null;
+    });
+    _insta.beginOperation();
+    try {
+      await action();
+    } on Insta360CancelledException {
+      if (mounted) setState(() => _instaBanner = 'İptal edildi');
+    } catch (e) {
+      if (e.toString().contains('İptal edildi')) {
+        if (mounted) setState(() => _instaBanner = 'İptal edildi');
+        return;
+      }
+      final friendly = _insta.error;
+      final raw = e.toString();
+      final cleaned = raw.startsWith('Bad state: ')
+          ? raw.substring('Bad state: '.length)
+          : raw;
+      setState(() => _instaBanner = friendly ?? cleaned);
+    } finally {
+      if (mounted) setState(() => _instaBusy = false);
+    }
+  }
+
+  Future<void> _cancelInsta() async {
+    if (!_instaBusy) return;
+    setState(() => _instaBanner = 'İptal ediliyor…');
+    await _insta.cancelOperation();
+  }
+
+  Future<void> _toggleInstaConnectSleep() async {
+    if (!await _ensurePermissions(forInsta: true)) return;
+    final closing = _insta.isConnected || _insta.isSessionRecording;
+    await _runInsta(() async {
+      setState(() {
+        _instaBanner =
+            closing ? 'Kapatılıyor…' : 'Uyandırılıyor / eşleşiliyor…';
+      });
+      await _insta.toggleConnectSleep();
+      if (!mounted) return;
+      setState(() {
+        _instaBanner = closing
+            ? 'Kamera kapandı · bağlantı yok'
+            : (_insta.isConnected
+                ? 'Bağlandı: ${_insta.preferredName ?? 'Insta360'}'
+                : null);
+      });
+    });
+  }
+
   Future<void> _openGoProDevices() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => DevicesPage(client: _gopro),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openInstaDevices() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => InstaDevicesPage(client: _insta),
       ),
     );
     if (mounted) setState(() {});
@@ -223,6 +305,21 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       case GoProConnectionState.connected:
         return 'Bağlı';
       case GoProConnectionState.error:
+        return 'Hata';
+    }
+  }
+
+  String get _instaStateLabel {
+    switch (_insta.state) {
+      case Insta360ConnectionState.disconnected:
+        return 'Bağlı değil';
+      case Insta360ConnectionState.advertising:
+        return 'Bekleniyor…';
+      case Insta360ConnectionState.connecting:
+        return 'Bağlanıyor…';
+      case Insta360ConnectionState.connected:
+        return 'Bağlı';
+      case Insta360ConnectionState.error:
         return 'Hata';
     }
   }
@@ -261,15 +358,20 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                       ],
                     ),
                   ),
-                  if (_goproBusy)
+                  if (_goproBusy || _instaBusy)
                     IconButton(
                       tooltip: 'İptal',
-                      onPressed: _cancelGoPro,
+                      onPressed: () {
+                        if (_goproBusy) _cancelGoPro();
+                        if (_instaBusy) _cancelInsta();
+                      },
                       icon: const Icon(Icons.close),
                     ),
                   IconButton(
                     tooltip: 'Güncelleme kontrol et',
-                    onPressed: _goproBusy ? null : _manualUpdateCheck,
+                    onPressed: (_goproBusy || _instaBusy)
+                        ? null
+                        : _manualUpdateCheck,
                     icon: const Icon(Icons.system_update_alt),
                   ),
                 ],
@@ -323,19 +425,34 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                   Expanded(
                     child: _BrandPanel(
                       title: 'Insta360',
-                      subtitle: 'X4+',
+                      subtitle: 'X4+ GPS Remote',
                       accent: const Color(0xFF4CC9F0),
                       child: _Insta360Section(
                         client: _insta,
-                        onTapSoon: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Insta360 X4+ kumandası yakında eklenecek.',
-                              ),
-                            ),
-                          );
-                        },
+                        busy: _instaBusy,
+                        banner: _instaBanner,
+                        stateLabel: _instaStateLabel,
+                        onCancel: _cancelInsta,
+                        onOpenDevices:
+                            _instaBusy ? null : _openInstaDevices,
+                        onRecord: () => _runInsta(() async {
+                          if (!await _ensurePermissions(forInsta: true)) {
+                            return;
+                          }
+                          final wasRecording = _insta.isSessionRecording;
+                          setState(() {
+                            _instaBanner = wasRecording
+                                ? 'Durduruluyor, kamera kapatılıyor…'
+                                : 'Uyandırılıyor → kayıt…';
+                          });
+                          await _insta.toggleRecording();
+                          setState(() {
+                            _instaBanner = wasRecording
+                                ? 'Kayıt durdu · kamera kapalı'
+                                : 'Kayıt başladı';
+                          });
+                        }),
+                        onConnectSleep: _toggleInstaConnectSleep,
                       ),
                     ),
                   ),
@@ -501,14 +618,31 @@ class _GoProSection extends StatelessWidget {
 class _Insta360Section extends StatelessWidget {
   const _Insta360Section({
     required this.client,
-    required this.onTapSoon,
+    required this.busy,
+    required this.banner,
+    required this.stateLabel,
+    required this.onCancel,
+    required this.onOpenDevices,
+    required this.onRecord,
+    required this.onConnectSleep,
   });
 
   final Insta360Client client;
-  final VoidCallback onTapSoon;
+  final bool busy;
+  final String? banner;
+  final String stateLabel;
+  final VoidCallback onCancel;
+  final VoidCallback? onOpenDevices;
+  final VoidCallback onRecord;
+  final VoidCallback onConnectSleep;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final connected = client.isConnected;
+    final linking = client.state == Insta360ConnectionState.advertising ||
+        client.state == Insta360ConnectionState.connecting;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
@@ -517,38 +651,51 @@ class _Insta360Section extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (busy)
+                  _InlineBanner(
+                    color: cs.secondaryContainer.withValues(alpha: 0.45),
+                    foreground: cs.onSecondaryContainer,
+                    text: banner ?? 'İşlem sürüyor…',
+                    trailing: IconButton(
+                      tooltip: 'İptal',
+                      onPressed: onCancel,
+                      icon: Icon(
+                        Icons.close,
+                        color: cs.onSecondaryContainer,
+                        size: 20,
+                      ),
+                    ),
+                  )
+                else if (banner != null || client.error != null)
+                  _InlineBanner(
+                    color: cs.errorContainer.withValues(alpha: 0.35),
+                    foreground: cs.onErrorContainer,
+                    text: banner ?? client.error!,
+                  ),
                 _CompactStatus(
-                  stateLabel: 'Yakında',
-                  deviceName: 'Insta360 seçilmedi',
-                  durationSec: null,
-                  batteryPercent: null,
-                  sessionRecording: false,
+                  stateLabel: stateLabel,
+                  deviceName: client.preferredName,
+                  durationSec: client.status.encodingDurationSec,
+                  batteryPercent: client.status.batteryPercent,
+                  sessionRecording: client.isSessionRecording,
                   accent: const Color(0xFF4CC9F0),
-                  onDeviceTap: onTapSoon,
+                  onDeviceTap: onOpenDevices,
                 ),
                 const SizedBox(height: 14),
                 _ControlPad(
                   accent: const Color(0xFF4CC9F0),
-                  recording: false,
-                  busy: false,
-                  enabled: false,
-                  recordLabel: 'KAYIT',
-                  onRecord: onTapSoon,
-                  powerBusy: false,
-                  powerConnected: false,
-                  powerLabel: 'Bağlan',
-                  onPower: onTapSoon,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'X4+ BLE/Wi‑Fi kumandası sonraki sürümde.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.45),
-                      ),
+                  recording: client.isSessionRecording,
+                  busy: busy,
+                  enabled: true,
+                  recordLabel:
+                      client.isSessionRecording ? 'DURDUR + KAPAT' : 'KAYIT',
+                  onRecord: onRecord,
+                  powerBusy: linking,
+                  powerConnected: connected,
+                  powerLabel: linking
+                      ? 'Bekleniyor…'
+                      : (connected ? 'Kapat' : 'Bağlan'),
+                  onPower: busy ? null : onConnectSleep,
                 ),
               ],
             ),
