@@ -730,6 +730,14 @@ class GoProBleClient extends ChangeNotifier {
       );
     }
 
+    // After Insta360 peripheral mode, stale cache/bonds often produce 133.
+    try {
+      await device.clearGattCache();
+    } catch (_) {}
+    await Future<void>.delayed(
+      Duration(milliseconds: attempt > 1 ? 200 : 80),
+    );
+
     await device.connect(
       timeout: Duration(seconds: fastRecord ? 7 : 15),
       autoConnect: false,
@@ -1446,10 +1454,9 @@ class GoProBleClient extends ChangeNotifier {
     if (text.contains('133') ||
         text.contains('ANDROID_SPECIFIC_ERROR') ||
         text.contains('GATT_ERROR')) {
-      return 'Bluetooth bağlantısı kurulamadı (Android 133). '
-          'GoPro’da Preferences → Connections → Devices ekranından çıkıp '
-          'ana ekrana dön. Quik kapalı olsun. Telefonda Bluetooth kapat-aç, '
-          'kamerayı kapat-aç, X ile iptal edip tekrar KAYIT.';
+      return 'Bluetooth 133 (radyo meşgul / kirli durum). '
+          'Insta eşleştirmesini iptal et, 2 sn bekle, tekrar Bağlan. '
+          'Olmazsa telefonda Bluetooth kapat-aç; Quik kapalı olsun.';
     }
     if (text.contains('writeCharacteristic') ||
         text.contains('Timed out') ||

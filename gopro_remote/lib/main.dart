@@ -178,10 +178,22 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       _goproBusy = true;
       _goproBanner = null;
     });
-    // Insta360 GPS-remote peripheral fights GoPro central on many phones.
+    // Insta pairing keeps re-advertising as GPS Remote; kill it first or
+    // GoPro central connects get Android GATT 133 on dual-role phones.
+    if (_instaBusy) {
+      setState(() {
+        _instaBanner = 'GoPro için Insta iptal…';
+        _instaBusy = false;
+      });
+      try {
+        await _insta.cancelOperation();
+      } catch (_) {}
+    }
     try {
       await _insta.yieldRadio();
     } catch (_) {}
+    // Peripheral → central role switch needs a short stack settle.
+    await Future<void>.delayed(const Duration(milliseconds: 900));
     _gopro.beginOperation();
     try {
       await action();

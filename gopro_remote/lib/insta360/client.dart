@@ -1192,8 +1192,23 @@ class Insta360Client extends ChangeNotifier {
 
   /// Free the radio for GoPro (stop advertising / drop peripheral or central).
   Future<void> yieldRadio() async {
-    await stopScan();
+    _cancelRequested = true;
+    _sessionEpoch++;
+    _stopGpsKeepalive();
+    _setHint(null);
+    final waiting = _connectedCompleter;
+    if (waiting != null && !waiting.isCompleted) {
+      waiting.completeError(const Insta360CancelledException());
+    }
+    try {
+      await stopScan();
+    } catch (_) {}
     await _teardown(keepSaved: true);
+    // Second stop — Android often keeps advertising one more cycle.
+    try {
+      await BlePeripheral.stopAdvertising();
+    } catch (_) {}
+    await Future<void>.delayed(const Duration(milliseconds: 450));
   }
 
   @override
