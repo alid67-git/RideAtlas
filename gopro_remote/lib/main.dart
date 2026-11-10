@@ -79,6 +79,11 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
 
   void _onChange() {
     if (!mounted) return;
+    // Live pairing / power-off instructions while an Insta op runs.
+    final hint = _insta.actionHint;
+    if (_instaBusy && hint != null && hint.isNotEmpty) {
+      _instaBanner = hint;
+    }
     // Drop banners that contradict live link state.
     final b = _instaBanner?.toLowerCase();
     if (b != null) {
@@ -273,6 +278,23 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   Future<void> _toggleInstaConnectSleep() async {
     if (!await _ensurePermissions(forInsta: true)) return;
     final closing = _insta.isConnected || _insta.isSessionRecording;
+    // First-time: force GPS Remote pairing so KAPAT can work afterwards.
+    if (!closing && !_insta.gpsRemotePaired) {
+      await _runInsta(() async {
+        setState(() {
+          _instaBanner =
+              'Eşleştirme: X4 → Ayarlar → Bluetooth → GPS Remote → bu telefon';
+        });
+        await _insta.pairGpsRemote();
+        if (!mounted) return;
+        setState(() {
+          _instaBanner = _insta.isConnected
+              ? 'GPS Remote eşleşti · Bağlı'
+              : 'GPS Remote eşleşti';
+        });
+      });
+      return;
+    }
     await _runInsta(() async {
       setState(() {
         _instaBanner = closing
@@ -464,7 +486,9 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                           final wasRecording = _insta.isSessionRecording;
                           setState(() {
                             _instaBanner = wasRecording
-                                ? 'Durduruluyor → GPS Remote ile kapatılıyor…'
+                                ? (_insta.canPowerOff
+                                    ? 'Durduruluyor → kapatılıyor…'
+                                    : 'Durduruluyor. Kapatmak için X4’te GPS Remote seç…')
                                 : 'Bağlanıyor / uyandırılıyor → kayıt…';
                           });
                           await _insta.toggleRecording();
@@ -472,7 +496,9 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                           setState(() {
                             _instaBanner = wasRecording
                                 ? 'Kayıt durdu · kamera kapandı'
-                                : 'Kayıt başladı';
+                                : (_insta.gpsRemotePaired
+                                    ? 'Kayıt başladı'
+                                    : 'Kayıt başladı · kapatmak için bir kez GPS Remote eşleştir');
                           });
                         }),
                         onConnectSleep: _toggleInstaConnectSleep,
@@ -684,14 +710,19 @@ class _Insta360Section extends StatelessWidget {
                   recording: client.isSessionRecording,
                   busy: busy,
                   enabled: true,
-                  recordLabel:
-                      client.isSessionRecording ? 'DURDUR + KAPAT' : 'KAYIT',
+                  recordLabel: client.isSessionRecording
+                      ? (client.canPowerOff ? 'DURDUR + KAPAT' : 'DURDUR')
+                      : 'KAYIT',
                   onRecord: onRecord,
                   powerBusy: linking,
                   powerConnected: connected,
                   powerLabel: linking
                       ? 'Bekleniyor…'
-                      : (connected ? 'Kapat' : 'Bağlan'),
+                      : (connected
+                          ? 'Kapat'
+                          : (client.gpsRemotePaired
+                              ? 'Bağlan'
+                              : 'Bağlan / Eşleştir')),
                   onPower: busy ? null : onConnectSleep,
                 ),
               ],

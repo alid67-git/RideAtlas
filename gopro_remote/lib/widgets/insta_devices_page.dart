@@ -112,9 +112,74 @@ class _InstaDevicesPageState extends State<InstaDevicesPage> {
                   color: cs.onSurface.withValues(alpha: 0.65),
                 ),
           ),
+          const SizedBox(height: 12),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFF132028),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFF4CC9F0).withValues(alpha: 0.35),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    _client.gpsRemotePaired
+                        ? 'GPS Remote eşleşmiş · kapatma hazır'
+                        : 'Kapatma için bir kez GPS Remote eşleştir',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF4CC9F0),
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'X4 açıkken: Ayarlar → Bluetooth → GPS Remote / Kumanda → '
+                    'listede “Insta360 GPS Remote” seç. Sonra bu telefondan '
+                    'DURDUR + KAPAT çalışır.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.75),
+                        ),
+                  ),
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => _run(() async {
+                              setState(() {
+                                _message =
+                                    'Eşleştirme reklamı açık — kamerada GPS Remote seç…';
+                              });
+                              await _client.pairGpsRemote();
+                              setState(() {
+                                _message =
+                                    'Eşleşti. Artık DURDUR + KAPAT kamerayı kapatır.';
+                              });
+                            }),
+                    icon: const Icon(Icons.link),
+                    label: Text(
+                      _client.gpsRemotePaired
+                          ? 'Tekrar eşleştir'
+                          : 'GPS Remote eşleştir (75 sn)',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           if (_message != null) ...[
             const SizedBox(height: 10),
-            Text(_message!, style: TextStyle(color: cs.error)),
+            Text(
+              _message!,
+              style: TextStyle(
+                color: _message!.toLowerCase().contains('eşleşti')
+                    ? const Color(0xFF4CC9F0)
+                    : cs.error,
+              ),
+            ),
           ],
           const SizedBox(height: 16),
           Text(
