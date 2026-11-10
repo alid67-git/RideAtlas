@@ -16,4 +16,9 @@ class InstaUuids {
 
   /// Apple company ID used by the ORBIT wake “iBeacon” envelope.
   static const appleCompanyId = 0x004C;
+
+  /// Architecture B — phone is central, camera hosts GATT (official app path).
+  static const serviceBe80 = '0000be80-0000-1000-8000-00805f9b34fb';
+  static const charBe81 = '0000be81-0000-1000-8000-00805f9b34fb'; // app → camera
+  static const charBe82 = '0000be82-0000-1000-8000-00805f9b34fb'; // camera → app
 }

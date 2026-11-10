@@ -1,5 +1,6 @@
 enum Insta360ConnectionState {
   disconnected,
+  scanning,
   advertising,
   connecting,
   connected,

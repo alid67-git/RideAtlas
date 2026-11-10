@@ -189,3 +189,31 @@ class InstaParsedCameraWrite {
   final String? batteryHint;
   final int? rawType;
 }
+
+/// Architecture B command codes (libOne MessageCode).
+class InstaDirectCode {
+  static const startCapture = 0x04;
+  static const stopCapture = 0x05;
+  static const powerOff = 0x37;
+}
+
+/// Header16 frame for X3/X4/X5 (Architecture B, written to `be81`).
+Uint8List buildHeader16Command({
+  required int command,
+  required int sequence,
+  Uint8List? payload,
+}) {
+  final body = payload ?? Uint8List(0);
+  final out = Uint8List(16 + body.length);
+  out[0] = body.length & 0xff;
+  out[1] = (body.length >> 8) & 0xff;
+  out[4] = 0x04; // message mode
+  out[7] = command & 0xff;
+  out[9] = 0x02; // protobuf content type
+  out[10] = sequence.clamp(1, 254);
+  out[13] = 0x80; // last fragment
+  if (body.isNotEmpty) {
+    out.setRange(16, 16 + body.length, body);
+  }
+  return out;
+}

@@ -313,6 +313,8 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     switch (_insta.state) {
       case Insta360ConnectionState.disconnected:
         return 'Bağlı değil';
+      case Insta360ConnectionState.scanning:
+        return 'Taranıyor…';
       case Insta360ConnectionState.advertising:
         return 'Bekleniyor…';
       case Insta360ConnectionState.connecting:
@@ -640,7 +642,8 @@ class _Insta360Section extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final connected = client.isConnected;
-    final linking = client.state == Insta360ConnectionState.advertising ||
+    final linking = client.state == Insta360ConnectionState.scanning ||
+        client.state == Insta360ConnectionState.advertising ||
         client.state == Insta360ConnectionState.connecting;
 
     return LayoutBuilder(
