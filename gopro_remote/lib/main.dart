@@ -275,8 +275,9 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     final closing = _insta.isConnected || _insta.isSessionRecording;
     await _runInsta(() async {
       setState(() {
-        _instaBanner =
-            closing ? 'Kapatılıyor…' : 'Bağlanıyor (kamera açık olmalı)…';
+        _instaBanner = closing
+            ? 'GPS Remote ile kapatılıyor…'
+            : 'Bağlanıyor / ORBIT uyandırma…';
       });
       await _insta.toggleConnectSleep();
       if (!mounted) return;
@@ -463,13 +464,14 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                           final wasRecording = _insta.isSessionRecording;
                           setState(() {
                             _instaBanner = wasRecording
-                                ? 'Durduruluyor, kamera kapatılıyor…'
-                                : 'Uyandırılıyor → kayıt…';
+                                ? 'Durduruluyor → GPS Remote ile kapatılıyor…'
+                                : 'Bağlanıyor / uyandırılıyor → kayıt…';
                           });
                           await _insta.toggleRecording();
+                          if (!mounted) return;
                           setState(() {
                             _instaBanner = wasRecording
-                                ? 'Kayıt durdu · kamera kapalı'
+                                ? 'Kayıt durdu · kamera kapandı'
                                 : 'Kayıt başladı';
                           });
                         }),

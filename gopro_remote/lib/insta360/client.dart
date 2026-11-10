@@ -578,7 +578,7 @@ class Insta360Client extends ChangeNotifier {
   }
 
   Future<void> _sendPeripheralPowerOffHold({
-    Duration duration = const Duration(milliseconds: 2000),
+    Duration duration = const Duration(milliseconds: 3000),
   }) async {
     final end = DateTime.now().add(duration);
     while (DateTime.now().isBefore(end)) {
@@ -602,13 +602,98 @@ class Insta360Client extends ChangeNotifier {
     }
   }
 
-  Future<void> _connectCentral(SavedInsta360Device selected) async {
-    _setState(Insta360ConnectionState.scanning);
-    discovered.clear();
-    notifyListeners();
+  String _errText(Object e) {
+    var s = e.toString().trim();
+    if (s.startsWith('Bad state: ')) s = s.substring('Bad state: '.length);
+    if (s.startsWith('StateError: ')) s = s.substring('StateError: '.length);
+    if (s.startsWith('Exception: ')) s = s.substring('Exception: '.length);
+    return s;
+  }
 
-    // Always scan for a live advert — stale remoteId connects often look
-    // "Bağlı" in the phone UI but have no be80 session.
+  Future<void> _dropCentralLink() async {
+    await _be82Sub?.cancel();
+    _be82Sub = null;
+    await _centralConnSub?.cancel();
+    _centralConnSub = null;
+    try {
+      await _centralDevice?.disconnect();
+    } catch (_) {}
+    _centralDevice = null;
+    _be81 = null;
+    if (_mode == _InstaLinkMode.central) {
+      _mode = _InstaLinkMode.none;
+    }
+  }
+
+  /// X4 has no reliable be81 power-off; shut down via GPS-remote power-hold.
+  Future<void> _powerOffViaGpsRemote(SavedInsta360Device selected) async {
+    await _dropCentralLink();
+    await stopScan();
+    try {
+      await BlePeripheral.stopAdvertising();
+    } catch (_) {}
+
+    await _ensureGattServer();
+    _ensureNotCancelled();
+    _connectedCompleter = Completer<void>();
+    _mode = _InstaLinkMode.peripheral;
+    _setState(Insta360ConnectionState.advertising);
+    connectedName = selected.name;
+
+    // Present as the GPS remote so a paired X4 reconnects for power-hold.
+    final manuf = ManufacturerData(
+      manufacturerId: InstaUuids.appleCompanyId,
+      data: buildOrbitWakeManufacturerData(selected.serial),
+    );
+    try {
+      await BlePeripheral.startAdvertising(
+        services: [InstaUuids.serviceCe80],
+        localName: 'Insta360 GPS Remote',
+        manufacturerData: manuf,
+      );
+    } catch (_) {
+      await _startWakeAdvertising(selected.serial);
+    }
+
+    try {
+      await _connectedCompleter!.future.timeout(const Duration(seconds: 16));
+    } on TimeoutException {
+      await _startDiscoverableAdvertising();
+      await _connectedCompleter!.future.timeout(
+        const Duration(seconds: 12),
+        onTimeout: () {
+          throw StateError(
+            'GPS Remote bağlantısı yok — X4 kapatılamadı. '
+            'Kamerada bir kez GPS Remote eşleştir (${selected.serial}), '
+            'veya elle kapat.',
+          );
+        },
+      );
+    }
+
+    _ensureNotCancelled();
+    _startGpsKeepalive();
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    await _sendPeripheralPowerOffHold();
+  }
+
+  Future<void> _powerOffBestEffort(SavedInsta360Device selected) async {
+    if (_mode == _InstaLinkMode.peripheral && isConnected) {
+      await _sendPeripheralPowerOffHold();
+      return;
+    }
+    if (_mode == _InstaLinkMode.central && isConnected) {
+      // 0x37 is not reliable on X4 — always finish via GPS Remote hold.
+      await _powerOffViaGpsRemote(selected);
+      return;
+    }
+    throw StateError('Kapatmak için önce Bağlan.');
+  }
+
+  Future<BluetoothDevice?> _scanForCamera(
+    SavedInsta360Device selected, {
+    required Duration timeout,
+  }) async {
     await stopScan();
     final completer = Completer<BluetoothDevice>();
     await _scanSub?.cancel();
@@ -630,21 +715,22 @@ class Insta360Client extends ChangeNotifier {
       }
     });
     await FlutterBluePlus.startScan(
-      timeout: const Duration(seconds: 12),
+      timeout: timeout,
       androidUsesFineLocation: true,
     );
-    late final BluetoothDevice target;
     try {
-      target = await completer.future.timeout(const Duration(seconds: 12));
+      return await completer.future.timeout(timeout);
     } on TimeoutException {
-      throw StateError(
-        'Kamera BLE’de görünmüyor. X4’ü açıp Bluetooth’u açık tut, '
-        'Insta uygulamasını kapat, sonra Bağlan’a bas.',
-      );
+      return null;
     } finally {
       await stopScan();
     }
+  }
 
+  Future<void> _finishCentralSession(
+    BluetoothDevice target,
+    SavedInsta360Device selected,
+  ) async {
     _ensureNotCancelled();
     _setState(Insta360ConnectionState.connecting);
     connectedName = selected.name;
@@ -718,6 +804,55 @@ class Insta360Client extends ChangeNotifier {
     _setState(Insta360ConnectionState.connected);
   }
 
+  /// Awake camera: quick scan. Sleeping: ORBIT wake advert + scan together.
+  Future<void> _connectCentral(SavedInsta360Device selected) async {
+    _setState(Insta360ConnectionState.scanning);
+    discovered.clear();
+    notifyListeners();
+
+    var target = await _scanForCamera(
+      selected,
+      timeout: const Duration(seconds: 4),
+    );
+
+    if (target == null) {
+      _ensureNotCancelled();
+      _setState(Insta360ConnectionState.advertising);
+      notifyListeners();
+      // Sleeping X4 scans for ORBIT; keep beaconing while we listen for be80.
+      try {
+        await _ensureGattServer();
+      } catch (_) {}
+      await _startWakeAdvertising(selected.serial);
+
+      final wakeUntil = DateTime.now().add(const Duration(seconds: 22));
+      while (target == null && DateTime.now().isBefore(wakeUntil)) {
+        _ensureNotCancelled();
+        try {
+          await _startWakeAdvertising(selected.serial);
+        } catch (_) {}
+        target = await _scanForCamera(
+          selected,
+          timeout: const Duration(seconds: 5),
+        );
+      }
+
+      try {
+        await BlePeripheral.stopAdvertising();
+      } catch (_) {}
+    }
+
+    if (target == null) {
+      throw StateError(
+        'Kamera BLE’de görünmüyor. X4 uyku/kapalı olabilir. '
+        'Bluetooth Wakeup açıkken Bağlan tekrar dene; tamamen kapalıysa elle aç, '
+        'Insta uygulamasını kapat.',
+      );
+    }
+
+    await _finishCentralSession(target, selected);
+  }
+
   Future<void> _connectPeripheral(SavedInsta360Device selected) async {
     await _ensureGattServer();
     _ensureNotCancelled();
@@ -727,24 +862,36 @@ class Insta360Client extends ChangeNotifier {
     _connectedCompleter = Completer<void>();
     _mode = _InstaLinkMode.peripheral;
 
-    await _startWakeAdvertising(selected.serial);
+    final manuf = ManufacturerData(
+      manufacturerId: InstaUuids.appleCompanyId,
+      data: buildOrbitWakeManufacturerData(selected.serial),
+    );
+    try {
+      await BlePeripheral.startAdvertising(
+        services: [InstaUuids.serviceCe80],
+        localName: 'Insta360 GPS Remote',
+        manufacturerData: manuf,
+      );
+    } catch (_) {
+      await _startWakeAdvertising(selected.serial);
+    }
 
-    unawaited(Future<void>.delayed(const Duration(seconds: 3), () async {
+    unawaited(Future<void>.delayed(const Duration(seconds: 4), () async {
       if (_cancelRequested || isConnected) return;
       try {
         await _startDiscoverableAdvertising();
-        await Future<void>.delayed(const Duration(seconds: 2));
+        await Future<void>.delayed(const Duration(seconds: 3));
         if (_cancelRequested || isConnected) return;
         await _startWakeAdvertising(selected.serial);
       } catch (_) {}
     }));
 
     await _connectedCompleter!.future.timeout(
-      const Duration(seconds: 25),
+      const Duration(seconds: 28),
       onTimeout: () {
         throw StateError(
-          'Kamera bağlanmadı. Kamerayı açıp GPS Remote eşleştirmesini kontrol et, '
-          'veya seri numarasını doğrula (${selected.serial}).',
+          'GPS Remote bağlanmadı (${selected.serial}). '
+          'X4’te GPS Remote eşleştirmesini kontrol et.',
         );
       },
     );
@@ -759,19 +906,25 @@ class Insta360Client extends ChangeNotifier {
     _error = null;
 
     if (isConnected || _sessionRecording) {
+      final selected = selectedDevice;
       _setState(Insta360ConnectionState.connecting);
+      Object? powerError;
       try {
-        if (_mode == _InstaLinkMode.peripheral && isConnected) {
+        if (selected != null) {
+          await _powerOffBestEffort(selected);
+        } else if (_mode == _InstaLinkMode.peripheral && isConnected) {
           await _sendPeripheralPowerOffHold();
-        } else if (_mode == _InstaLinkMode.central && isConnected) {
-          await _writeDirect(InstaDirectCode.powerOff);
         }
       } catch (e) {
-        _error = e.toString();
+        powerError = e;
+        _error = _errText(e);
       }
       _sessionRecording = false;
       status = const Insta360CameraStatus();
       await _teardown(keepSaved: true);
+      if (powerError != null) {
+        throw StateError(_errText(powerError));
+      }
       return;
     }
 
@@ -785,7 +938,7 @@ class Insta360Client extends ChangeNotifier {
 
     await stopScan();
 
-    // Prefer direct be80 (works for awake X4). Wake-via-GPS-remote is fallback.
+    // Prefer direct be80 (works for awake X4; ORBIT wake if sleeping).
     Object? centralError;
     try {
       await _connectCentral(selected);
@@ -802,8 +955,8 @@ class Insta360Client extends ChangeNotifier {
       await _teardown(keepSaved: true);
       throw StateError(
         'Bağlantı başarısız.\n'
-        'Doğrudan (be80): $centralError\n'
-        'GPS Remote: $e',
+        'Doğrudan (be80): ${_errText(centralError)}\n'
+        'GPS Remote: ${_errText(e)}',
       );
     }
   }
@@ -821,9 +974,11 @@ class Insta360Client extends ChangeNotifier {
       throw StateError('Insta360 bağlı değil');
     }
 
+    final selected = selectedDevice;
     final wasRecording = isSessionRecording;
+    final modeAtStart = _mode;
 
-    if (_mode == _InstaLinkMode.peripheral) {
+    if (modeAtStart == _InstaLinkMode.peripheral) {
       await _sendPeripheralShutter();
     } else {
       await _writeDirect(
@@ -838,17 +993,30 @@ class Insta360Client extends ChangeNotifier {
     );
     notifyListeners();
 
-    if (wasRecording) {
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-      _ensureNotCancelled();
-      try {
-        if (_mode == _InstaLinkMode.peripheral) {
-          await _sendPeripheralPowerOffHold();
-        } else if (_mode == _InstaLinkMode.central) {
-          await _writeDirect(InstaDirectCode.powerOff);
-        }
-      } catch (_) {}
-      await _teardown(keepSaved: true);
+    if (!wasRecording) return;
+
+    // Stop then power-off (GPS Remote hold — be81 cannot shut X4 down).
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    _ensureNotCancelled();
+    Object? powerError;
+    try {
+      if (selected != null) {
+        await _powerOffBestEffort(selected);
+      } else if (modeAtStart == _InstaLinkMode.peripheral) {
+        await _sendPeripheralPowerOffHold();
+      } else {
+        throw StateError(
+          'Kayıt durdu ama kapatılamadı (kayıtlı kamera yok).',
+        );
+      }
+    } catch (e) {
+      powerError = e;
+    }
+    await _teardown(keepSaved: true);
+    if (powerError != null) {
+      throw StateError(
+        'Kayıt durdu ama kapatılamadı. ${_errText(powerError)}',
+      );
     }
   }
 

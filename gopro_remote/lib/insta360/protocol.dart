@@ -194,6 +194,7 @@ class InstaParsedCameraWrite {
 class InstaDirectCode {
   static const startCapture = 0x04;
   static const stopCapture = 0x05;
+  /// Not reliable on X4 — power-off must use GPS-remote ce82 hold.
   static const powerOff = 0x37;
 }
 
