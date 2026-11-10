@@ -66,6 +66,10 @@ class GoProBleClient extends ChangeNotifier {
   /// connect, otherwise Android frequently returns status 133.
   DateTime? _lastSleepAt;
 
+  /// Bumped on sleep / cancel / teardown so deferred BLE writes cannot run
+  /// after the link is intentionally closed (those writes re-wake the camera).
+  int _sessionEpoch = 0;
+
   /// User-facing long operations (KAYIT / bağlan) can be aborted via [cancelOperation].
   bool _cancelRequested = false;
   bool get isCancelRequested => _cancelRequested;
@@ -80,6 +84,7 @@ class GoProBleClient extends ChangeNotifier {
   /// Abort scan/connect/wake in progress and drop any half-open GATT link.
   Future<void> cancelOperation() async {
     _cancelRequested = true;
+    _sessionEpoch++;
     _error = null;
     notifyListeners();
     try {
@@ -323,9 +328,21 @@ class GoProBleClient extends ChangeNotifier {
   }
 
   /// Put camera to sleep (if linked) and clear local BLE session — no recording.
+  ///
+  /// Critical: after the sleep TLV we **force-disconnect immediately**. Waiting
+  /// for the camera to drop the link first lets Android's bonded reconnect
+  /// poke the GoPro and wake it again (screen opens with no recording).
   Future<void> sleepAndDisconnect() async {
     _error = null;
     _ensureNotCancelled();
+
+    // Invalidate any unawaited post-connect init writes first.
+    _sessionEpoch++;
+    await _connSub?.cancel();
+    _connSub = null;
+    try {
+      await stopScan();
+    } catch (_) {}
 
     if (isSessionRecording && _commandReq != null) {
       try {
@@ -338,25 +355,33 @@ class GoProBleClient extends ChangeNotifier {
     }
 
     final sleeping = _device;
-    if (sleeping != null && _commandReq != null) {
+    final cmd = _commandReq;
+
+    // Drop characteristic refs so deferred init cannot write after sleep.
+    _commandReq = null;
+    _queryReq = null;
+    _wifiSsid = null;
+    _wifiPassword = null;
+
+    if (sleeping != null && cmd != null) {
       try {
-        await sleepCamera();
+        await _bleWrite(
+          cmd,
+          GoProProtocol.sleep(),
+          preferWithoutResponse: true,
+          timeoutSec: 2,
+        );
       } catch (e) {
         debugPrint('sleepAndDisconnect sleep: $e');
       }
+      // Tiny flush window, then hard disconnect — do not wait for camera
+      // disconnect (that race re-wakes bonded HERO cameras on Android).
+      await Future<void>.delayed(const Duration(milliseconds: 120));
       try {
-        await sleeping.connectionState
-            .firstWhere((s) => s == BluetoothConnectionState.disconnected)
-            .timeout(const Duration(seconds: 3));
-      } catch (_) {
-        if (_cancelRequested) throw const GoProCancelledException();
-        try {
-          await sleeping.disconnect();
-        } catch (_) {}
-      }
+        await sleeping.disconnect();
+      } catch (_) {}
     }
 
-    await _delayCancellable(const Duration(milliseconds: 300));
     await _teardownLink();
     _lastSleepAt = DateTime.now();
     _resetSessionLocal();
@@ -834,10 +859,15 @@ class GoProBleClient extends ChangeNotifier {
   }
 
   Future<void> _finishInitAfterRecordReady(BluetoothDevice device) async {
+    final epoch = _sessionEpoch;
     try {
+      if (epoch != _sessionEpoch || _device != device) return;
       await _enableNotifications(device, minimal: true);
+      if (epoch != _sessionEpoch || _device != device) return;
       await _writeCommand(GoProProtocol.setThirdPartyClientInfo(), wait: false);
+      if (epoch != _sessionEpoch || _device != device) return;
       await _writeQuery(GoProProtocol.registerAllSettings(), wait: false);
+      if (epoch != _sessionEpoch || _device != device) return;
       await _writeQuery(GoProProtocol.registerAllStatuses(), wait: false);
     } catch (e) {
       debugPrint('deferred init: $e');
@@ -930,32 +960,9 @@ class GoProBleClient extends ChangeNotifier {
       await _waitUntilNotEncoding();
       _ensureNotCancelled();
 
-      // Sleep ONLY — power-down after the first take was preventing reliable
-      // BLE wake (ads/bond OK once, then Android 133 on the next KAYIT).
-      final sleeping = _device;
-      try {
-        await sleepCamera();
-      } catch (e) {
-        debugPrint('Sleep after stop: $e');
-      }
-
-      if (sleeping != null) {
-        try {
-          await sleeping.connectionState
-              .firstWhere((s) => s == BluetoothConnectionState.disconnected)
-              .timeout(const Duration(seconds: 3));
-        } catch (_) {
-          if (_cancelRequested) throw const GoProCancelledException();
-          try {
-            await sleeping.disconnect();
-          } catch (_) {}
-        }
-      }
-
-      await _delayCancellable(const Duration(milliseconds: 400));
-      await _teardownLink();
-      _lastSleepAt = DateTime.now();
-      _resetSessionLocal();
+      // Shared sleep path (immediate disconnect; kills deferred init).
+      _sessionRecording = false;
+      await sleepAndDisconnect();
       return;
     }
 
@@ -1333,6 +1340,8 @@ class GoProBleClient extends ChangeNotifier {
   }
 
   Future<void> _teardownLink({bool keepState = false}) async {
+    // Any in-flight deferred init must observe this and stop writing.
+    _sessionEpoch++;
     for (final sub in _notifySubs) {
       await sub.cancel();
     }
