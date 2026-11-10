@@ -594,7 +594,8 @@ class _GoProSection extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 _ControlPad(
-                  accent: const Color(0xFFE85D04),
+                  // Bağlan/Uyut — same blue as Insta360 power control.
+                  accent: const Color(0xFF4CC9F0),
                   recording: client.isSessionRecording,
                   busy: busy,
                   enabled: true,
