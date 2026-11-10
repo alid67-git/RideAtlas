@@ -16,10 +16,9 @@ enum _InstaLinkMode { none, peripheral, central }
 
 /// Insta360 remote control.
 ///
-/// Prefers GPS-Remote emulation (phone = BLE peripheral, Architecture A).
-/// If the phone cannot host a peripheral (or wake advert fails), falls back to
-/// Architecture B: phone connects as central to the camera's `be80` service
-/// (camera must already be awake).
+/// Prefers Architecture B (phone = central → camera `be80`) when the camera is
+/// already awake — this is the reliable X4 shutter path. Falls back to
+/// GPS-Remote emulation (phone = peripheral) to wake a sleeping camera.
 class Insta360Client extends ChangeNotifier {
   Insta360ConnectionState _state = Insta360ConnectionState.disconnected;
   Insta360ConnectionState get state => _state;
@@ -78,6 +77,8 @@ class Insta360Client extends ChangeNotifier {
   bool get isCancelRequested => _cancelRequested;
 
   int _buttonSeq = 0;
+  int _sessionEpoch = 0;
+  Timer? _gpsKeepalive;
   Completer<void>? _serviceAddCompleter;
   Completer<void>? _connectedCompleter;
   StreamSubscription<List<ScanResult>>? _scanSub;
@@ -88,6 +89,7 @@ class Insta360Client extends ChangeNotifier {
 
   Future<void> cancelOperation() async {
     _cancelRequested = true;
+    _sessionEpoch++;
     _error = null;
     notifyListeners();
     try {
@@ -310,19 +312,28 @@ class Insta360Client extends ChangeNotifier {
 
     BlePeripheral.setConnectionStateChangeCallback((deviceId, connected) {
       if (connected) {
+        // Ignore stale connects after cancel/teardown or while on central path.
+        if (_cancelRequested ||
+            (_state != Insta360ConnectionState.advertising &&
+                _state != Insta360ConnectionState.connecting &&
+                _mode != _InstaLinkMode.peripheral)) {
+          return;
+        }
         _peripheralDeviceId = deviceId;
         _mode = _InstaLinkMode.peripheral;
         connectedName = selectedDevice?.name ?? 'Insta360';
         _buttonSeq = 0;
         _setState(Insta360ConnectionState.connected);
+        _startGpsKeepalive();
         final waiting = _connectedCompleter;
         if (waiting != null && !waiting.isCompleted) {
           waiting.complete();
         }
       } else if (_peripheralDeviceId == deviceId ||
           _peripheralDeviceId == null) {
-        _peripheralDeviceId = null;
         if (_mode == _InstaLinkMode.peripheral) {
+          _stopGpsKeepalive();
+          _peripheralDeviceId = null;
           _mode = _InstaLinkMode.none;
           _sessionRecording = false;
           if (_state != Insta360ConnectionState.disconnected) {
@@ -516,11 +527,38 @@ class Insta360Client extends ChangeNotifier {
   }
 
   Future<void> _notifyButton(Uint8List frame) async {
+    if (_peripheralDeviceId == null) {
+      throw StateError('Insta360 kumanda bağlantısı yok (ce82).');
+    }
     await BlePeripheral.updateCharacteristic(
       characteristicId: InstaUuids.charCe82,
       value: frame,
       deviceId: _peripheralDeviceId,
     );
+  }
+
+  void _startGpsKeepalive() {
+    _stopGpsKeepalive();
+    // Real GPS remotes stream ~10 Hz; silence makes X4 drop the link.
+    _gpsKeepalive = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (_mode != _InstaLinkMode.peripheral || _peripheralDeviceId == null) {
+        return;
+      }
+      unawaited(() async {
+        try {
+          await BlePeripheral.updateCharacteristic(
+            characteristicId: InstaUuids.charCe82,
+            value: buildVoidGpsKeepaliveFrame(),
+            deviceId: _peripheralDeviceId,
+          );
+        } catch (_) {}
+      }());
+    });
+  }
+
+  void _stopGpsKeepalive() {
+    _gpsKeepalive?.cancel();
+    _gpsKeepalive = null;
   }
 
   int _nextButtonSeq() {
@@ -557,7 +595,11 @@ class Insta360Client extends ChangeNotifier {
       command: command,
       sequence: _nextDirectSeq(),
     );
-    await char.write(frame, withoutResponse: false);
+    try {
+      await char.write(frame, withoutResponse: false, timeout: 5);
+    } catch (_) {
+      await char.write(frame, withoutResponse: true, timeout: 3);
+    }
   }
 
   Future<void> _connectCentral(SavedInsta360Device selected) async {
@@ -565,48 +607,52 @@ class Insta360Client extends ChangeNotifier {
     discovered.clear();
     notifyListeners();
 
-    BluetoothDevice? target;
-    final knownId = selected.remoteId;
-    if (knownId != null && knownId.isNotEmpty) {
-      target = BluetoothDevice.fromId(knownId);
-    }
-
-    if (target == null) {
-      await stopScan();
-      final completer = Completer<BluetoothDevice>();
-      await _scanSub?.cancel();
-      _scanSub = FlutterBluePlus.scanResults.listen((results) {
-        for (final r in results) {
-          final name = r.advertisementData.advName.trim().isNotEmpty
-              ? r.advertisementData.advName.trim()
-              : r.device.platformName.trim();
-          final serial = extractInstaSerial(name);
-          if (serial == selected.serial ||
-              name.toUpperCase().contains(selected.serial)) {
-            if (!completer.isCompleted) completer.complete(r.device);
-            break;
-          }
+    // Always scan for a live advert — stale remoteId connects often look
+    // "Bağlı" in the phone UI but have no be80 session.
+    await stopScan();
+    final completer = Completer<BluetoothDevice>();
+    await _scanSub?.cancel();
+    _scanSub = FlutterBluePlus.scanResults.listen((results) {
+      for (final r in results) {
+        final name = r.advertisementData.advName.trim().isNotEmpty
+            ? r.advertisementData.advName.trim()
+            : r.device.platformName.trim();
+        final serial = extractInstaSerial(name);
+        final idMatch = selected.remoteId != null &&
+            selected.remoteId!.isNotEmpty &&
+            r.device.remoteId.str == selected.remoteId;
+        if (idMatch ||
+            serial == selected.serial ||
+            name.toUpperCase().contains(selected.serial)) {
+          if (!completer.isCompleted) completer.complete(r.device);
+          break;
         }
-      });
-      await FlutterBluePlus.startScan(
-        timeout: const Duration(seconds: 12),
-        androidUsesFineLocation: true,
-      );
-      try {
-        target = await completer.future.timeout(const Duration(seconds: 12));
-      } on TimeoutException {
-        throw StateError(
-          'Kamera BLE’de görünmüyor. Kamerayı açıp tekrar dene '
-          '(bu telefonda uyandırma reklamı yoksa kamera açık olmalı).',
-        );
-      } finally {
-        await stopScan();
       }
+    });
+    await FlutterBluePlus.startScan(
+      timeout: const Duration(seconds: 12),
+      androidUsesFineLocation: true,
+    );
+    late final BluetoothDevice target;
+    try {
+      target = await completer.future.timeout(const Duration(seconds: 12));
+    } on TimeoutException {
+      throw StateError(
+        'Kamera BLE’de görünmüyor. X4’ü açıp Bluetooth’u açık tut, '
+        'Insta uygulamasını kapat, sonra Bağlan’a bas.',
+      );
+    } finally {
+      await stopScan();
     }
 
     _ensureNotCancelled();
     _setState(Insta360ConnectionState.connecting);
     connectedName = selected.name;
+
+    try {
+      await target.disconnect();
+    } catch (_) {}
+    await Future<void>.delayed(const Duration(milliseconds: 250));
 
     await target.connect(
       autoConnect: false,
@@ -619,11 +665,12 @@ class Insta360Client extends ChangeNotifier {
     BluetoothCharacteristic? be81;
     BluetoothCharacteristic? be82;
     for (final s in services) {
-      if (s.uuid.str128.toLowerCase() != InstaUuids.serviceBe80) continue;
+      final su = s.uuid.str128.toLowerCase();
+      if (!su.contains('be80')) continue;
       for (final c in s.characteristics) {
         final id = c.uuid.str128.toLowerCase();
-        if (id == InstaUuids.charBe81) be81 = c;
-        if (id == InstaUuids.charBe82) be82 = c;
+        if (id.contains('be81')) be81 = c;
+        if (id.contains('be82')) be82 = c;
       }
     }
     if (be81 == null) {
@@ -631,7 +678,7 @@ class Insta360Client extends ChangeNotifier {
         await target.disconnect();
       } catch (_) {}
       throw StateError(
-        'Kamerada be80 kumanda servisi yok. Firmware / model desteklemiyor olabilir.',
+        'Kamerada be80 kumanda servisi yok. Insta uygulamasını kapatıp tekrar dene.',
       );
     }
 
@@ -639,9 +686,11 @@ class Insta360Client extends ChangeNotifier {
     _centralDevice = target;
     _mode = _InstaLinkMode.central;
     _directSeq = 1;
+    final epoch = _sessionEpoch;
 
     await _centralConnSub?.cancel();
     _centralConnSub = target.connectionState.listen((s) {
+      if (epoch != _sessionEpoch) return;
       if (s == BluetoothConnectionState.disconnected &&
           _mode == _InstaLinkMode.central) {
         _centralDevice = null;
@@ -660,7 +709,6 @@ class Insta360Client extends ChangeNotifier {
       } catch (_) {}
     }
 
-    // Persist discovered address for faster reconnect.
     final idx = _savedDevices.indexWhere((d) => d.serial == selected.serial);
     if (idx >= 0) {
       _savedDevices[idx] = selected.copyWith(remoteId: target.remoteId.str);
@@ -736,25 +784,26 @@ class Insta360Client extends ChangeNotifier {
     }
 
     await stopScan();
-    Object? peripheralError;
+
+    // Prefer direct be80 (works for awake X4). Wake-via-GPS-remote is fallback.
+    Object? centralError;
     try {
-      await _connectPeripheral(selected);
+      await _connectCentral(selected);
       return;
     } catch (e) {
-      peripheralError = e;
+      centralError = e;
       await _teardown(keepSaved: true);
       _ensureNotCancelled();
     }
 
-    // Fallback: camera must already be awake; phone acts as BLE central.
     try {
-      await _connectCentral(selected);
+      await _connectPeripheral(selected);
     } catch (e) {
       await _teardown(keepSaved: true);
       throw StateError(
         'Bağlantı başarısız.\n'
-        'Kumanda yolu: $peripheralError\n'
-        'Doğrudan yol: $e',
+        'Doğrudan (be80): $centralError\n'
+        'GPS Remote: $e',
       );
     }
   }
@@ -804,6 +853,8 @@ class Insta360Client extends ChangeNotifier {
   }
 
   Future<void> _teardown({required bool keepSaved}) async {
+    _sessionEpoch++;
+    _stopGpsKeepalive();
     try {
       await BlePeripheral.stopAdvertising();
     } catch (_) {}

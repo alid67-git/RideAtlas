@@ -197,23 +197,57 @@ class InstaDirectCode {
   static const powerOff = 0x37;
 }
 
-/// Header16 frame for X3/X4/X5 (Architecture B, written to `be81`).
+/// Direct-control frame for X4 `be81` (Architecture B).
+///
+/// X4-verified on-air layout (not the classic uint16-payload Header16):
+/// bytes 0–3 = uint32 LE total size (16 + payload),
+/// byte 7–8 = uint16 LE command, byte 9 = 0x02 protobuf, byte 10 = seq,
+/// byte 13 = 0x80 last fragment.
+///
+/// Golden start (seq 0x0C): `10 00 00 00 04 00 00 04 00 02 0C 00 00 80 00 00`
 Uint8List buildHeader16Command({
   required int command,
   required int sequence,
   Uint8List? payload,
 }) {
   final body = payload ?? Uint8List(0);
-  final out = Uint8List(16 + body.length);
-  out[0] = body.length & 0xff;
-  out[1] = (body.length >> 8) & 0xff;
+  final total = 16 + body.length;
+  final out = Uint8List(total);
+  out[0] = total & 0xff;
+  out[1] = (total >> 8) & 0xff;
+  out[2] = (total >> 16) & 0xff;
+  out[3] = (total >> 24) & 0xff;
   out[4] = 0x04; // message mode
   out[7] = command & 0xff;
+  out[8] = (command >> 8) & 0xff;
   out[9] = 0x02; // protobuf content type
   out[10] = sequence.clamp(1, 254);
   out[13] = 0x80; // last fragment
   if (body.isNotEmpty) {
-    out.setRange(16, 16 + body.length, body);
+    out.setRange(16, total, body);
   }
   return out;
+}
+
+/// Minimal void GPS keepalive for GPS-remote emulation (camera drops silent remotes).
+Uint8List buildVoidGpsKeepaliveFrame() {
+  // FC EF FE 83 00 <len> ,26.7,\x07, $GNRMC,...*CS  — void fix, status V
+  const nmea =
+      '\$GNRMC,120000.000,V,0000.0000,N,00000.0000,E,0.00,0.00,010126,0.0,W,A,V';
+  var cs = 0;
+  for (var i = 1; i < nmea.length; i++) {
+    cs ^= nmea.codeUnitAt(i);
+  }
+  final hex = cs.toRadixString(16).toUpperCase().padLeft(2, '0');
+  final payload = ',26.7,\x07,$nmea*$hex';
+  final payloadBytes = ascii.encode(payload);
+  return Uint8List.fromList([
+    0xfc,
+    0xef,
+    0xfe,
+    0x83,
+    0x00,
+    payloadBytes.length & 0xff,
+    ...payloadBytes,
+  ]);
 }

@@ -53,18 +53,36 @@ void main() {
     expect(parsed?.encodingDurationSec, 5);
   });
 
-  test('Header16 START_CAPTURE frame layout', () {
-    final frame = buildHeader16Command(
+  test('X4 be81 START/STOP frames match on-air golden bytes', () {
+    final start = buildHeader16Command(
       command: InstaDirectCode.startCapture,
-      sequence: 1,
+      sequence: 0x0c,
     );
-    expect(frame.length, 16);
-    expect(frame[0], 0x00); // payload len lo
-    expect(frame[1], 0x00);
-    expect(frame[4], 0x04); // mode
-    expect(frame[7], 0x04); // START_CAPTURE
-    expect(frame[9], 0x02); // protobuf
-    expect(frame[10], 0x01); // seq
-    expect(frame[13], 0x80); // last fragment
+    expect(
+      start,
+      [
+        0x10, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x04,
+        0x00, 0x02, 0x0c, 0x00, 0x00, 0x80, 0x00, 0x00,
+      ],
+    );
+    final stop = buildHeader16Command(
+      command: InstaDirectCode.stopCapture,
+      sequence: 0x01,
+    );
+    expect(
+      stop,
+      [
+        0x10, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x05,
+        0x00, 0x02, 0x01, 0x00, 0x00, 0x80, 0x00, 0x00,
+      ],
+    );
+  });
+
+  test('void GPS keepalive starts with remote→camera magic', () {
+    final frame = buildVoidGpsKeepaliveFrame();
+    expect(frame[0], 0xfc);
+    expect(frame[1], 0xef);
+    expect(frame[2], 0xfe);
+    expect(frame[3], 0x83);
   });
 }

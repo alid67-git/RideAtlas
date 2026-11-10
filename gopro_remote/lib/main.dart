@@ -78,7 +78,20 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   }
 
   void _onChange() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    // Drop banners that contradict live link state.
+    final b = _instaBanner?.toLowerCase();
+    if (b != null) {
+      if (_insta.isConnected &&
+          (b.contains('kapandı') || b.contains('bağlantı yok'))) {
+        _instaBanner = null;
+      } else if (!_insta.isConnected &&
+          !_instaBusy &&
+          b.contains('bağlandı')) {
+        _instaBanner = null;
+      }
+    }
+    setState(() {});
   }
 
   @override
@@ -142,9 +155,10 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       setBanner('Bluetooth izinleri gerekli (Scan + Connect).');
       return false;
     }
+    // Advertise is only needed for GPS-Remote wake (peripheral). Central be80
+    // control works without it — don't block Bağlan / KAYIT when it's missing.
     if (forInsta && !advertiseOk) {
-      setBanner('Bluetooth Advertise izni gerekli (Insta360 kumanda).');
-      return false;
+      // Soft warning only; central path still proceeds.
     }
     if (!locOk) {
       setBanner('Konum izni BLE taraması için gerekli (Android kısıtı).');
@@ -262,16 +276,19 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     await _runInsta(() async {
       setState(() {
         _instaBanner =
-            closing ? 'Kapatılıyor…' : 'Uyandırılıyor / eşleşiliyor…';
+            closing ? 'Kapatılıyor…' : 'Bağlanıyor (kamera açık olmalı)…';
       });
       await _insta.toggleConnectSleep();
       if (!mounted) return;
+      // Always reflect live client state (avoid stale “kapandı” while Bağlı).
       setState(() {
-        _instaBanner = closing
-            ? 'Kamera kapandı · bağlantı yok'
-            : (_insta.isConnected
-                ? 'Bağlandı: ${_insta.preferredName ?? 'Insta360'}'
-                : null);
+        if (_insta.isConnected) {
+          _instaBanner = 'Bağlandı: ${_insta.preferredName ?? 'Insta360'}';
+        } else if (closing) {
+          _instaBanner = 'Kamera kapandı · bağlantı yok';
+        } else {
+          _instaBanner = null;
+        }
       });
     });
   }
@@ -310,6 +327,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   }
 
   String get _instaStateLabel {
+    if (_insta.isConnected) return 'Bağlı';
     switch (_insta.state) {
       case Insta360ConnectionState.disconnected:
         return 'Bağlı değil';
@@ -320,7 +338,8 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       case Insta360ConnectionState.connecting:
         return 'Bağlanıyor…';
       case Insta360ConnectionState.connected:
-        return 'Bağlı';
+        // State alone is not enough — need live GATT/peripheral session.
+        return 'Bağlı değil';
       case Insta360ConnectionState.error:
         return 'Hata';
     }
