@@ -433,24 +433,17 @@ class GoProBleClient extends ChangeNotifier {
     _error = null;
     await _waitScanFullyStopped();
     await _awaitPostSleepCooldown();
-    await _disconnectAllBleClients();
     _setState(GoProConnectionState.connecting);
 
     Object? lastError;
-    var saw133 = false;
-    var cycledBt = false;
-    // 133 is flaky: many short retries + one BT adapter cycle.
-    final attempts = fastRecord ? retries.clamp(1, 7) : retries;
+    // Short direct GATT retries. Do NOT cycle the phone Bluetooth adapter —
+    // turnOff is broken/deprecated on modern Android and was making "used to
+    // connect, now doesn't" worse after the first success.
+    final attempts = fastRecord ? retries.clamp(1, 5) : retries;
     for (var attempt = 1; attempt <= attempts; attempt++) {
       _ensureNotCancelled();
-      // After a couple of GATT 133s, reset the phone BT stack once.
-      if (saw133 && !cycledBt && attempt >= 3) {
-        cycledBt = true;
-        try {
-          await _cycleBluetoothAdapter();
-        } catch (e) {
-          debugPrint('BT cycle failed: $e');
-        }
+      if (attempt > 1) {
+        await _disconnectAllBleClients();
       }
       try {
         await _connectOnce(
@@ -478,10 +471,9 @@ class GoProBleClient extends ChangeNotifier {
         final is133 = e.toString().contains('133') ||
             e.toString().contains('ANDROID_SPECIFIC_ERROR') ||
             e.toString().contains('GATT_ERROR');
-        if (is133) saw133 = true;
         await _delayCancellable(
           Duration(
-            milliseconds: is133 ? (600 + attempt * 400) : (500 * attempt),
+            milliseconds: is133 ? (500 + attempt * 300) : (400 * attempt),
           ),
         );
       }
@@ -524,25 +516,6 @@ class GoProBleClient extends ChangeNotifier {
     await _delayCancellable(const Duration(milliseconds: 250));
   }
 
-  /// Nuclear option for wedged Android GATT after sleep / re-pair loops.
-  Future<void> _cycleBluetoothAdapter() async {
-    _ensureNotCancelled();
-    debugPrint('Cycling Bluetooth adapter (GATT 133 recovery)');
-    try {
-      // ignore: deprecated_member_use — no Android 13+ replacement; best-effort.
-      await FlutterBluePlus.turnOff(timeout: 8);
-    } catch (e) {
-      debugPrint('turnOff: $e');
-    }
-    await _delayCancellable(const Duration(milliseconds: 1800));
-    _ensureNotCancelled();
-    await FlutterBluePlus.turnOn(timeout: 45);
-    await FlutterBluePlus.adapterState
-        .firstWhere((s) => s == BluetoothAdapterState.on)
-        .timeout(const Duration(seconds: 45));
-    await _delayCancellable(const Duration(milliseconds: 900));
-  }
-
   Future<void> _awaitPostSleepCooldown() async {
     final slept = _lastSleepAt;
     if (slept == null) return;
@@ -572,24 +545,24 @@ class GoProBleClient extends ChangeNotifier {
       );
     }
 
-    // Direct connect first; on later attempts after 133, try autoConnect once.
-    final useAuto = attempt >= 4;
+    // Always direct connect. autoConnect hangs awkwardly and felt like
+    // "Bağlanıyor…" forever after the camera had already paired once.
     await device.connect(
-      timeout: Duration(seconds: useAuto ? 20 : (fastRecord ? 12 : 20)),
-      autoConnect: useAuto,
+      timeout: Duration(seconds: fastRecord ? 8 : 15),
+      autoConnect: false,
       mtu: null,
     );
 
     await device.connectionState
         .firstWhere((s) => s == BluetoothConnectionState.connected)
-        .timeout(Duration(seconds: useAuto ? 20 : (fastRecord ? 12 : 15)));
+        .timeout(Duration(seconds: fastRecord ? 8 : 15));
 
     // Sleep→wake / fresh pair: let firmware settle before GATT ops.
     await _delayCancellable(
       Duration(
         milliseconds: (shutterOnConnect || _lastSleepAt != null)
-            ? (500 + (attempt - 1) * 200)
-            : 250,
+            ? (350 + (attempt - 1) * 150)
+            : 200,
       ),
     );
     _ensureNotCancelled();
@@ -644,9 +617,9 @@ class GoProBleClient extends ChangeNotifier {
     await _writeQuery(GoProProtocol.registerAllStatuses(), wait: false);
   }
 
-  /// Open GoPro / ClipRide pattern: read Wi‑Fi password to trigger SMP pair,
-  /// then fall back to createBond. Without a bond, Android often accepts the
-  /// GATT link but stalls forever on characteristic writes.
+  /// Bond only when needed. Already-paired cameras must not re-enter a long
+  /// WAP-password / createBond path — that blocked "Bağlanıyor…" after the
+  /// first successful session.
   Future<void> _ensureBonded(
     BluetoothDevice device, {
     int promptSeconds = 20,
@@ -658,18 +631,18 @@ class GoProBleClient extends ChangeNotifier {
       );
       if (bond == BluetoothBondState.bonded) return;
 
-      // Reading WAP_PASSWORD commonly starts the system pairing dialog.
+      // Unbonded: read WAP_PASSWORD to trigger SMP (Open GoPro / ClipRide).
       final wifiPw = _wifiPassword;
       if (wifiPw != null) {
         try {
-          await wifiPw.read(timeout: 6);
+          await wifiPw.read(timeout: 5);
         } catch (e) {
           debugPrint('wap password read (pair trigger): $e');
         }
         try {
           bond = await device.bondState
               .firstWhere((b) => b == BluetoothBondState.bonded)
-              .timeout(Duration(seconds: promptSeconds.clamp(4, 20)));
+              .timeout(Duration(seconds: promptSeconds.clamp(4, 15)));
           if (bond == BluetoothBondState.bonded) return;
         } on TimeoutException {
           // Fall through to createBond.
@@ -682,7 +655,7 @@ class GoProBleClient extends ChangeNotifier {
       );
       if (bond == BluetoothBondState.bonded) return;
 
-      await device.createBond(timeout: promptSeconds);
+      await device.createBond(timeout: promptSeconds.clamp(5, 20));
     } catch (e) {
       debugPrint('bond/pair: $e');
     }
@@ -1344,8 +1317,9 @@ class GoProBleClient extends ChangeNotifier {
         text.contains('ANDROID_SPECIFIC_ERROR') ||
         text.contains('GATT_ERROR')) {
       return 'Bluetooth bağlantısı kurulamadı (Android 133). '
-          'GoPro Quik / başka uygulama bağlıysa kapat. Sonra telefonda '
-          'Bluetooth’u kapat-aç, kamerayı kapat-aç, tekrar KAYIT’a bas.';
+          'GoPro’da Preferences → Connections → Devices ekranından çıkıp '
+          'ana ekrana dön. Quik kapalı olsun. Telefonda Bluetooth kapat-aç, '
+          'kamerayı kapat-aç, X ile iptal edip tekrar KAYIT.';
     }
     if (text.contains('writeCharacteristic') ||
         text.contains('Timed out') ||
