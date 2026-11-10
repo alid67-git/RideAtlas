@@ -9,6 +9,7 @@ class GoProProtocol {
 
   // Command IDs (CQ_COMMAND)
   static const int cmdSetShutter = 0x01;
+  static const int cmdPowerDown = 0x04;
   static const int cmdApControl = 0x17;
   static const int cmdSleep = 0x05;
   static const int cmdSetThirdPartyClientInfo = 0x50;
@@ -34,6 +35,8 @@ class GoProProtocol {
       Uint8List.fromList([0x01, cmdSetThirdPartyClientInfo]);
 
   static Uint8List sleep() => Uint8List.fromList([0x01, cmdSleep]);
+
+  static Uint8List powerDown() => Uint8List.fromList([0x01, cmdPowerDown]);
 
   static Uint8List registerAllSettings() =>
       Uint8List.fromList([0x01, queryRegisterAllSettings]);

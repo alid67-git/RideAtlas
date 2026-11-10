@@ -29,11 +29,24 @@ android {
         versionName = flutter.versionName
     }
 
+    // Stable sideload keystore (same idea as RideAtlas): must not use the
+    // machine-local debug.keystore or every CI/agent APK gets a new key and
+    // Android refuses in-app updates over the previous install.
+    signingConfigs {
+        create("release") {
+            storeFile = file("gopro-remote-debug.keystore")
+            storePassword = "goproremote123"
+            keyAlias = "goproremote"
+            keyPassword = "goproremote123"
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
