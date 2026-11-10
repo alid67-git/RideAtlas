@@ -356,7 +356,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                   setState(() {
                     _banner = wasRecording
                         ? 'Durduruluyor, kamera uykuya alınıyor…'
-                        : 'Tarama → bağlan → kayıt…';
+                        : 'Uyandırılıyor → kayıt…';
                   });
                   await _client.toggleRecording();
                   setState(() {
