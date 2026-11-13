@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.130 beta',
+    date: '2026-11-13',
+    note:
+        'iPhone’da kayıt çok seyrek noktalıyor ve her kabul edilen '
+        'noktada hız bir an görünüp sıfırlanıyordu. Sebep: izi seyrelten '
+        'hop süzgeci HUD hızını da sıfırlıyordu; ayrıca her kayıt StickyStay '
+        'kilitli başlıyordu. Artık hız yalnızca gerçek durak (kilitli '
+        'park) veya yer değiştirmeye göre sınırlı Doppler; sürüşte küçük '
+        'hop hızı düşürmez. iOS konum akışı AppleSettings ile mesafe '
+        'filtresiz / otomatik duraklatmasız. Kayıt başı ve kaydetmede iz '
+        'yeniden kurma artık ilk ~80 m’yi yutmaz.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.129 beta',
     date: '2026-11-04',
     note:

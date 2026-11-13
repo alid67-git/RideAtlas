@@ -25,6 +25,53 @@ double effectiveRecordingSpeedKmh({
 }) =>
     min(dopplerKmh, displacementKmh);
 
+/// Live HUD / auto-pause speed for one fix.
+///
+/// [parked] (StickyStay still locked at a stop) forces 0 — overnight indoor
+/// wander must not look like motion. A hop that is merely "within noise" of
+/// the last *accepted track point* must NOT zero speed: with a 25 m track
+/// gate (or sparse iPhone updates) that pattern flashes real Doppler every
+/// accepted point then drops to 0 until the next one. Indoor phantom crawl
+/// is already handled by [effectiveRecordingSpeedKmh]. Exposed for tests.
+double recordingHudSpeedKmh({
+  required bool parked,
+  required double dopplerKmh,
+  required double displacementKmh,
+}) {
+  if (parked) return 0;
+  return effectiveRecordingSpeedKmh(
+    dopplerKmh: dopplerKmh,
+    displacementKmh: displacementKmh,
+  );
+}
+
+/// Location settings for the Dart-side recording stream (iOS / web /
+/// desktop). Android uses [NativeRecording] instead.
+///
+/// iPhone: plain [LocationSettings] + `distanceFilter: 5` plus Core
+/// Location's automatic pause made fixes very sparse; every accepted point
+/// briefly showed speed then the next sub-gate hop zeroed it. Use
+/// [AppleSettings] with no distance filter and pause disabled so updates
+/// keep arriving while the screen is on.
+LocationSettings recordingLocationSettings() {
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+    return AppleSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      activityType: ActivityType.otherNavigation,
+      distanceFilter: 0,
+      pauseLocationUpdatesAutomatically: false,
+      // No UIBackgroundModes / Always permission yet — keep false so iOS
+      // does not expect background delivery we have not declared.
+      allowBackgroundLocationUpdates: false,
+      showBackgroundLocationIndicator: false,
+    );
+  }
+  return const LocationSettings(
+    accuracy: LocationAccuracy.high,
+    distanceFilter: 5,
+  );
+}
+
 enum RecordingState { idle, recording, paused }
 
 /// Why [GpsRecorder.start] failed, so the UI can show a specific message.
@@ -263,7 +310,11 @@ class GpsRecorder extends ChangeNotifier {
     _stationarySince = null;
     _autoPauseOrigin = null;
     _stickyOrigin = null;
+    // Fresh ride: do not sticky-lock from the first fix. Lock only on
+    // auto-pause / manual pause — otherwise the first ~80–240 m of every
+    // ride is dropped and HUD speed stays 0 until three 80 m leaves.
     _stay.reset();
+    _stay.unlock();
     _lastAutoPauseFixLatLng = null;
     _lastAutoPauseFixTime = null;
     _recentSpeedsKmh.clear();
@@ -289,10 +340,7 @@ class GpsRecorder extends ChangeNotifier {
       unawaited(_persistSession());
     } else {
       _sub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 5,
-        ),
+        locationSettings: recordingLocationSettings(),
       ).listen(_onPosition);
     }
     return null;
@@ -418,12 +466,18 @@ class GpsRecorder extends ChangeNotifier {
       _autoPauseOrigin = null;
       _lastAutoPauseFixLatLng = null;
       _lastAutoPauseFixTime = null;
+      _stay.reset();
+      _stay.unlock();
       if (manualPaused) {
         _state = RecordingState.paused;
         final pauseStartMs = session?.pauseStartedAtMs;
         _pauseStartedAt = pauseStartMs != null
             ? DateTime.fromMillisecondsSinceEpoch(pauseStartMs)
             : DateTime.now();
+        if (_points.isNotEmpty) {
+          _stickyOrigin = _points.last.latLng;
+          _stay.lock();
+        }
       } else {
         _state = RecordingState.recording;
         // Auto-pause may have left nativePaused true without manual pause —
@@ -657,28 +711,37 @@ class GpsRecorder extends ChangeNotifier {
     );
     final hopFromLast =
         _points.isEmpty ? 0.0 : _distance(_points.last.latLng, here);
+    // Track thinning only — must not drive HUD speed (see
+    // [recordingHudSpeedKmh]). While sticky-locked, every fix is "noise"
+    // for the track; while riding, drop jitter inside the accuracy circle
+    // with a small floor (not the 25 m overnight gate — that made rides
+    // accept a point every ~25 m and flash speed in between).
     final hopIsNoise = parked ||
         (_points.isNotEmpty &&
             isGpsHopWithinNoise(
               meters: hopFromLast,
               accuracyMeters: pos.accuracy,
+              // Riding: thin jitter only. Overnight 25 m floor stays on
+              // StickyStay-locked stops via [parked] above.
+              minMeters: 5,
             ));
-    final smoothedDopplerKmh =
-        _smoothedSpeedKmh(hopIsNoise ? 0.0 : speedKmh);
     final displacementKmh =
-        hopIsNoise ? 0.0 : _displacementSpeedKmh(here, pos.timestamp);
-    final smoothedSpeedKmh = effectiveRecordingSpeedKmh(
+        parked ? 0.0 : _displacementSpeedKmh(here, pos.timestamp);
+    final smoothedDopplerKmh =
+        _smoothedSpeedKmh(parked ? 0.0 : speedKmh);
+    final smoothedSpeedKmh = recordingHudSpeedKmh(
+      parked: parked,
       dopplerKmh: smoothedDopplerKmh,
       displacementKmh: displacementKmh,
     );
-    // HUD uses the same capped value so indoor phantom crawls read as ~0.
-    _currentSpeedKmh = hopIsNoise
-        ? 0.0
-        : effectiveRecordingSpeedKmh(
-            dopplerKmh: speedKmh,
-            displacementKmh: displacementKmh,
-          );
-    if (!hopIsNoise) {
+    // HUD: parked → 0; otherwise Doppler capped by displacement. Never
+    // zero just because this hop is too small to append to the track.
+    _currentSpeedKmh = recordingHudSpeedKmh(
+      parked: parked,
+      dopplerKmh: speedKmh,
+      displacementKmh: displacementKmh,
+    );
+    if (!parked) {
       _currentAltitude = pos.altitude;
     }
     if (pos.heading.isFinite && pos.heading >= 0 && smoothedSpeedKmh > 3) {
@@ -853,7 +916,12 @@ class GpsRecorder extends ChangeNotifier {
     _stationarySince = null;
     _autoPauseOrigin = null;
     _stickyOrigin = null;
+    // Historical burst is not a live stop — do not sticky-lock from the
+    // first fix or the start of every saved ride is eaten (~80 m+). Indoor
+    // overnight scribble is kept out live via auto-pause; here only the
+    // hop-within-noise gate remains.
     _stay.reset();
+    _stay.unlock();
     _lastAutoPauseFixLatLng = null;
     _lastAutoPauseFixTime = null;
     _recentSpeedsKmh.clear();
@@ -869,15 +937,13 @@ class GpsRecorder extends ChangeNotifier {
       final speedMs = (raw['speed'] as num?)?.toDouble() ?? 0;
       final accuracy = (raw['accuracy'] as num?)?.toDouble() ?? 0;
       final latLng = LatLng(lat, lng);
-      _stickyOrigin ??= latLng;
-      final parked = _stay.consider(
-        metersFromOrigin: _distance(_stickyOrigin!, latLng),
-        accuracyMeters: accuracy,
-      );
       if (_points.isNotEmpty) {
-        if (parked) continue;
         final hop = _distance(_points.last.latLng, latLng);
-        if (isGpsHopWithinNoise(meters: hop, accuracyMeters: accuracy)) {
+        if (isGpsHopWithinNoise(
+          meters: hop,
+          accuracyMeters: accuracy,
+          minMeters: 5,
+        )) {
           continue;
         }
         _distanceMeters += hop;
