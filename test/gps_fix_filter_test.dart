@@ -34,6 +34,27 @@ void main() {
       );
     });
 
+    test('riding minMeters 5 still records a 17 m outdoor hop', () {
+      // Live recording uses minMeters: 5 so iPhone / sparse streams are
+      // not forced to one point every 25 m (default floor).
+      expect(
+        isGpsHopWithinNoise(
+          meters: 17,
+          accuracyMeters: 8,
+          minMeters: 5,
+        ),
+        isFalse,
+      );
+      expect(
+        isGpsHopWithinNoise(
+          meters: 12,
+          accuracyMeters: 8,
+          minMeters: 5,
+        ),
+        isTrue,
+      );
+    });
+
     test('unknown accuracy still ignores small wobble', () {
       expect(
         isGpsHopWithinNoise(meters: 10, accuracyMeters: 0),

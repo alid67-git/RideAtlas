@@ -24,4 +24,41 @@ void main() {
       );
     });
   });
+
+  group('recordingHudSpeedKmh', () {
+    test('sticky-locked stop forces HUD speed to zero', () {
+      expect(
+        recordingHudSpeedKmh(
+          parked: true,
+          dopplerKmh: 45,
+          displacementKmh: 40,
+        ),
+        0,
+      );
+    });
+
+    test('riding keeps Doppler even when the last track hop was small', () {
+      // Regression: hop-within-noise used to zero HUD speed, so sparse
+      // iPhone / 25 m-gated updates flashed real speed then dropped to 0.
+      expect(
+        recordingHudSpeedKmh(
+          parked: false,
+          dopplerKmh: 72,
+          displacementKmh: 70,
+        ),
+        70,
+      );
+    });
+
+    test('still caps indoor crawl while unlocked', () {
+      expect(
+        recordingHudSpeedKmh(
+          parked: false,
+          dopplerKmh: 3.5,
+          displacementKmh: 0.3,
+        ),
+        0.3,
+      );
+    });
+  });
 }
