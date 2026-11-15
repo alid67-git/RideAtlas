@@ -1400,6 +1400,86 @@ class _RecordScreenState extends State<RecordScreen>
     // Dismissed (tap outside / back): stay paused, decide later.
   }
 
+  /// Mid-recording (or paused): export selected calendar days from the
+  /// live track without finishing the session. Shown when the ride already
+  /// spans 2+ local days — this is the menu riders look for.
+  Future<void> _exportDaysFromLiveRecording() async {
+    final l10n = AppLocalizations.of(context)!;
+    final recorder = context.read<GpsRecorder>();
+    if (recorder.isIdle) return;
+    final points = List<TrackPoint>.from(recorder.points);
+    final days = splitIntoDays(points);
+    if (days.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.recordingExportDaysNeedMulti)),
+      );
+      return;
+    }
+
+    final waypoints = [
+      for (final a in _sessionAnnotations)
+        if (a.hasNote || a.hasPhoto)
+          Waypoint(
+            latLng: a.latLng,
+            name: a.hasNote
+                ? a.note!.trim()
+                : l10n.recordingPhotoWaypointName,
+            description: a.hasPhoto && a.hasNote
+                ? l10n.recordingPhotoWaypointName
+                : null,
+          ),
+    ];
+    final routeName = l10n.recordingDefaultName(
+      DateFormat(
+        'd MMM yyyy HH:mm',
+        Localizations.localeOf(context).languageCode,
+      ).format(DateTime.now()),
+    );
+
+    final format = await showDialog<TrackFormat>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(l10n.exportFormatQuestion),
+        children: [
+          for (final f in TrackFormat.values)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, f),
+              child: Text(f.label),
+            ),
+        ],
+      ),
+    );
+    if (format == null || !mounted) return;
+
+    final plan = await showDayExportDialog(context: context, days: days);
+    if (plan == null || !mounted) return;
+
+    final files = preparePlanExportFiles(
+      plan: plan,
+      routeName: routeName,
+      points: points,
+      waypoints: waypoints,
+      format: format,
+    );
+    if (files.isEmpty || !mounted) return;
+
+    final result = await deliverExportFiles(
+      files: files,
+      destination: plan.destination,
+      subject: routeName,
+    );
+    if (!mounted) return;
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dayExportFailed)),
+      );
+    } else if (plan.destination == DayExportDestination.folder) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dayExportSavedToFolder(result))),
+      );
+    }
+  }
+
   /// After the ride is in the app library: ask where to write the GPX
   /// file(s) externally. Folder choice always opens the system picker —
   /// never silently reuse the daily-backup URI (riders expect to pick).
@@ -1810,6 +1890,14 @@ class _RecordScreenState extends State<RecordScreen>
                           padding: EdgeInsets.only(top: 4),
                           child: SatelliteCountBadge(),
                         ),
+                        if (!recorder.isIdle) ...[
+                          const SizedBox(width: 8),
+                          _RoundIconButton(
+                            icon: Icons.ios_share,
+                            tooltip: l10n.recordingExportDaysTooltip,
+                            onPressed: _exportDaysFromLiveRecording,
+                          ),
+                        ],
                         const SizedBox(width: 8),
                         _RoundIconButton(
                           icon: Icons.settings,
@@ -2146,6 +2234,14 @@ class _RecordScreenState extends State<RecordScreen>
                       _buildOverlayMenuButton(l10n),
                       const Spacer(),
                       const SatelliteCountBadge(),
+                      if (!recorder.isIdle) ...[
+                        const SizedBox(width: 8),
+                        _RoundIconButton(
+                          icon: Icons.ios_share,
+                          tooltip: l10n.recordingExportDaysTooltip,
+                          onPressed: _exportDaysFromLiveRecording,
+                        ),
+                      ],
                       const SizedBox(width: 8),
                       _RoundIconButton(
                         icon: Icons.settings,
@@ -2450,10 +2546,14 @@ class _RecordScreenState extends State<RecordScreen>
     }
 
     // Paused: resume, save the ride so far (session keeps going - see
-    // _saveRecording), or reset to zero (confirmation only if unsaved -
-    // see _resetRecording).
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    // _saveRecording), export days when multi-day, or reset to zero
+    // (confirmation only if unsaved - see _resetRecording).
+    final multiDay = splitIntoDays(recorder.points).length >= 2;
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 12,
+      runSpacing: 12,
       children: [
         FloatingActionButton(
           heroTag: 'recordPauseResume',
@@ -2461,7 +2561,6 @@ class _RecordScreenState extends State<RecordScreen>
           onPressed: recorder.resume,
           child: const Icon(Icons.play_arrow),
         ),
-        const SizedBox(width: 16),
         FilledButton.icon(
           onPressed: _saving ? null : _saveRecording,
           icon: _saving
@@ -2473,7 +2572,12 @@ class _RecordScreenState extends State<RecordScreen>
               : const Icon(Icons.save_outlined),
           label: Text(l10n.save),
         ),
-        const SizedBox(width: 16),
+        if (multiDay)
+          FilledButton.tonalIcon(
+            onPressed: _saving ? null : _exportDaysFromLiveRecording,
+            icon: const Icon(Icons.ios_share),
+            label: Text(l10n.recordingExportDaysButton),
+          ),
         FloatingActionButton(
           heroTag: 'recordReset',
           tooltip: l10n.resetRecordingButton,

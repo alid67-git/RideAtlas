@@ -306,5 +306,8 @@
   "recordingExternalSaveMessage": "The route is saved in the app. Also write the GPX to a folder or share it?",
   "recordingExternalSaveMultiDayMessage": "The route is saved in the app ({count} days). Write the files to a folder or share them? Choosing a folder also lets you split by day.",
   "@recordingExternalSaveMultiDayMessage": {"placeholders": {"count": {"type": "int"}}},
-  "recordingExternalSaveAppOnly": "Keep in the app only"
+  "recordingExternalSaveAppOnly": "Keep in the app only",
+  "recordingExportDaysTooltip": "Export days",
+  "recordingExportDaysButton": "Export days",
+  "recordingExportDaysNeedMulti": "Not multi-day yet — after midnight, days show up here."
 }

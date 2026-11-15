@@ -23,12 +23,12 @@ const kChangelog = <ChangelogEntry>[
     version: 'v1.4.134 beta',
     date: '2026-11-15',
     note:
-        'Kayıt kaydedilince (duraklat → Kaydet) rota uygulamaya alındıktan '
-        'sonra “Nereye kaydedilsin?” sorulur: klasöre yaz (sistem klasör '
-        'seçicisi — Drive vb.), paylaşım menüsü veya sadece uygulamada '
-        'kalsın. Çok günlükse klasör/paylaş sonrası gün seçimi de gelir. '
-        'Önceden dışa aktarma isteğe bağlıydı ve yedek klasörü sessizce '
-        'kullanılabiliyordu.',
+        'Çok günlük canlı kayıtta günleri çıkarma yeri: kayıt ekranı üst '
+        'sağdaki paylaş ikonu, veya duraklatınca “Günleri dışa aktar” '
+        'düğmesi — gün seç → klasör/paylaş. Kaydetince ayrıca “Nereye '
+        'kaydedilsin?” (klasör seçici / paylaş / sadece uygulama) sorulur; '
+        'çok günlükse gün ayırma da gelir. Yedek klasörü sessizce '
+        'kullanılmaz.',
   ),
   ChangelogEntry(
     version: 'v1.4.133 beta',
