@@ -21,9 +21,16 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # Pin below Flutter 3.50: that release requires Gradle ≥9.3.1 and
+      # AGP ≥9.1.1. We stay on AGP 8.x (see android/settings.gradle.kts)
+      # because file_picker and friends skip their Kotlin plugin under AGP
+      # 9 and break the release APK. channel:stable alone jumped to 3.50
+      # and left android-latest stuck on v1.4.129 while main already had
+      # v1.4.130.
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: "3.47.9"
           channel: stable
           cache: true
 
