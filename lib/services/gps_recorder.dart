@@ -567,16 +567,10 @@ class GpsRecorder extends ChangeNotifier {
     return rawKmh;
   }
 
-  /// Above any real vehicle speed this app expects to record - a fix that
-  /// implies faster than this since the last *accepted* point is a
-  /// reflected/multipath GPS glitch (common near junctions, tall buildings,
-  /// underpasses), not real motion. Rejected points are simply left out of
-  /// the track rather than accepted-then-corrected, so a bad fix can't
-  /// spike the drawn route out to some other spot and back. Comparing
-  /// against the last *accepted* point (not the last raw fix) means a run
-  /// of several consecutive bad fixes gets skipped in full rather than each
-  /// one anchoring the next comparison to more noise.
-  static const _maxPlausibleSpeedKmh = 250.0;
+  /// Hard teleport ceiling while recording — same as
+  /// [maxPlausibleTrackSpeedKmh]. Isolated >120 km/h hops are cleaned by
+  /// [_pruneGpsGlitchPoints] once the next fix arrives (need two hops to
+  /// tell a lone glitch from sustained highway speed).
 
   /// How many recent points to re-scan for spike-and-return glitches after
   /// each fix ([findExcursionPointIndices] lookahead is ~150).
@@ -606,7 +600,7 @@ class GpsRecorder extends ChangeNotifier {
     if (dtSeconds <= 0) return true;
     final meters = _distance(last.latLng, latLng);
     final impliedKmh = (meters / dtSeconds) * 3.6;
-    return impliedKmh <= _maxPlausibleSpeedKmh;
+    return impliedKmh <= maxPlausibleTrackSpeedKmh;
   }
 
   void _recomputeDistanceMeters() {
@@ -703,7 +697,7 @@ class GpsRecorder extends ChangeNotifier {
         if (dtSeconds > 0) {
           final impliedKmh =
               (_distance(prevFixLatLng, here) / dtSeconds) * 3.6;
-          if (impliedKmh > _maxPlausibleSpeedKmh) {
+          if (impliedKmh > maxPlausibleTrackSpeedKmh) {
             notifyListeners();
             return;
           }

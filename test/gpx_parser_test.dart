@@ -68,5 +68,50 @@ void main() {
 
       expect(findImplausiblePointIndices(points), contains(1));
     });
+
+    test('flags an isolated hop above 120 km/h as outlier', () {
+      final start = DateTime(2026, 8, 13, 9, 0, 0);
+      // ~0.0015° lat ≈ 167 m in 4 s ≈ 150 km/h, then crawl — lone spike.
+      final points = <TrackPoint>[
+        _pt(41.0, 29.0, start),
+        _pt(41.0015, 29.0, start.add(const Duration(seconds: 4))),
+        _pt(41.00152, 29.0, start.add(const Duration(seconds: 8))),
+      ];
+
+      expect(findImplausiblePointIndices(points), contains(1));
+      expect(
+        filterImplausiblePoints(points).map((p) => p.latLng.latitude).toList(),
+        [41.0, 41.00152],
+      );
+    });
+
+    test('keeps sustained consecutive hops above 120 km/h', () {
+      final start = DateTime(2026, 8, 13, 9, 0, 0);
+      // ~140 km/h along a line for several fixes — real fast riding.
+      final points = <TrackPoint>[
+        for (var i = 0; i < 8; i++)
+          _pt(
+            41.0 + i * 0.00125,
+            29.0,
+            start.add(Duration(seconds: i * 4)),
+          ),
+      ];
+
+      expect(findImplausiblePointIndices(points), isEmpty);
+    });
+
+    test('keeps a final hop above 120 when track ends mid-speed', () {
+      final start = DateTime(2026, 8, 13, 9, 0, 0);
+      final points = <TrackPoint>[
+        for (var i = 0; i < 4; i++)
+          _pt(
+            41.0 + i * 0.00125,
+            29.0,
+            start.add(Duration(seconds: i * 4)),
+          ),
+      ];
+
+      expect(findImplausiblePointIndices(points), isEmpty);
+    });
   });
 }
