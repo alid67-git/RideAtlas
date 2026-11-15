@@ -86,9 +86,11 @@ const _helpSectionsTr = <HelpSection>[
         'duraklamalar ve gecelemeler), Hava durumu (rota boyunca günlük '
         'hava koşulları, internet gerektirir) ve Günlük (rota birden fazla '
         'güne yayılıyorsa gün gün özet - her günün kendi mesafesi, süresi '
-        've sürüş/mola dağılımı). Güzergâh, Molalar, Hava durumu ve Günlük '
-        'sekmeleri ilk açıldıklarında hesaplanır; bir kez hesaplandıktan '
-        'sonra tekrar tekrar yeniden işlenmez.',
+        've sürüş/mola dağılımı; istediğiniz günün satırındaki paylaş '
+        'simgesiyle o günü ayrı dosya olarak dışa aktarabilirsiniz). '
+        'Güzergâh, Molalar, Hava durumu ve Günlük sekmeleri ilk '
+        'açıldıklarında hesaplanır; bir kez hesaplandıktan sonra tekrar '
+        'tekrar yeniden işlenmez.',
   ),
   HelpSection(
     title: 'Fotoğraf ve video ekleme',
@@ -243,19 +245,13 @@ const _helpSectionsTr = <HelpSection>[
   HelpSection(
     title: 'Dışa aktarma',
     body:
-        'Çok günlük bir rota dışa aktarılırken gün sayısı gösterilir; tüm '
-        'rotayı tek dosya veya seçtiğiniz takvim günlerini (ör. yalnızca 1. '
-        'gün, ya da her gün ayrı) dışarıya yazabilirsiniz. Nereye '
-        'kaydedileceği sorulur: Android\'de klasör seçimi (Drive vb.) veya '
-        'paylaşım menüsü. Canlı kaydı kaydedince de “Nereye kaydedilsin?” '
-        'sorulur (klasör / paylaş / sadece uygulama); çok günlükse gün '
-        'ayırma seçenekleri de gelir. '
-        'Harita ekranındaki paylaş ikonuyla açık olan rotayı GPX, KML veya '
-        'KMZ formatında dışa aktarabilir, bir dosya adı seçip (varsayılan '
-        'olarak rotanın kendi ismi önerilir) başka bir uygulamayla veya '
-        'kişiyle paylaşabilirsiniz. Özellikle birleştirilmiş rotalarda '
-        '(otomatik "A + B" ismiyle gelenler) farklı bir isim vermek '
-        'isteyebilirsiniz.',
+        'İstenen günü çıkarmak için en net yol: kayıtlı rotayı açın → '
+        'Analiz (grafik ikonu) → Günlük → o günün satırındaki paylaş '
+        'simgesi. Haritadaki paylaş veya ⋮ → "Günleri dışa aktar" ile de '
+        'gün seçebilirsiniz. Canlı kayıtta üstteki paylaş / duraklatınca '
+        '"Günleri dışa aktar"; kaydetince “Nereye kaydedilsin?” (klasör / '
+        'paylaş / sadece uygulama) sorulur. Nereye yazılacağı: Android\'de '
+        'klasör seçici (Drive vb.) veya paylaşım menüsü.',
   ),
   HelpSection(
     title: 'Günlük Drive yedeği',
@@ -358,8 +354,9 @@ const _helpSectionsEn = <HelpSection>[
         'minutes and overnight stays), Weather (daily conditions along '
         'the route, needs internet) and Daily (a day-by-day breakdown for '
         'multi-day routes - each day\'s own distance, duration and riding/'
-        'rest split). Route, Stops, Weather and Daily are computed the '
-        'first time you open them, not recomputed on every rebuild.',
+        'rest split; tap the share icon on a day\'s row to export that day '
+        'as its own file). Route, Stops, Weather and Daily are computed '
+        'the first time you open them, not recomputed on every rebuild.',
   ),
   HelpSection(
     title: 'Adding photos and videos',
@@ -508,18 +505,13 @@ const _helpSectionsEn = <HelpSection>[
   HelpSection(
     title: 'Exporting',
     body:
-        'The share icon on the map screen exports the open route as GPX, '
-        'KML or KMZ - pick a file name (the route\'s own name is '
-        'suggested by default) and share it with another app or another '
-        'person. Merged routes (with an automatic "A + B" name) are a '
-        'common case where you\'ll want to type something different. On a '
-        'multi-day route the app shows how many days it spans: export the '
-        'whole trip as one file, or only the calendar days you pick '
-        '(each day its own file — e.g. day 1 alone, or every day one by '
-        'one). You are asked where to save: on Android a folder picker '
-        '(Drive etc.) or the share sheet. Saving a live recording also '
-        'asks “Where should it be saved?” (folder / share / app only); '
-        'multi-day saves can still split by calendar day.',
+        'To export a specific day from a saved route: open it → Analysis '
+        '(chart icon) → Daily → share icon on that day\'s row. Map share '
+        'or ⋮ → "Export days" also lets you pick days. During a live '
+        'recording use the top share icon or pause → "Export days"; '
+        'saving also asks “Where should it be saved?” (folder / share / '
+        'app only). Destination is an Android folder picker (Drive etc.) '
+        'or the share sheet.',
   ),
   HelpSection(
     title: 'Daily Drive backup',
