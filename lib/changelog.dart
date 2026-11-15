@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.134 beta',
+    date: '2026-11-15',
+    note:
+        'Çok günlük canlı kayıtta günleri çıkarma yeri: kayıt ekranı üst '
+        'sağdaki paylaş ikonu, veya duraklatınca “Günleri dışa aktar” '
+        'düğmesi — gün seç → klasör/paylaş. Kaydetince ayrıca “Nereye '
+        'kaydedilsin?” (klasör seçici / paylaş / sadece uygulama) sorulur; '
+        'çok günlükse gün ayırma da gelir. Yedek klasörü sessizce '
+        'kullanılmaz.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.133 beta',
     date: '2026-11-15',
     note:

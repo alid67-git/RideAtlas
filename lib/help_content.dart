@@ -247,8 +247,9 @@ const _helpSectionsTr = <HelpSection>[
         'rotayı tek dosya veya seçtiğiniz takvim günlerini (ör. yalnızca 1. '
         'gün, ya da her gün ayrı) dışarıya yazabilirsiniz. Nereye '
         'kaydedileceği sorulur: Android\'de klasör seçimi (Drive vb.) veya '
-        'paylaşım menüsü. Çok günlük kayıt kaydedilince de aynı gün-gün '
-        'dışa aktarma teklif edilir. '
+        'paylaşım menüsü. Canlı kaydı kaydedince de “Nereye kaydedilsin?” '
+        'sorulur (klasör / paylaş / sadece uygulama); çok günlükse gün '
+        'ayırma seçenekleri de gelir. '
         'Harita ekranındaki paylaş ikonuyla açık olan rotayı GPX, KML veya '
         'KMZ formatında dışa aktarabilir, bir dosya adı seçip (varsayılan '
         'olarak rotanın kendi ismi önerilir) başka bir uygulamayla veya '
@@ -516,8 +517,9 @@ const _helpSectionsEn = <HelpSection>[
         'whole trip as one file, or only the calendar days you pick '
         '(each day its own file — e.g. day 1 alone, or every day one by '
         'one). You are asked where to save: on Android a folder picker '
-        '(Drive etc.) or the share sheet. Saving a multi-day recording '
-        'also offers the same day-by-day export.',
+        '(Drive etc.) or the share sheet. Saving a live recording also '
+        'asks “Where should it be saved?” (folder / share / app only); '
+        'multi-day saves can still split by calendar day.',
   ),
   HelpSection(
     title: 'Daily Drive backup',
