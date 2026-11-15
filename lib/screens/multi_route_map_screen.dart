@@ -18,6 +18,7 @@ import '../services/track_display_loader.dart';
 import '../services/track_display_simplify.dart';
 import '../widgets/route_photo_strip.dart' show PhotoViewerDialog;
 import '../widgets/route_picker_dialog.dart';
+import '../widgets/map_attribution.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
 
 const _metaBoxName = 'rideatlas_meta';
@@ -639,9 +640,7 @@ class _MultiRouteMapScreenState extends State<MultiRouteMapScreen> {
               ),
             ],
           ),
-        RichAttributionWidget(
-          attributions: [TextSourceAttribution(_mapStyle.attribution)],
-        ),
+        rideAtlasMapAttribution(context, _mapStyle),
       ],
     );
   }

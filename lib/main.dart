@@ -21,6 +21,7 @@ import 'services/gps_recorder.dart';
 import 'navigation/root_navigator.dart';
 import 'widgets/app_update_ui.dart';
 import 'widgets/incoming_track_gate.dart';
+import 'widgets/system_nav_bar_lift.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -106,7 +107,9 @@ class RideAtlasApp extends StatelessWidget {
               // watches the live recorder for completed local days to back up.
               builder: (context, child) => _DailyNoonUpdateHost(
                 child: _DailyDriveBackupHost(
-                  child: child ?? const SizedBox.shrink(),
+                  child: SystemNavBarLift(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
               home: const HomeMapScreen(),

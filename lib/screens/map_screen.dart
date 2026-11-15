@@ -30,6 +30,7 @@ import '../services/track_io.dart';
 import '../widgets/day_export_dialog.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/route_photo_strip.dart';
+import '../widgets/map_attribution.dart';
 import 'analysis_sheet.dart';
 import 'location_picker_screen.dart';
 import 'route_anomaly_editor_screen.dart';
@@ -1187,9 +1188,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 ),
           ],
         ),
-        RichAttributionWidget(
-          attributions: [TextSourceAttribution(_mapStyle.attribution)],
-        ),
+        rideAtlasMapAttribution(context, _mapStyle),
       ],
     );
   }

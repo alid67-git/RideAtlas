@@ -51,6 +51,7 @@ import '../widgets/route_picker_dialog.dart';
 import '../widgets/satellite_count_badge.dart';
 import '../widgets/vehicle_marker.dart';
 import '../widgets/route_photo_strip.dart' show PhotoViewerDialog;
+import '../widgets/map_attribution.dart';
 import 'analysis_sheet.dart' show AnalysisStatCard;
 import 'location_picker_screen.dart';
 import 'map_screen.dart' show MapStylePickerDialog;
@@ -3141,9 +3142,7 @@ class _RecordScreenState extends State<RecordScreen>
             ],
           ),
 
-        RichAttributionWidget(
-          attributions: [TextSourceAttribution(style.attribution)],
-        ),
+        rideAtlasMapAttribution(context, style),
       ],
     );
   }
