@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.138 beta',
+    date: '2026-11-15',
+    note:
+        'Samsung One UI’da kayıt / zoom / konum ikonları sistem geri/son '
+        'uygulamalar çubuğunun üstüne taşındı (OS inset; yoksa 24 dp). '
+        'Harita (i) kimlik metni seçili dile göre: EN contributors, TR '
+        'katkıda bulunanlar, DE Mitwirkende.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.137 beta',
     date: '2026-11-15',
     note:

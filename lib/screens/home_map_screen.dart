@@ -30,6 +30,7 @@ import '../services/track_io.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/photo_repository.dart';
 import '../widgets/route_picker_dialog.dart';
+import '../widgets/map_attribution.dart';
 import 'settings_screen.dart';
 
 const _metaBoxName = 'rideatlas_meta';
@@ -902,9 +903,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
             ],
           ),
-        RichAttributionWidget(
-          attributions: [TextSourceAttribution(_mapStyle.attribution)],
-        ),
+        rideAtlasMapAttribution(context, _mapStyle),
       ],
     );
   }

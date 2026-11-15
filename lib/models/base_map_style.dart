@@ -68,6 +68,23 @@ class BaseMapStyle {
   /// Highest zoom the tile host actually serves. flutter_map upscales beyond
   /// this instead of requesting missing z18+ tiles that 404 and leave gaps.
   final int maxNativeZoom;
+
+  /// OSM-style credit in the rider's language. English (and German) use the
+  /// usual "contributors" wording instead of the Turkish "katkıda bulunanlar".
+  String localizedAttribution(String languageCode) {
+    final osm = switch (languageCode) {
+      'tr' => 'OpenStreetMap katkıda bulunanlar',
+      'de' => 'OpenStreetMap-Mitwirkende',
+      _ => 'OpenStreetMap contributors',
+    };
+    return switch (id) {
+      'voyager' => osm,
+      'satellite' => 'Esri, Maxar, Earthstar Geographics',
+      'topo' => '$osm, SRTM | OpenTopoMap (CC-BY-SA)',
+      'dark' || 'positron' => 'Esri, $osm',
+      _ => attribution,
+    };
+  }
 }
 
 const kBaseMapStyles = <BaseMapStyle>[
