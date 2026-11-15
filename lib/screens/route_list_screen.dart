@@ -153,7 +153,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
       _showError(AppLocalizations.of(context)!.unsupportedTrackFileType);
       return;
     }
-    final bytes = file.bytes;
+    final bytes = await readPickedTrackBytes(file);
     if (bytes == null) {
       _showError(AppLocalizations.of(context)!.fileNotReadable);
       return;
@@ -203,17 +203,22 @@ class _RouteListScreenState extends State<RouteListScreen> {
       final repo = context.read<RouteRepository>();
       for (final file in files) {
         if (!mounted) return;
-        final bytes = file.bytes;
-        if (!isSupportedTrackFileName(file.name) || bytes == null) {
+        if (!isSupportedTrackFileName(file.name)) {
+          skipped++;
+          continue;
+        }
+        final bytes = await readPickedTrackBytes(file);
+        if (bytes == null) {
           skipped++;
           continue;
         }
         try {
           await repo.importFromBytes(bytes: bytes, suggestedFileName: file.name);
           imported++;
+        } on DuplicateRouteException {
+          // Already in the library — count as success for the batch.
+          imported++;
         } catch (_) {
-          // DuplicateRouteException or a bad file - either way this file
-          // just doesn't add a new route; the rest of the batch continues.
           skipped++;
         }
       }

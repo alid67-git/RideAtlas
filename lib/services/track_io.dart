@@ -12,6 +12,7 @@ import 'gpx_parser.dart';
 import 'kml_parser.dart';
 
 export 'track_file_pick.dart' show pickTrackFiles;
+export 'track_file_bytes.dart' show readPickedTrackBytes;
 
 enum TrackFormat {
   gpx('gpx', 'GPX', 'application/gpx+xml'),

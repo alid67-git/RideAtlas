@@ -20,6 +20,15 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.136 beta',
+    date: '2026-11-15',
+    note:
+        'GPX/KML içe aktarma: file_picker bazen bytes=null + geçerli path '
+        'döndürüyordu (iPhone / bazı Android). Artık path ve xFile '
+        'yedekleniyor; “dosya okunamadı” yanlış negatifleri azalıyor. '
+        'Çoklu seçimde zaten kayıtlı rota atlanmış değil başarı sayılır.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.135 beta',
     date: '2026-11-15',
     note:
