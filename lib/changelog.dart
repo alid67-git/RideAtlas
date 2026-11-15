@@ -20,6 +20,17 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.130 beta',
+    date: '2026-11-15',
+    note:
+        'Çok günlük rota/kayıtta kaç gün olduğu gösterilir; tüm rota tek '
+        'dosya veya seçilen takvim günleri (ör. yalnızca 1. gün, ya da her '
+        'gün ayrı) dışa aktarılabilir. Nereye kaydedileceği sorulur: '
+        'Android’de klasör seçimi (Drive vb.) veya paylaşım menüsü. '
+        'Çok günlük kayıt kaydedilince aynı gün-gün dışa aktarma teklif '
+        'edilir. Analiz “Günlük” ile aynı yerel gün sınırları.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.129 beta',
     date: '2026-11-04',
     note:

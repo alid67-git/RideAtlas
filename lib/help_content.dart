@@ -243,6 +243,12 @@ const _helpSectionsTr = <HelpSection>[
   HelpSection(
     title: 'Dışa aktarma',
     body:
+        'Çok günlük bir rota dışa aktarılırken gün sayısı gösterilir; tüm '
+        'rotayı tek dosya veya seçtiğiniz takvim günlerini (ör. yalnızca 1. '
+        'gün, ya da her gün ayrı) dışarıya yazabilirsiniz. Nereye '
+        'kaydedileceği sorulur: Android\'de klasör seçimi (Drive vb.) veya '
+        'paylaşım menüsü. Çok günlük kayıt kaydedilince de aynı gün-gün '
+        'dışa aktarma teklif edilir. '
         'Harita ekranındaki paylaş ikonuyla açık olan rotayı GPX, KML veya '
         'KMZ formatında dışa aktarabilir, bir dosya adı seçip (varsayılan '
         'olarak rotanın kendi ismi önerilir) başka bir uygulamayla veya '
@@ -501,7 +507,13 @@ const _helpSectionsEn = <HelpSection>[
         'KML or KMZ - pick a file name (the route\'s own name is '
         'suggested by default) and share it with another app or another '
         'person. Merged routes (with an automatic "A + B" name) are a '
-        'common case where you\'ll want to type something different.',
+        'common case where you\'ll want to type something different. On a '
+        'multi-day route the app shows how many days it spans: export the '
+        'whole trip as one file, or only the calendar days you pick '
+        '(each day its own file — e.g. day 1 alone, or every day one by '
+        'one). You are asked where to save: on Android a folder picker '
+        '(Drive etc.) or the share sheet. Saving a multi-day recording '
+        'also offers the same day-by-day export.',
   ),
   HelpSection(
     title: 'Daily Drive backup',
