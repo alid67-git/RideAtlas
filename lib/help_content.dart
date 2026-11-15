@@ -245,13 +245,13 @@ const _helpSectionsTr = <HelpSection>[
   HelpSection(
     title: 'Dışa aktarma',
     body:
-        'İstenen günü çıkarmak için en net yol: rotayı açın → Analiz '
-        '(grafik ikonu) → Günlük → o günün satırındaki paylaş simgesi. '
-        'Haritadaki paylaş ikonu veya ⋮ menüsündeki "Günleri dışa aktar" '
-        'ile de gün seçebilirsiniz (tüm rota tek dosya veya işaretlediğiniz '
-        'günler ayrı ayrı). Nereye kaydedileceği sorulur: Android\'de klasör '
-        '(Drive vb.) veya paylaşım menüsü. Çok günlük kayıt kaydedilince '
-        'de aynı gün-gün dışa aktarma teklif edilir.',
+        'İstenen günü çıkarmak için en net yol: kayıtlı rotayı açın → '
+        'Analiz (grafik ikonu) → Günlük → o günün satırındaki paylaş '
+        'simgesi. Haritadaki paylaş veya ⋮ → "Günleri dışa aktar" ile de '
+        'gün seçebilirsiniz. Canlı kayıtta üstteki paylaş / duraklatınca '
+        '"Günleri dışa aktar"; kaydetince “Nereye kaydedilsin?” (klasör / '
+        'paylaş / sadece uygulama) sorulur. Nereye yazılacağı: Android\'de '
+        'klasör seçici (Drive vb.) veya paylaşım menüsü.',
   ),
   HelpSection(
     title: 'Günlük Drive yedeği',
@@ -505,13 +505,13 @@ const _helpSectionsEn = <HelpSection>[
   HelpSection(
     title: 'Exporting',
     body:
-        'To export a specific day: open the route → Analysis (chart icon) '
-        '→ Daily → share icon on that day\'s row. The map share icon or '
-        '⋮ → "Export days" also lets you pick days (whole trip as one '
-        'file, or checked calendar days each as their own file). You are '
-        'asked where to save: on Android a folder (Drive etc.) or the '
-        'share sheet. Saving a multi-day recording also offers the same '
-        'day-by-day export.',
+        'To export a specific day from a saved route: open it → Analysis '
+        '(chart icon) → Daily → share icon on that day\'s row. Map share '
+        'or ⋮ → "Export days" also lets you pick days. During a live '
+        'recording use the top share icon or pause → "Export days"; '
+        'saving also asks “Where should it be saved?” (folder / share / '
+        'app only). Destination is an Android folder picker (Drive etc.) '
+        'or the share sheet.',
   ),
   HelpSection(
     title: 'Daily Drive backup',

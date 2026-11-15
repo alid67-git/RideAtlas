@@ -20,14 +20,37 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
-    version: 'v1.4.132 beta',
+    version: 'v1.4.135 beta',
     date: '2026-11-15',
     note:
-        'Çok günlük rotada istenen günü bulmak kolaydı değil (yalnızca '
-        'Paylaş arkasındaydı). Artık Analiz → Günlük sekmesinde her günün '
-        'satırında paylaş simgesi var; dokununca o gün ayrı dosya olarak '
-        'klasöre veya paylaşım menüsüne gider. Harita ⋮ menüsünde de '
-        '“Günleri dışa aktar” satırı görünür.',
+        'Kayıtlı çok günlük rotada istenen günü bulmak kolaydı değil. '
+        'Artık Analiz → Günlük sekmesinde her günün satırında paylaş '
+        'simgesi var; dokununca o gün ayrı dosya olarak klasöre veya '
+        'paylaşım menüsüne gider. Harita ⋮ menüsünde de “Günleri dışa '
+        'aktar” satırı görünür.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.134 beta',
+    date: '2026-11-15',
+    note:
+        'Çok günlük canlı kayıtta günleri çıkarma yeri: kayıt ekranı üst '
+        'sağdaki paylaş ikonu, veya duraklatınca “Günleri dışa aktar” '
+        'düğmesi — gün seç → klasör/paylaş. Kaydetince ayrıca “Nereye '
+        'kaydedilsin?” (klasör seçici / paylaş / sadece uygulama) sorulur; '
+        'çok günlükse gün ayırma da gelir. Yedek klasörü sessizce '
+        'kullanılmaz.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.133 beta',
+    date: '2026-11-15',
+    note:
+        'GPS süzgeci: anlık tek hop 120 km/s üstüyse (sonraki hop da hızlı '
+        'değilse) sıra dışı kabul edilip atılır; ardışık hop’lar 120’nin '
+        'üstündeyse gerçek hız sayılır ve iz korunur. Mutlak tavan hâlâ '
+        '~300 km/s (ışınlanma). İçe aktarmada MotionX vb. uygulamalara '
+        'göre mesafe düşük çıkıyorsa (ör. 414→384 km) çoğunlukla glitch / '
+        'spike-and-return süzgecinin nokta silmesi — ham GPX ile '
+        'karşılaştırılabilir.',
   ),
   ChangelogEntry(
     version: 'v1.4.131 beta',

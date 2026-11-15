@@ -26,6 +26,7 @@ import '../repositories/live_stats_layout_controller.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
+import '../services/backup_folder_bridge.dart';
 import '../services/battery_info.dart';
 import '../services/battery_optimization.dart';
 import '../services/daily_analysis.dart';
@@ -1360,15 +1361,13 @@ class _RecordScreenState extends State<RecordScreen>
       if (!mounted) return;
     }
 
-    // Multi-day session: offer day-by-day external export (folder / share)
-    // before the resume/reset choice — same day buckets as Analiz > Günlük.
-    final dayStats = splitIntoDays(points);
-    if (dayStats.length >= 2 && mounted) {
-      await _offerMultiDayExport(
+    // Always ask where to also write the GPX outside the app (folder /
+    // share / skip) — riders expect a destination when they tap Save.
+    if (mounted) {
+      await _offerExternalSaveAfterRecording(
         routeName: name,
         points: points,
         waypoints: waypoints,
-        days: dayStats,
       );
       if (!mounted) return;
     }
@@ -1401,33 +1400,41 @@ class _RecordScreenState extends State<RecordScreen>
     // Dismissed (tap outside / back): stay paused, decide later.
   }
 
-  /// After saving a multi-day recording: ask whether to export individual
-  /// calendar days externally, and where (SAF folder or share sheet).
-  Future<void> _offerMultiDayExport({
-    required String routeName,
-    required List<TrackPoint> points,
-    required List<Waypoint> waypoints,
-    required List<DayStats> days,
-  }) async {
+  /// Mid-recording (or paused): export selected calendar days from the
+  /// live track without finishing the session. Shown when the ride already
+  /// spans 2+ local days — this is the menu riders look for.
+  Future<void> _exportDaysFromLiveRecording() async {
     final l10n = AppLocalizations.of(context)!;
-    final want = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.dayExportOfferTitle(days.length)),
-        content: Text(l10n.dayExportOfferMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.dayExportOfferSkip),
+    final recorder = context.read<GpsRecorder>();
+    if (recorder.isIdle) return;
+    final points = List<TrackPoint>.from(recorder.points);
+    final days = splitIntoDays(points);
+    if (days.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.recordingExportDaysNeedMulti)),
+      );
+      return;
+    }
+
+    final waypoints = [
+      for (final a in _sessionAnnotations)
+        if (a.hasNote || a.hasPhoto)
+          Waypoint(
+            latLng: a.latLng,
+            name: a.hasNote
+                ? a.note!.trim()
+                : l10n.recordingPhotoWaypointName,
+            description: a.hasPhoto && a.hasNote
+                ? l10n.recordingPhotoWaypointName
+                : null,
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.dayExportOfferExport),
-          ),
-        ],
-      ),
+    ];
+    final routeName = l10n.recordingDefaultName(
+      DateFormat(
+        'd MMM yyyy HH:mm',
+        Localizations.localeOf(context).languageCode,
+      ).format(DateTime.now()),
     );
-    if (want != true || !mounted) return;
 
     final format = await showDialog<TrackFormat>(
       context: context,
@@ -1456,13 +1463,119 @@ class _RecordScreenState extends State<RecordScreen>
     );
     if (files.isEmpty || !mounted) return;
 
-    final backup = context.read<DailyDriveBackupController>();
     final result = await deliverExportFiles(
       files: files,
       destination: plan.destination,
       subject: routeName,
-      existingFolderUri: backup.isConfigured ? backup.folderUri : null,
-      existingFolderName: backup.isConfigured ? backup.folderName : null,
+    );
+    if (!mounted) return;
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dayExportFailed)),
+      );
+    } else if (plan.destination == DayExportDestination.folder) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dayExportSavedToFolder(result))),
+      );
+    }
+  }
+
+  /// After the ride is in the app library: ask where to write the GPX
+  /// file(s) externally. Folder choice always opens the system picker —
+  /// never silently reuse the daily-backup URI (riders expect to pick).
+  Future<void> _offerExternalSaveAfterRecording({
+    required String routeName,
+    required List<TrackPoint> points,
+    required List<Waypoint> waypoints,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    final days = splitIntoDays(points);
+
+    final destination = await showDialog<DayExportDestination?>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.recordingExternalSaveTitle),
+        content: Text(
+          days.length >= 2
+              ? l10n.recordingExternalSaveMultiDayMessage(days.length)
+              : l10n.recordingExternalSaveMessage,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: Text(l10n.recordingExternalSaveAppOnly),
+          ),
+          if (BackupFolderBridge.isSupported) ...[
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(context, DayExportDestination.share),
+              child: Text(l10n.dayExportDestinationShare),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(context, DayExportDestination.folder),
+              child: Text(l10n.dayExportDestinationFolder),
+            ),
+          ] else
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(context, DayExportDestination.share),
+              child: Text(l10n.dayExportDestinationShare),
+            ),
+        ],
+      ),
+    );
+    // null = "app only" or dismissed
+    if (destination == null || !mounted) return;
+
+    final format = await showDialog<TrackFormat>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(l10n.exportFormatQuestion),
+        children: [
+          for (final f in TrackFormat.values)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, f),
+              child: Text(f.label),
+            ),
+        ],
+      ),
+    );
+    if (format == null || !mounted) return;
+
+    late final DayExportPlan plan;
+    if (days.length >= 2) {
+      final chosen = await showDayExportDialog(
+        context: context,
+        days: days,
+        // Destination already chosen above — dialog only picks scope/days.
+        fixedDestination: destination,
+      );
+      if (chosen == null || !mounted) return;
+      plan = chosen;
+    } else {
+      plan = DayExportPlan(
+        scope: DayExportScope.fullRoute,
+        destination: destination,
+        selectedDays: const [],
+      );
+    }
+
+    final files = preparePlanExportFiles(
+      plan: plan,
+      routeName: routeName,
+      points: points,
+      waypoints: waypoints,
+      format: format,
+    );
+    if (files.isEmpty || !mounted) return;
+
+    // Always pick the folder when saving from a recording — do not reuse
+    // the silent daily-backup URI.
+    final result = await deliverExportFiles(
+      files: files,
+      destination: plan.destination,
+      subject: routeName,
     );
     if (!mounted) return;
     if (result == null) {
@@ -1777,6 +1890,14 @@ class _RecordScreenState extends State<RecordScreen>
                           padding: EdgeInsets.only(top: 4),
                           child: SatelliteCountBadge(),
                         ),
+                        if (!recorder.isIdle) ...[
+                          const SizedBox(width: 8),
+                          _RoundIconButton(
+                            icon: Icons.ios_share,
+                            tooltip: l10n.recordingExportDaysTooltip,
+                            onPressed: _exportDaysFromLiveRecording,
+                          ),
+                        ],
                         const SizedBox(width: 8),
                         _RoundIconButton(
                           icon: Icons.settings,
@@ -2113,6 +2234,14 @@ class _RecordScreenState extends State<RecordScreen>
                       _buildOverlayMenuButton(l10n),
                       const Spacer(),
                       const SatelliteCountBadge(),
+                      if (!recorder.isIdle) ...[
+                        const SizedBox(width: 8),
+                        _RoundIconButton(
+                          icon: Icons.ios_share,
+                          tooltip: l10n.recordingExportDaysTooltip,
+                          onPressed: _exportDaysFromLiveRecording,
+                        ),
+                      ],
                       const SizedBox(width: 8),
                       _RoundIconButton(
                         icon: Icons.settings,
@@ -2417,10 +2546,14 @@ class _RecordScreenState extends State<RecordScreen>
     }
 
     // Paused: resume, save the ride so far (session keeps going - see
-    // _saveRecording), or reset to zero (confirmation only if unsaved -
-    // see _resetRecording).
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    // _saveRecording), export days when multi-day, or reset to zero
+    // (confirmation only if unsaved - see _resetRecording).
+    final multiDay = splitIntoDays(recorder.points).length >= 2;
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 12,
+      runSpacing: 12,
       children: [
         FloatingActionButton(
           heroTag: 'recordPauseResume',
@@ -2428,7 +2561,6 @@ class _RecordScreenState extends State<RecordScreen>
           onPressed: recorder.resume,
           child: const Icon(Icons.play_arrow),
         ),
-        const SizedBox(width: 16),
         FilledButton.icon(
           onPressed: _saving ? null : _saveRecording,
           icon: _saving
@@ -2440,7 +2572,12 @@ class _RecordScreenState extends State<RecordScreen>
               : const Icon(Icons.save_outlined),
           label: Text(l10n.save),
         ),
-        const SizedBox(width: 16),
+        if (multiDay)
+          FilledButton.tonalIcon(
+            onPressed: _saving ? null : _exportDaysFromLiveRecording,
+            icon: const Icon(Icons.ios_share),
+            label: Text(l10n.recordingExportDaysButton),
+          ),
         FloatingActionButton(
           heroTag: 'recordReset',
           tooltip: l10n.resetRecordingButton,
