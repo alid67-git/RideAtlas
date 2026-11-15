@@ -16,6 +16,7 @@ import '../models/gpx_route.dart';
 import '../models/route_photo.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
+import '../repositories/daily_drive_backup_controller.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart';
@@ -674,10 +675,15 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
     if (files.isEmpty || !mounted) return;
 
+    final backup = context.read<DailyDriveBackupController>();
     final result = await deliverExportFiles(
       files: files,
       destination: plan.destination,
       subject: name,
+      // Same Drive/SAF folder as Günlük yedek — all days in one shot,
+      // no second folder picker when backup is already configured.
+      existingFolderUri: backup.isConfigured ? backup.folderUri : null,
+      existingFolderName: backup.isConfigured ? backup.folderName : null,
     );
     if (!mounted) return;
     if (result == null) {

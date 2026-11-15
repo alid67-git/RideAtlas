@@ -60,6 +60,26 @@ Future<void> shareExportFiles(
   );
 }
 
+/// Writes every file into [folderUri] (existing persistable SAF tree).
+/// Returns [folderName] on success, null if unsupported / failed.
+Future<String?> writeExportFilesToFolder({
+  required List<PreparedExportFile> files,
+  required String folderUri,
+  String? folderName,
+}) async {
+  if (!BackupFolderBridge.isSupported || files.isEmpty) return null;
+  if (folderUri.isEmpty) return null;
+  for (final f in files) {
+    final ok = await BackupFolderBridge.writeFile(
+      uri: folderUri,
+      fileName: f.fileName,
+      bytes: f.export.bytes,
+    );
+    if (!ok) return null;
+  }
+  return folderName ?? 'Drive';
+}
+
 /// Opens the SAF folder picker and writes every file. Returns the folder
 /// display name on success, null if cancelled or unsupported / failed.
 Future<String?> writeExportFilesToPickedFolder(
@@ -68,23 +88,25 @@ Future<String?> writeExportFilesToPickedFolder(
   if (!BackupFolderBridge.isSupported || files.isEmpty) return null;
   final picked = await BackupFolderBridge.pickFolder();
   if (picked == null) return null;
-  for (final f in files) {
-    final ok = await BackupFolderBridge.writeFile(
-      uri: picked.uri,
-      fileName: f.fileName,
-      bytes: f.export.bytes,
-    );
-    if (!ok) return null;
-  }
-  return picked.name;
+  return writeExportFilesToFolder(
+    files: files,
+    folderUri: picked.uri,
+    folderName: picked.name,
+  );
 }
 
 /// Delivers [files] according to [destination].
 /// Returns `share`, the folder display name, or null if cancelled/failed.
+///
+/// When [destination] is [DayExportDestination.folder] and
+/// [existingFolderUri] is set (e.g. Ayarlar → Günlük Drive yedeği), writes
+/// there without opening another picker so all days land in one shot.
 Future<String?> deliverExportFiles({
   required List<PreparedExportFile> files,
   required DayExportDestination destination,
   String? subject,
+  String? existingFolderUri,
+  String? existingFolderName,
 }) async {
   if (files.isEmpty) return null;
   switch (destination) {
@@ -92,6 +114,14 @@ Future<String?> deliverExportFiles({
       await shareExportFiles(files, subject: subject);
       return 'share';
     case DayExportDestination.folder:
+      final uri = existingFolderUri;
+      if (uri != null && uri.isNotEmpty) {
+        return writeExportFilesToFolder(
+          files: files,
+          folderUri: uri,
+          folderName: existingFolderName,
+        );
+      }
       return writeExportFilesToPickedFolder(files);
   }
 }

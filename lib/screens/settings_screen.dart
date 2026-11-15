@@ -13,6 +13,7 @@ import '../repositories/vehicle_icon_controller.dart';
 import '../services/app_update_controller.dart';
 import '../services/backup_folder_bridge.dart';
 import '../services/battery_optimization.dart';
+import '../services/gps_recorder.dart';
 import '../services/update_checker.dart';
 import '../services/web_update_check.dart';
 import '../widgets/app_update_ui.dart';
@@ -320,13 +321,61 @@ class _CheckForUpdatesTileState extends State<_CheckForUpdatesTile> {
 class _DailyDriveBackupSettings extends StatelessWidget {
   const _DailyDriveBackupSettings();
 
+  Future<void> _catchUpNow(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final backup = context.read<DailyDriveBackupController>();
+    final recorder = context.read<GpsRecorder>();
+    if (!backup.isConfigured) return;
+    if (recorder.isIdle || recorder.points.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dailyDriveBackupCatchUpIdle)),
+      );
+      return;
+    }
+    final result = await backup.backupDaysPresent(
+      points: List.of(recorder.points),
+      includeToday: true,
+    );
+    if (!context.mounted) return;
+    final message = result.failed > 0
+        ? l10n.dailyDriveBackupCatchUpFailed(result.written, result.failed)
+        : result.written > 0
+        ? l10n.dailyDriveBackupCatchUpDone(result.written)
+        : l10n.dailyDriveBackupCatchUpNone;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _pickFolderAndCatchUp(BuildContext context) async {
+    final backup = context.read<DailyDriveBackupController>();
+    final ok = await backup.pickFolder();
+    if (!ok || !context.mounted) return;
+    // Re-selecting the Drive folder is often how riders recover after
+    // permission loss — write every missing day from the live session now.
+    final recorder = context.read<GpsRecorder>();
+    if (recorder.isIdle || recorder.points.isEmpty) return;
+    final l10n = AppLocalizations.of(context)!;
+    final result = await backup.backupDaysPresent(
+      points: List.of(recorder.points),
+      includeToday: true,
+    );
+    if (!context.mounted) return;
+    if (!result.hadWork) return;
+    final message = result.failed > 0
+        ? l10n.dailyDriveBackupCatchUpFailed(result.written, result.failed)
+        : l10n.dailyDriveBackupCatchUpDone(result.written);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final backup = context.watch<DailyDriveBackupController>();
     final folderLabel = backup.folderName;
+    final errorKey = backup.lastError;
     final subtitle = !backup.enabled
         ? l10n.dailyDriveBackupOffSubtitle
+        : errorKey != null
+        ? l10n.dailyDriveBackupErrorSubtitle(errorKey)
         : folderLabel == null || folderLabel.isEmpty
         ? l10n.dailyDriveBackupPickFolderSubtitle
         : l10n.dailyDriveBackupFolderSubtitle(folderLabel);
@@ -345,8 +394,8 @@ class _DailyDriveBackupSettings extends StatelessWidget {
                   if (value &&
                       (backup.folderUri == null || backup.folderUri!.isEmpty) &&
                       context.mounted) {
-                    final ok = await backup.pickFolder();
-                    if (!ok && context.mounted) {
+                    await _pickFolderAndCatchUp(context);
+                    if (backup.folderUri == null && context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(l10n.dailyDriveBackupPickFolderSubtitle),
@@ -356,7 +405,7 @@ class _DailyDriveBackupSettings extends StatelessWidget {
                   }
                 },
         ),
-        if (backup.enabled)
+        if (backup.enabled) ...[
           ListTile(
             leading: const Icon(Icons.folder_outlined),
             title: Text(l10n.dailyDriveBackupPickFolderTitle),
@@ -372,15 +421,23 @@ class _DailyDriveBackupSettings extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.chevron_right),
-            onTap: backup.isBusy
-                ? null
-                : () async {
-                    final ok = await backup.pickFolder();
-                    if (!ok && context.mounted) {
-                      // Cancelled - leave previous folder as-is.
-                    }
-                  },
+            onTap: backup.isBusy ? null : () => _pickFolderAndCatchUp(context),
           ),
+          if (backup.folderUri != null && backup.folderUri!.isNotEmpty)
+            ListTile(
+              leading: const Icon(Icons.upload_file_outlined),
+              title: Text(l10n.dailyDriveBackupCatchUpTitle),
+              subtitle: Text(l10n.dailyDriveBackupCatchUpSubtitle),
+              trailing: backup.isBusy
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.chevron_right),
+              onTap: backup.isBusy ? null : () => _catchUpNow(context),
+            ),
+        ],
       ],
     );
   }

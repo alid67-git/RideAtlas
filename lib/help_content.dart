@@ -264,8 +264,12 @@ const _helpSectionsTr = <HelpSection>[
         '- dosyada yalnızca o günün noktaları vardır, tüm sürüş birikmez. '
         'Ayarlar > Günlük Drive yedeği\'ni açıp Google Drive (veya başka '
         'bir depolama) klasörü seçin. Gece yarısı geçen gün otomatik '
-        'yazılır; kayıt sırasında kaydettiğinizde o ana kadarki günler '
-        'de klasöre düşer. Dosya adı RideAtlas_yyyy-MM-dd.gpx.',
+        'yazılır; uygulama öne gelince veya klasör yeniden seçilince '
+        'eksik günler yakalanır. "Eksik günleri şimdi yaz" ile açık '
+        'kayıttaki tüm günleri bir defada klasöre aktarabilirsiniz. '
+        'Kayıt sırasında kaydettiğinizde o ana kadarki günler de düşer. '
+        'Dosya adı RideAtlas_yyyy-MM-dd.gpx. Kayıtlı çok günlük rotadan '
+        'Paylaş ile de günleri tek seferde klasöre yazabilirsiniz.'
   ),
   HelpSection(
     title: 'Uygulama güncellemeleri',
@@ -523,8 +527,12 @@ const _helpSectionsEn = <HelpSection>[
         'tab — containing only that day\'s points, not the whole ride. '
         'Turn on Settings > Daily Drive backup and pick a Google Drive '
         '(or other) folder. When midnight passes, yesterday is written '
-        'automatically; mid-ride save also flushes completed days. Files '
-        'are named RideAtlas_yyyy-MM-dd.gpx.',
+        'automatically; bringing the app to the foreground or re-picking '
+        'the folder also catches up missing days. "Write missing days now" '
+        'flushes every day from the open recording in one pass. Mid-ride '
+        'save also writes days present so far. Files are named '
+        'RideAtlas_yyyy-MM-dd.gpx. From a saved multi-day route, Share '
+        'can write every selected day to the same folder at once.'
   ),
   HelpSection(
     title: 'App updates',
