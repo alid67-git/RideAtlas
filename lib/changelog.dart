@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.137 beta',
+    date: '2026-11-15',
+    note:
+        'iPhone kayıt: hop-within-noise izi seyreltirken HUD hızını da '
+        'sıfırlıyordu (gerçek hız → 0 yanıp sönmesi). Artık HUD yalnız '
+        'StickyStay kilitliyken 0; sürüşte Doppler∩displacement. Kayıt '
+        'StickyStay açık başlar (ilk 80–240 m düşmez). İz seyreltme tabanı '
+        '5 m. iOS: AppleSettings distanceFilter 0, otomatik pause kapalı.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.136 beta',
     date: '2026-11-15',
     note:
