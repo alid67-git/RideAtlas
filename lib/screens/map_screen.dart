@@ -1,17 +1,14 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' show max, min, pi;
 
-import 'package:flutter/foundation.dart' show compute, kIsWeb;
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hive/hive.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
@@ -22,11 +19,14 @@ import '../models/waypoint.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart';
+import '../services/day_export.dart';
 import '../services/exif_gps.dart';
 import '../services/map_camera_fit.dart';
 import '../services/route_geography.dart';
 import '../services/track_display_simplify.dart';
+import '../services/track_export_actions.dart';
 import '../services/track_io.dart';
+import '../widgets/day_export_dialog.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/route_photo_strip.dart';
 import 'analysis_sheet.dart';
@@ -609,11 +609,12 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   Future<void> _share(GpxRoute route) async {
     final points = _points;
     if (points == null) return;
+    final l10n = AppLocalizations.of(context)!;
 
     final format = await showDialog<TrackFormat>(
       context: context,
       builder: (context) => SimpleDialog(
-        title: Text(AppLocalizations.of(context)!.exportFormatQuestion),
+        title: Text(l10n.exportFormatQuestion),
         children: [
           for (final f in TrackFormat.values)
             SimpleDialogOption(
@@ -625,60 +626,69 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
     if (format == null || !mounted) return;
 
+    final days = splitIntoDays(points);
+    DayExportPlan plan;
+    if (days.length >= 2) {
+      final chosen = await showDayExportDialog(context: context, days: days);
+      if (chosen == null || !mounted) return;
+      plan = chosen;
+    } else {
+      plan = const DayExportPlan(
+        scope: DayExportScope.fullRoute,
+        destination: DayExportDestination.share,
+        selectedDays: [],
+      );
+    }
+
     // Defaults to the route's own saved name - riders only need to type
     // something different when they actually want to (e.g. a merged
     // route's auto-generated "A + B" name), not on every single export.
+    // Day-split files append yyyy-MM-dd themselves.
     final nameController = TextEditingController(text: route.name);
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(AppLocalizations.of(context)!.exportNameQuestion),
+        title: Text(l10n.exportNameQuestion),
         content: TextField(controller: nameController, autofocus: true),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(AppLocalizations.of(context)!.cancel),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () =>
                 Navigator.pop(context, nameController.text.trim()),
-            child: Text(AppLocalizations.of(context)!.save),
+            child: Text(l10n.save),
           ),
         ],
       ),
     );
     if (name == null || name.isEmpty || !mounted) return;
 
-    final export = buildTrackExport(
-      name: name,
+    final files = preparePlanExportFiles(
+      plan: plan,
+      routeName: name,
       points: points,
       waypoints: _waypoints ?? const [],
       format: format,
     );
-    XFile shareFile;
-    if (kIsWeb) {
-      // No filesystem to write a real file to - the browser's own
-      // save/share affordance reads the name from XFile.fromData directly.
-      shareFile = XFile.fromData(
-        export.bytes,
-        name: '$name.${export.extension}',
-        mimeType: export.mimeType,
-      );
-    } else {
-      // XFile.fromData doesn't reliably carry its `name:` through to the
-      // share sheet on Android - the receiving app shows some internal
-      // random-looking temp name instead of the one just chosen above. A
-      // real file on disk, named up front, is what actually shows up in
-      // the share sheet.
-      final safeName = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-      final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/$safeName.${export.extension}');
-      await file.writeAsBytes(export.bytes);
-      shareFile = XFile(file.path, mimeType: export.mimeType);
-    }
-    await SharePlus.instance.share(
-      ShareParams(files: [shareFile], subject: name),
+    if (files.isEmpty || !mounted) return;
+
+    final result = await deliverExportFiles(
+      files: files,
+      destination: plan.destination,
+      subject: name,
     );
+    if (!mounted) return;
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dayExportFailed)),
+      );
+    } else if (plan.destination == DayExportDestination.folder) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dayExportSavedToFolder(result))),
+      );
+    }
   }
 
   /// A single entry point for adding either photos or videos: picking from

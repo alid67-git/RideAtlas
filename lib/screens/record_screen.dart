@@ -28,7 +28,8 @@ import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
 import '../services/battery_info.dart';
 import '../services/battery_optimization.dart';
-import '../services/daily_analysis.dart' show colorForDay;
+import '../services/daily_analysis.dart';
+import '../services/day_export.dart';
 import '../services/exif_gps.dart';
 import '../services/gallery_scan.dart';
 import '../services/gps_recorder.dart';
@@ -39,8 +40,10 @@ import '../services/map_camera_fit.dart';
 import '../services/track_heading.dart';
 import '../services/track_display_loader.dart';
 import '../services/track_display_simplify.dart';
+import '../services/track_export_actions.dart';
 import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';
+import '../widgets/day_export_dialog.dart';
 import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/route_picker_dialog.dart';
@@ -1357,6 +1360,19 @@ class _RecordScreenState extends State<RecordScreen>
       if (!mounted) return;
     }
 
+    // Multi-day session: offer day-by-day external export (folder / share)
+    // before the resume/reset choice — same day buckets as Analiz > Günlük.
+    final dayStats = splitIntoDays(points);
+    if (dayStats.length >= 2 && mounted) {
+      await _offerMultiDayExport(
+        routeName: name,
+        points: points,
+        waypoints: waypoints,
+        days: dayStats,
+      );
+      if (!mounted) return;
+    }
+
     final resume = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1383,6 +1399,78 @@ class _RecordScreenState extends State<RecordScreen>
       await _resetRecording();
     }
     // Dismissed (tap outside / back): stay paused, decide later.
+  }
+
+  /// After saving a multi-day recording: ask whether to export individual
+  /// calendar days externally, and where (SAF folder or share sheet).
+  Future<void> _offerMultiDayExport({
+    required String routeName,
+    required List<TrackPoint> points,
+    required List<Waypoint> waypoints,
+    required List<DayStats> days,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    final want = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.dayExportOfferTitle(days.length)),
+        content: Text(l10n.dayExportOfferMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.dayExportOfferSkip),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.dayExportOfferExport),
+          ),
+        ],
+      ),
+    );
+    if (want != true || !mounted) return;
+
+    final format = await showDialog<TrackFormat>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(l10n.exportFormatQuestion),
+        children: [
+          for (final f in TrackFormat.values)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, f),
+              child: Text(f.label),
+            ),
+        ],
+      ),
+    );
+    if (format == null || !mounted) return;
+
+    final plan = await showDayExportDialog(context: context, days: days);
+    if (plan == null || !mounted) return;
+
+    final files = preparePlanExportFiles(
+      plan: plan,
+      routeName: routeName,
+      points: points,
+      waypoints: waypoints,
+      format: format,
+    );
+    if (files.isEmpty || !mounted) return;
+
+    final result = await deliverExportFiles(
+      files: files,
+      destination: plan.destination,
+      subject: routeName,
+    );
+    if (!mounted) return;
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dayExportFailed)),
+      );
+    } else if (plan.destination == DayExportDestination.folder) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dayExportSavedToFolder(result))),
+      );
+    }
   }
 
   /// Looks for photos/videos the gallery gained during this ride and, if
