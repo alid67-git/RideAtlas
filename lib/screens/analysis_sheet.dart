@@ -6,18 +6,28 @@ import 'package:provider/provider.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
 import '../models/track_point.dart';
+import '../models/waypoint.dart';
 import '../repositories/stat_icon_settings_controller.dart';
 import '../services/daily_analysis.dart';
 import '../services/gpx_parser.dart';
 import '../services/route_geography.dart';
+import '../services/run_day_export.dart';
 import '../services/weather_service.dart';
 
 /// Tabbed route analysis: overview, elevation, countries, stops, weather.
 class AnalysisSheet extends StatefulWidget {
-  const AnalysisSheet({super.key, required this.route, required this.points});
+  const AnalysisSheet({
+    super.key,
+    required this.route,
+    required this.points,
+    this.waypoints = const [],
+  });
 
   final GpxRoute route;
   final List<TrackPoint> points;
+
+  /// Named points from the GPX — attached to the matching day file on export.
+  final List<Waypoint> waypoints;
 
   @override
   State<AnalysisSheet> createState() => _AnalysisSheetState();
@@ -240,7 +250,9 @@ class _AnalysisSheetState extends State<AnalysisSheet>
                       },
                     ),
                     _DailyTab(
+                      routeName: route.name,
                       points: widget.points,
+                      waypoints: widget.waypoints,
                       geography: _geography,
                       geoLoading: _geoLoading,
                     ),
@@ -883,12 +895,16 @@ String weatherLabelFor(AppLocalizations l10n, int code) {
 
 class _DailyTab extends StatelessWidget {
   const _DailyTab({
+    required this.routeName,
     required this.points,
+    required this.waypoints,
     required this.geography,
     required this.geoLoading,
   });
 
+  final String routeName;
   final List<TrackPoint> points;
+  final List<Waypoint> waypoints;
   final RouteGeography? geography;
   final bool geoLoading;
 
@@ -908,12 +924,28 @@ class _DailyTab extends StatelessWidget {
       padding: const EdgeInsets.only(right: 8, top: 8),
       children: [
         Text(l10n.daysCountLabel(days.length), style: theme.textTheme.titleSmall),
+        if (days.length >= 2) ...[
+          const SizedBox(height: 4),
+          Text(
+            l10n.dayExportFromDailyHint,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         for (final day in days) ...[
           _DayCard(
             day: day,
             geoLoading: geoLoading,
             hasGeography: geography != null,
+            onExport: () => exportSingleCalendarDay(
+              context: context,
+              routeName: routeName,
+              points: points,
+              waypoints: waypoints,
+              day: day.date,
+            ),
           ),
           const SizedBox(height: 8),
         ],
@@ -927,11 +959,13 @@ class _DayCard extends StatelessWidget {
     required this.day,
     required this.geoLoading,
     required this.hasGeography,
+    required this.onExport,
   });
 
   final DayStats day;
   final bool geoLoading;
   final bool hasGeography;
+  final VoidCallback onExport;
 
   @override
   Widget build(BuildContext context) {
@@ -971,6 +1005,12 @@ class _DayCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+              ),
+              IconButton(
+                tooltip: l10n.dayExportThisDayTooltip,
+                icon: const Icon(Icons.ios_share),
+                visualDensity: VisualDensity.compact,
+                onPressed: onExport,
               ),
             ],
           ),

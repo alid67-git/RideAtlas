@@ -20,6 +20,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.132 beta',
+    date: '2026-11-15',
+    note:
+        'Çok günlük rotada istenen günü bulmak kolaydı değil (yalnızca '
+        'Paylaş arkasındaydı). Artık Analiz → Günlük sekmesinde her günün '
+        'satırında paylaş simgesi var; dokununca o gün ayrı dosya olarak '
+        'klasöre veya paylaşım menüsüne gider. Harita ⋮ menüsünde de '
+        '“Günleri dışa aktar” satırı görünür.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.131 beta',
     date: '2026-11-15',
     note:
