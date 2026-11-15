@@ -77,10 +77,11 @@ class _AnalysisSheetState extends State<AnalysisSheet>
     try {
       final result = await RouteGeographyAnalyzer().analyze(
         widget.points,
-        onProgress: (msg, p) {
+        onProgress: (_, p) {
           if (!mounted) return;
           setState(() {
-            _status = msg;
+            // Keep the localized status; service progress strings are
+            // implementation details and must not leak Turkish into EN/DE.
             _progress = p;
           });
         },
@@ -116,10 +117,9 @@ class _AnalysisSheetState extends State<AnalysisSheet>
     try {
       final result = await WeatherService.instance.forTrack(
         widget.points,
-        onProgress: (msg, p) {
+        onProgress: (_, p) {
           if (!mounted) return;
           setState(() {
-            _status = msg;
             _progress = p;
           });
         },

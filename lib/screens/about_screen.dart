@@ -66,7 +66,10 @@ class AboutScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
-            Text(entry.note, style: theme.textTheme.bodyMedium),
+            Text(
+              entry.noteFor(Localizations.localeOf(context).languageCode),
+              style: theme.textTheme.bodyMedium,
+            ),
             const SizedBox(height: 16),
           ],
         ],
