@@ -9,21 +9,31 @@ import '../services/day_export.dart';
 /// Asks which part of a multi-day track to export and where to put it.
 ///
 /// Returns null if cancelled. [days] must have length ≥ 2.
+/// When [fixedDestination] is set, the destination radios are hidden and
+/// that value is used (e.g. recording save already asked folder vs share).
 Future<DayExportPlan?> showDayExportDialog({
   required BuildContext context,
   required List<DayStats> days,
+  DayExportDestination? fixedDestination,
 }) {
   assert(days.length >= 2);
   return showDialog<DayExportPlan>(
     context: context,
-    builder: (context) => _DayExportDialog(days: days),
+    builder: (context) => _DayExportDialog(
+      days: days,
+      fixedDestination: fixedDestination,
+    ),
   );
 }
 
 class _DayExportDialog extends StatefulWidget {
-  const _DayExportDialog({required this.days});
+  const _DayExportDialog({
+    required this.days,
+    this.fixedDestination,
+  });
 
   final List<DayStats> days;
+  final DayExportDestination? fixedDestination;
 
   @override
   State<_DayExportDialog> createState() => _DayExportDialogState();
@@ -32,14 +42,16 @@ class _DayExportDialog extends StatefulWidget {
 class _DayExportDialogState extends State<_DayExportDialog> {
   DayExportScope _scope = DayExportScope.selectedDays;
   late Set<DateTime> _checked;
-  DayExportDestination _destination = BackupFolderBridge.isSupported
-      ? DayExportDestination.folder
-      : DayExportDestination.share;
+  late DayExportDestination _destination;
 
   @override
   void initState() {
     super.initState();
     _checked = {for (final d in widget.days) d.date};
+    _destination = widget.fixedDestination ??
+        (BackupFolderBridge.isSupported
+            ? DayExportDestination.folder
+            : DayExportDestination.share);
   }
 
   void _toggleDay(DateTime day, bool? value) {
@@ -75,6 +87,7 @@ class _DayExportDialogState extends State<_DayExportDialog> {
     final dateFmt =
         DateFormat.yMMMEd(Localizations.localeOf(context).toString());
     final folderOk = BackupFolderBridge.isSupported;
+    final pickDestination = widget.fixedDestination == null;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 36),
@@ -151,36 +164,38 @@ class _DayExportDialogState extends State<_DayExportDialog> {
                   ),
                 ),
               ],
-              const Divider(height: 16),
-              Text(
-                l10n.dayExportDestinationTitle,
-                style: theme.textTheme.titleSmall,
-              ),
-              const SizedBox(height: 4),
-              RadioGroup<DayExportDestination>(
-                groupValue: _destination,
-                onChanged: (v) {
-                  if (v == null) return;
-                  setState(() => _destination = v);
-                },
-                child: Column(
-                  children: [
-                    if (folderOk)
+              if (pickDestination) ...[
+                const Divider(height: 16),
+                Text(
+                  l10n.dayExportDestinationTitle,
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(height: 4),
+                RadioGroup<DayExportDestination>(
+                  groupValue: _destination,
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _destination = v);
+                  },
+                  child: Column(
+                    children: [
+                      if (folderOk)
+                        RadioListTile<DayExportDestination>(
+                          value: DayExportDestination.folder,
+                          title: Text(l10n.dayExportDestinationFolder),
+                          subtitle: Text(l10n.dayExportDestinationFolderHint),
+                          contentPadding: EdgeInsets.zero,
+                        ),
                       RadioListTile<DayExportDestination>(
-                        value: DayExportDestination.folder,
-                        title: Text(l10n.dayExportDestinationFolder),
-                        subtitle: Text(l10n.dayExportDestinationFolderHint),
+                        value: DayExportDestination.share,
+                        title: Text(l10n.dayExportDestinationShare),
+                        subtitle: Text(l10n.dayExportDestinationShareHint),
                         contentPadding: EdgeInsets.zero,
                       ),
-                    RadioListTile<DayExportDestination>(
-                      value: DayExportDestination.share,
-                      title: Text(l10n.dayExportDestinationShare),
-                      subtitle: Text(l10n.dayExportDestinationShareHint),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,

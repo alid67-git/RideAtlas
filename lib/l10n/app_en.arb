@@ -295,16 +295,16 @@
   "dayExportSelectedDaysHint": "Check the days you want — e.g. only day 1.",
   "dayExportDestinationTitle": "Where should it be saved?",
   "dayExportDestinationFolder": "Save to folder",
-  "dayExportDestinationFolderHint": "If a Daily backup folder is set, files go there; otherwise you pick a folder.",
+  "dayExportDestinationFolderHint": "You pick Google Drive or a phone folder; files are written there.",
   "dayExportDestinationShare": "Share sheet",
   "dayExportDestinationShareHint": "Send to Drive, Files, email, or another app.",
   "dayExportContinue": "Continue",
   "dayExportFailed": "Export was cancelled or could not finish.",
   "dayExportSavedToFolder": "Files saved to: {folder}",
   "@dayExportSavedToFolder": {"placeholders": {"folder": {"type": "String"}}},
-  "dayExportOfferTitle": "Recording covered {count} days",
-  "@dayExportOfferTitle": {"placeholders": {"count": {"type": "int"}}},
-  "dayExportOfferMessage": "The route is saved in the app. You can also export calendar days as separate files (e.g. only day 1, or each day one by one).",
-  "dayExportOfferSkip": "Not now",
-  "dayExportOfferExport": "Export days"
+  "recordingExternalSaveTitle": "Where should it be saved?",
+  "recordingExternalSaveMessage": "The route is saved in the app. Also write the GPX to a folder or share it?",
+  "recordingExternalSaveMultiDayMessage": "The route is saved in the app ({count} days). Write the files to a folder or share them? Choosing a folder also lets you split by day.",
+  "@recordingExternalSaveMultiDayMessage": {"placeholders": {"count": {"type": "int"}}},
+  "recordingExternalSaveAppOnly": "Keep in the app only"
 }

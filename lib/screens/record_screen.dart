@@ -26,6 +26,7 @@ import '../repositories/live_stats_layout_controller.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_icon_controller.dart';
+import '../services/backup_folder_bridge.dart';
 import '../services/battery_info.dart';
 import '../services/battery_optimization.dart';
 import '../services/daily_analysis.dart';
@@ -1360,15 +1361,13 @@ class _RecordScreenState extends State<RecordScreen>
       if (!mounted) return;
     }
 
-    // Multi-day session: offer day-by-day external export (folder / share)
-    // before the resume/reset choice — same day buckets as Analiz > Günlük.
-    final dayStats = splitIntoDays(points);
-    if (dayStats.length >= 2 && mounted) {
-      await _offerMultiDayExport(
+    // Always ask where to also write the GPX outside the app (folder /
+    // share / skip) — riders expect a destination when they tap Save.
+    if (mounted) {
+      await _offerExternalSaveAfterRecording(
         routeName: name,
         points: points,
         waypoints: waypoints,
-        days: dayStats,
       );
       if (!mounted) return;
     }
@@ -1401,33 +1400,53 @@ class _RecordScreenState extends State<RecordScreen>
     // Dismissed (tap outside / back): stay paused, decide later.
   }
 
-  /// After saving a multi-day recording: ask whether to export individual
-  /// calendar days externally, and where (SAF folder or share sheet).
-  Future<void> _offerMultiDayExport({
+  /// After the ride is in the app library: ask where to write the GPX
+  /// file(s) externally. Folder choice always opens the system picker —
+  /// never silently reuse the daily-backup URI (riders expect to pick).
+  Future<void> _offerExternalSaveAfterRecording({
     required String routeName,
     required List<TrackPoint> points,
     required List<Waypoint> waypoints,
-    required List<DayStats> days,
   }) async {
     final l10n = AppLocalizations.of(context)!;
-    final want = await showDialog<bool>(
+    final days = splitIntoDays(points);
+
+    final destination = await showDialog<DayExportDestination?>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(l10n.dayExportOfferTitle(days.length)),
-        content: Text(l10n.dayExportOfferMessage),
+        title: Text(l10n.recordingExternalSaveTitle),
+        content: Text(
+          days.length >= 2
+              ? l10n.recordingExternalSaveMultiDayMessage(days.length)
+              : l10n.recordingExternalSaveMessage,
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.dayExportOfferSkip),
+            onPressed: () => Navigator.pop(context, null),
+            child: Text(l10n.recordingExternalSaveAppOnly),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.dayExportOfferExport),
-          ),
+          if (BackupFolderBridge.isSupported) ...[
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(context, DayExportDestination.share),
+              child: Text(l10n.dayExportDestinationShare),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(context, DayExportDestination.folder),
+              child: Text(l10n.dayExportDestinationFolder),
+            ),
+          ] else
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(context, DayExportDestination.share),
+              child: Text(l10n.dayExportDestinationShare),
+            ),
         ],
       ),
     );
-    if (want != true || !mounted) return;
+    // null = "app only" or dismissed
+    if (destination == null || !mounted) return;
 
     final format = await showDialog<TrackFormat>(
       context: context,
@@ -1444,8 +1463,23 @@ class _RecordScreenState extends State<RecordScreen>
     );
     if (format == null || !mounted) return;
 
-    final plan = await showDayExportDialog(context: context, days: days);
-    if (plan == null || !mounted) return;
+    late final DayExportPlan plan;
+    if (days.length >= 2) {
+      final chosen = await showDayExportDialog(
+        context: context,
+        days: days,
+        // Destination already chosen above — dialog only picks scope/days.
+        fixedDestination: destination,
+      );
+      if (chosen == null || !mounted) return;
+      plan = chosen;
+    } else {
+      plan = DayExportPlan(
+        scope: DayExportScope.fullRoute,
+        destination: destination,
+        selectedDays: const [],
+      );
+    }
 
     final files = preparePlanExportFiles(
       plan: plan,
@@ -1456,13 +1490,12 @@ class _RecordScreenState extends State<RecordScreen>
     );
     if (files.isEmpty || !mounted) return;
 
-    final backup = context.read<DailyDriveBackupController>();
+    // Always pick the folder when saving from a recording — do not reuse
+    // the silent daily-backup URI.
     final result = await deliverExportFiles(
       files: files,
       destination: plan.destination,
       subject: routeName,
-      existingFolderUri: backup.isConfigured ? backup.folderUri : null,
-      existingFolderName: backup.isConfigured ? backup.folderName : null,
     );
     if (!mounted) return;
     if (result == null) {
