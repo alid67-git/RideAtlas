@@ -2543,10 +2543,7 @@ class _RecordScreenState extends State<RecordScreen>
       );
     }
 
-    // Paused: resume, save the ride so far (session keeps going - see
-    // _saveRecording), export days when multi-day, or reset to zero
-    // (confirmation only if unsaved - see _resetRecording).
-    final multiDay = splitIntoDays(recorder.points).length >= 2;
+    // Paused: resume, save, or reset. Day export is only the top-bar share.
     return Wrap(
       alignment: WrapAlignment.center,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -2570,12 +2567,6 @@ class _RecordScreenState extends State<RecordScreen>
               : const Icon(Icons.save_outlined),
           label: Text(l10n.save),
         ),
-        if (multiDay)
-          FilledButton.tonalIcon(
-            onPressed: _saving ? null : _exportDaysFromLiveRecording,
-            icon: const Icon(Icons.ios_share),
-            label: Text(l10n.recordingExportDaysButton),
-          ),
         FloatingActionButton(
           heroTag: 'recordReset',
           tooltip: l10n.resetRecordingButton,

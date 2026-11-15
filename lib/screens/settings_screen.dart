@@ -100,6 +100,26 @@ class SettingsScreen extends StatelessWidget {
           ],
           const Divider(height: 1),
           ListTile(
+            leading: const Icon(Icons.list_alt_outlined),
+            title: Text(l10n.routesDialogTitle),
+            subtitle: Text(l10n.manageRoutesSubtitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const RouteListScreen()),
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              l10n.settingsInterfaceSection,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ListTile(
             leading: SizedBox(
               width: 40,
               height: 40,
@@ -128,16 +148,6 @@ class SettingsScreen extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const StatIconSettingsScreen()),
-            ),
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.list_alt_outlined),
-            title: Text(l10n.routesDialogTitle),
-            subtitle: Text(l10n.manageRoutesSubtitle),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RouteListScreen()),
             ),
           ),
           const Divider(height: 1),
@@ -321,30 +331,6 @@ class _CheckForUpdatesTileState extends State<_CheckForUpdatesTile> {
 class _DailyDriveBackupSettings extends StatelessWidget {
   const _DailyDriveBackupSettings();
 
-  Future<void> _catchUpNow(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    final backup = context.read<DailyDriveBackupController>();
-    final recorder = context.read<GpsRecorder>();
-    if (!backup.isConfigured) return;
-    if (recorder.isIdle || recorder.points.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.dailyDriveBackupCatchUpIdle)),
-      );
-      return;
-    }
-    final result = await backup.backupDaysPresent(
-      points: List.of(recorder.points),
-      includeToday: true,
-    );
-    if (!context.mounted) return;
-    final message = result.failed > 0
-        ? l10n.dailyDriveBackupCatchUpFailed(result.written, result.failed)
-        : result.written > 0
-        ? l10n.dailyDriveBackupCatchUpDone(result.written)
-        : l10n.dailyDriveBackupCatchUpNone;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  }
-
   Future<void> _pickFolderAndCatchUp(BuildContext context) async {
     final backup = context.read<DailyDriveBackupController>();
     final ok = await backup.pickFolder();
@@ -357,6 +343,7 @@ class _DailyDriveBackupSettings extends StatelessWidget {
     final result = await backup.backupDaysPresent(
       points: List.of(recorder.points),
       includeToday: true,
+      rewriteExisting: true,
     );
     if (!context.mounted) return;
     if (!result.hadWork) return;
@@ -423,20 +410,6 @@ class _DailyDriveBackupSettings extends StatelessWidget {
                 : const Icon(Icons.chevron_right),
             onTap: backup.isBusy ? null : () => _pickFolderAndCatchUp(context),
           ),
-          if (backup.folderUri != null && backup.folderUri!.isNotEmpty)
-            ListTile(
-              leading: const Icon(Icons.upload_file_outlined),
-              title: Text(l10n.dailyDriveBackupCatchUpTitle),
-              subtitle: Text(l10n.dailyDriveBackupCatchUpSubtitle),
-              trailing: backup.isBusy
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.chevron_right),
-              onTap: backup.isBusy ? null : () => _catchUpNow(context),
-            ),
         ],
       ],
     );

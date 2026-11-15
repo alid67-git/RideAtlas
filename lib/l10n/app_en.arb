@@ -225,6 +225,7 @@
   "openSettings": "Open Settings",
   "satelliteCountTitle": "Show satellite count",
   "satelliteCountSubtitle": "Show the number of connected satellites near the record button and on the record screen",
+  "settingsInterfaceSection": "Interface",
   "vehicleIconTitle": "Vehicle icon",
   "vehicleIconClassic": "Classic dot",
   "vehicleIconMotorcycleCategory": "Motorcycle",

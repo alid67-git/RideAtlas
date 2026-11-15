@@ -566,7 +566,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       builder: (_) => AnalysisSheet(
         route: route,
         points: points,
-        waypoints: _waypoints ?? const [],
       ),
     );
   }
@@ -1246,13 +1245,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                     onSelected: (action) => action(),
                     itemBuilder: (context) {
                       final l10n = AppLocalizations.of(context)!;
-                      final multiDay = splitIntoDays(_points ?? const []).length >= 2;
                       return [
-                        if (multiDay)
-                          PopupMenuItem(
-                            value: () => _share(route),
-                            child: Text(l10n.dayExportMenuItem),
-                          ),
                         PopupMenuItem(
                           value: () => _editRouteAnomalies(context, route),
                           child: Text(l10n.anomalyEditorMenuItem),

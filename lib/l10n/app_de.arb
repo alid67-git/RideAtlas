@@ -225,6 +225,7 @@
   "openSettings": "Einstellungen öffnen",
   "satelliteCountTitle": "Satellitenanzahl anzeigen",
   "satelliteCountSubtitle": "Anzahl der verbundenen Satelliten neben der Aufnahmetaste und auf dem Aufnahmebildschirm anzeigen",
+  "settingsInterfaceSection": "Oberfläche",
   "vehicleIconTitle": "Fahrzeugsymbol",
   "vehicleIconClassic": "Klassischer Punkt",
   "vehicleIconMotorcycleCategory": "Motorrad",
