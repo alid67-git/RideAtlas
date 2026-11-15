@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/import_errors.dart';
 import '../navigation/root_navigator.dart';
 import '../repositories/route_repository.dart';
 import '../screens/map_screen.dart';
@@ -71,8 +72,8 @@ class _IncomingTrackGateState extends State<IncomingTrackGate> {
           builder: (_) => RouteMapScreen(routeId: e.existing.id),
         ),
       );
-    } on FormatException {
-      _snack((l10n) => l10n.trackHasNoPoints);
+    } on FormatException catch (e) {
+      _snack((l10n) => importFormatErrorMessage(l10n, e));
     } catch (e) {
       _snack((l10n) => l10n.importFailedGeneric('$e'));
     } finally {

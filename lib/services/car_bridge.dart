@@ -3,7 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 
+import '../l10n/resolved_language.dart';
 import '../repositories/route_repository.dart';
 import 'battery_info.dart';
 import 'gps_recorder.dart';
@@ -16,7 +18,11 @@ const _channel = MethodChannel('com.rideatlas.app/car');
 /// taps from there back into the recorder. A no-op everywhere else - there
 /// is no CarPlay/Android Automotive equivalent wired up yet.
 class CarBridge {
-  CarBridge({required this._recorder, required this._routeRepository}) {
+  CarBridge({
+    required GpsRecorder recorder,
+    required RouteRepository routeRepository,
+  }) : _recorder = recorder,
+       _routeRepository = routeRepository {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     _recorder.addListener(_pushState);
     _channel.setMethodCallHandler(_handleCarCommand);
@@ -26,10 +32,15 @@ class CarBridge {
   final GpsRecorder _recorder;
   final RouteRepository _routeRepository;
 
+  /// Re-send the latest snapshot (e.g. after the in-app language changes
+  /// so Android Auto copy switches with it).
+  void refresh() => _pushState();
+
   void _pushState() {
     // Fire-and-forget: nothing on the Dart side needs the result, and in
     // widget tests (which default to TargetPlatform.android) there's no
     // native handler registered at all, which throws MissingPluginException.
+    final copy = _carCopy();
     unawaited(
       _channel
           .invokeMethod('updateState', {
@@ -46,6 +57,9 @@ class CarBridge {
             'lat': _recorder.currentLatLng?.latitude,
             'lng': _recorder.currentLatLng?.longitude,
             'headingDegrees': _recorder.currentHeading,
+            'idleHint': copy.idleHint,
+            'startTitle': copy.startTitle,
+            'speedUnit': copy.speedUnit,
           })
           .catchError((_) {}),
     );
@@ -54,12 +68,10 @@ class CarBridge {
   Future<void> _handleCarCommand(MethodCall call) async {
     switch (call.method) {
       case 'start':
-        // Matches AppLocalizations.recordingNotificationTitle/Text's
-        // Turkish text - the car screen has no BuildContext to look those
-        // up through, and Turkish is the app's default/primary language.
+        final copy = _carCopy();
         await _recorder.start(
-          androidNotificationTitle: 'RideAtlas kayıt yapıyor',
-          androidNotificationText: 'Rotanız arka planda kaydediliyor',
+          androidNotificationTitle: copy.notificationTitle,
+          androidNotificationText: copy.notificationText,
         );
       case 'pause':
         _recorder.pause();
@@ -80,10 +92,7 @@ class CarBridge {
     final points = await _recorder.stop();
     if (points.isEmpty) return;
 
-    final now = DateTime.now();
-    final name =
-        'Kayıt ${now.day} ${_monthNameTr(now.month)} ${now.year} '
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final name = _recordingName(DateTime.now());
     final gpx = exportTrack(
       name: name,
       points: points,
@@ -100,24 +109,72 @@ class CarBridge {
     );
   }
 
-  static const _trMonths = [
-    'Oca',
-    'Şub',
-    'Mar',
-    'Nis',
-    'May',
-    'Haz',
-    'Tem',
-    'Ağu',
-    'Eyl',
-    'Eki',
-    'Kas',
-    'Ara',
-  ];
+  String _recordingName(DateTime now) {
+    final code = resolvedLanguageCode();
+    final date = DateFormat(
+      'd MMM yyyy HH:mm',
+      code == 'de'
+          ? 'de'
+          : code == 'en'
+          ? 'en'
+          : 'tr',
+    ).format(now);
+    switch (code) {
+      case 'en':
+        return 'Recording $date';
+      case 'de':
+        return 'Aufzeichnung $date';
+      default:
+        return 'Kayıt $date';
+    }
+  }
 
-  String _monthNameTr(int month) => _trMonths[month - 1];
+  _CarCopy _carCopy() {
+    switch (resolvedLanguageCode()) {
+      case 'en':
+        return const _CarCopy(
+          idleHint: 'Tap to start recording',
+          startTitle: 'Start recording',
+          speedUnit: 'km/h',
+          notificationTitle: 'RideAtlas is recording',
+          notificationText: 'Your ride is being tracked in the background',
+        );
+      case 'de':
+        return const _CarCopy(
+          idleHint: 'Tippen, um die Aufzeichnung zu starten',
+          startTitle: 'Aufzeichnung starten',
+          speedUnit: 'km/h',
+          notificationTitle: 'RideAtlas zeichnet auf',
+          notificationText: 'Ihre Fahrt wird im Hintergrund aufgezeichnet',
+        );
+      default:
+        return const _CarCopy(
+          idleHint: 'Kayda başlamak için dokunun',
+          startTitle: 'Kayda başla',
+          speedUnit: 'km/s',
+          notificationTitle: 'RideAtlas kayıt yapıyor',
+          notificationText: 'Rotanız arka planda kaydediliyor',
+        );
+    }
+  }
 
   void dispose() {
     _recorder.removeListener(_pushState);
   }
+}
+
+class _CarCopy {
+  const _CarCopy({
+    required this.idleHint,
+    required this.startTitle,
+    required this.speedUnit,
+    required this.notificationTitle,
+    required this.notificationText,
+  });
+
+  final String idleHint;
+  final String startTitle;
+  final String speedUnit;
+  final String notificationTitle;
+  final String notificationText;
 }

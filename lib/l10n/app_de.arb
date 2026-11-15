@@ -313,5 +313,6 @@
   "recordingExternalSaveAppOnly": "Nur in der App behalten",
   "recordingExportDaysTooltip": "Tage exportieren",
   "recordingExportDaysButton": "Tage exportieren",
-  "recordingExportDaysNeedMulti": "Noch kein Mehrtagesritt — nach Mitternacht erscheinen die Tage hier."
+  "recordingExportDaysNeedMulti": "Noch kein Mehrtagesritt — nach Mitternacht erscheinen die Tage hier.",
+  "kmzMissingKml": "In diesem KMZ-Archiv wurde keine KML-Datei gefunden."
 }

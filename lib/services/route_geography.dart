@@ -75,14 +75,14 @@ class RouteGeographyAnalyzer {
     double stopRadiusMeters = 180,
     GeographyProgress? onProgress,
   }) async {
-    onProgress?.call('Molalar hesaplanıyor…', 0.05);
+    onProgress?.call('Computing stops…', 0.05);
     final rawStops = detectStops(
       points,
       minDuration: minStop,
       radiusMeters: stopRadiusMeters,
     );
 
-    onProgress?.call('Güzergâh örnekleniyor…', 0.1);
+    onProgress?.call('Sampling route…', 0.1);
     final samples = _sampleAlongTrack(points, sampleEveryKm);
     // Always include stop centroids so city names enrich legs / stop cards.
     final lookupPoints = <LatLng>[
@@ -96,7 +96,7 @@ class RouteGeographyAnalyzer {
       final key = GeoLookup.cacheKey(ll);
       if (places.containsKey(key)) continue;
       onProgress?.call(
-        'Konum çözülüyor (${i + 1}/${lookupPoints.length})…',
+        'Resolving location (${i + 1}/${lookupPoints.length})…',
         0.1 + 0.75 * ((i + 1) / lookupPoints.length),
       );
       places[key] = await _geo.lookup(ll);

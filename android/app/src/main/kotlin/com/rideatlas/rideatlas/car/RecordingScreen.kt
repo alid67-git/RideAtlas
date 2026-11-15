@@ -51,12 +51,12 @@ class RecordingScreen(
                     .addRow(
                         Row.Builder()
                             .setTitle("RideAtlas")
-                            .addText("Kayda başlamak için dokunun")
+                            .addText(CarRecordingBridge.idleHint)
                             .build()
                     )
                     .addAction(
                         Action.Builder()
-                            .setTitle("Kayda başla")
+                            .setTitle(CarRecordingBridge.startTitle)
                             .setOnClickListener { CarRecordingBridge.start() }
                             .build()
                     )
