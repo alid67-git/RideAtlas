@@ -20,6 +20,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.139 beta',
+    date: '2026-11-15',
+    note:
+        'Çok günlük canlı kayıtta gün/tüm rota dışa aktarma yalnız üstteki '
+        'paylaş tuşu; duraklatınca ayrı düğme, Analiz Günlük satır paylaş ve '
+        'harita ⋮ “Günleri dışa aktar” kaldırıldı (kayıtlı rotada harita '
+        'paylaş kalır). Günlük Drive: “Eksik günleri şimdi yaz” menüsü yok — '
+        'uygulama öne gelince / klasör seçilince / gece yarısı açık kayıttaki '
+        'günler yeniden yazılır (Hive’da işaretli ama Drive’da olmayan '
+        'günler de). Ayarlar’da Arayüz: araç ikonu, istatistik ikon görünümü, '
+        'kayıt ekranı kartları.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.138 beta',
     date: '2026-11-15',
     note:

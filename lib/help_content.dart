@@ -86,8 +86,7 @@ const _helpSectionsTr = <HelpSection>[
         'duraklamalar ve gecelemeler), Hava durumu (rota boyunca günlük '
         'hava koşulları, internet gerektirir) ve Günlük (rota birden fazla '
         'güne yayılıyorsa gün gün özet - her günün kendi mesafesi, süresi '
-        've sürüş/mola dağılımı; istediğiniz günün satırındaki paylaş '
-        'simgesiyle o günü ayrı dosya olarak dışa aktarabilirsiniz). '
+        've sürüş/mola dağılımı). '
         'Güzergâh, Molalar, Hava durumu ve Günlük sekmeleri ilk '
         'açıldıklarında hesaplanır; bir kez hesaplandıktan sonra tekrar '
         'tekrar yeniden işlenmez.',
@@ -245,13 +244,11 @@ const _helpSectionsTr = <HelpSection>[
   HelpSection(
     title: 'Dışa aktarma',
     body:
-        'İstenen günü çıkarmak için en net yol: kayıtlı rotayı açın → '
-        'Analiz (grafik ikonu) → Günlük → o günün satırındaki paylaş '
-        'simgesi. Haritadaki paylaş veya ⋮ → "Günleri dışa aktar" ile de '
-        'gün seçebilirsiniz. Canlı kayıtta üstteki paylaş / duraklatınca '
-        '"Günleri dışa aktar"; kaydetince “Nereye kaydedilsin?” (klasör / '
-        'paylaş / sadece uygulama) sorulur. Nereye yazılacağı: Android\'de '
-        'klasör seçici (Drive vb.) veya paylaşım menüsü.',
+        'Çok günlük canlı kayıtta günleri (tek tek veya hepsi) yalnızca '
+        'kayıt ekranındaki üst paylaş tuşuyla dışa aktarın. Kayıtlı rotada '
+        'haritadaki paylaş ikonu aynı gün seçimini sunar. Kaydetince '
+        '“Nereye kaydedilsin?” (klasör / paylaş / sadece uygulama) sorulur. '
+        'Android\'de klasör seçici (Drive vb.) veya paylaşım menüsü.',
   ),
   HelpSection(
     title: 'Günlük Drive yedeği',
@@ -262,8 +259,8 @@ const _helpSectionsTr = <HelpSection>[
         'Ayarlar > Günlük Drive yedeği\'ni açıp Google Drive (veya başka '
         'bir depolama) klasörü seçin. Gece yarısı geçen gün otomatik '
         'yazılır; uygulama öne gelince veya klasör yeniden seçilince '
-        'eksik günler yakalanır. "Eksik günleri şimdi yaz" ile açık '
-        'kayıttaki tüm günleri bir defada klasöre aktarabilirsiniz. '
+        'açık kayıttaki günler klasöre yeniden yazılır (Drive\'da eksik '
+        'kalan günler için ayrı menü yok). '
         'Kayıt sırasında kaydettiğinizde o ana kadarki günler de düşer. '
         'Dosya adı RideAtlas_yyyy-MM-dd.gpx. Kayıtlı çok günlük rotadan '
         'Paylaş ile de günleri tek seferde klasöre yazabilirsiniz.'
@@ -354,8 +351,7 @@ const _helpSectionsEn = <HelpSection>[
         'minutes and overnight stays), Weather (daily conditions along '
         'the route, needs internet) and Daily (a day-by-day breakdown for '
         'multi-day routes - each day\'s own distance, duration and riding/'
-        'rest split; tap the share icon on a day\'s row to export that day '
-        'as its own file). Route, Stops, Weather and Daily are computed '
+        'rest split). Route, Stops, Weather and Daily are computed '
         'the first time you open them, not recomputed on every rebuild.',
   ),
   HelpSection(
@@ -505,13 +501,12 @@ const _helpSectionsEn = <HelpSection>[
   HelpSection(
     title: 'Exporting',
     body:
-        'To export a specific day from a saved route: open it → Analysis '
-        '(chart icon) → Daily → share icon on that day\'s row. Map share '
-        'or ⋮ → "Export days" also lets you pick days. During a live '
-        'recording use the top share icon or pause → "Export days"; '
-        'saving also asks “Where should it be saved?” (folder / share / '
-        'app only). Destination is an Android folder picker (Drive etc.) '
-        'or the share sheet.',
+        'On a multi-day live recording, export days (one or all) only via '
+        'the top share button on the record screen. On a saved route the '
+        'map share icon offers the same day picker. Saving also asks '
+        '“Where should it be saved?” (folder / share / app only). '
+        'Destination is an Android folder picker (Drive etc.) or the '
+        'share sheet.',
   ),
   HelpSection(
     title: 'Daily Drive backup',
@@ -522,9 +517,9 @@ const _helpSectionsEn = <HelpSection>[
         'Turn on Settings > Daily Drive backup and pick a Google Drive '
         '(or other) folder. When midnight passes, yesterday is written '
         'automatically; bringing the app to the foreground or re-picking '
-        'the folder also catches up missing days. "Write missing days now" '
-        'flushes every day from the open recording in one pass. Mid-ride '
-        'save also writes days present so far. Files are named '
+        'the folder rewrites every day from the open recording (no '
+        'separate catch-up menu). Mid-ride save also writes days present '
+        'so far. Files are named '
         'RideAtlas_yyyy-MM-dd.gpx. From a saved multi-day route, Share '
         'can write every selected day to the same folder at once.'
   ),

@@ -112,29 +112,41 @@ class DailyDriveBackupController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// While a ride is in progress: upload every **completed** local day
-  /// (strictly before today) that has not been backed up yet.
-  Future<void> syncFromRecorder(GpsRecorder recorder) async {
+  /// While a ride is in progress: upload local days from the open track.
+  ///
+  /// [thorough] is for app resume / folder configure / midnight: rewrite
+  /// every present day (including today) so a Hive "already backed up"
+  /// mark cannot leave Drive missing mid-range days while only the latest
+  /// appears. GPS-tick sync keeps [thorough] false to avoid hammering SAF.
+  Future<void> syncFromRecorder(
+    GpsRecorder recorder, {
+    bool thorough = false,
+  }) async {
     if (!isConfigured || recorder.isIdle) return;
     final points = List<TrackPoint>.from(recorder.points);
-    await backupDaysPresent(points: points, includeToday: false);
+    await backupDaysPresent(
+      points: points,
+      includeToday: thorough,
+      rewriteExisting: thorough,
+    );
   }
 
-  /// After mid-ride save / finish / manual catch-up: write each present
-  /// local day that is not yet marked backed up. Still one file per day.
+  /// Write each present local day. Still one file per day.
   ///
   /// When [includeToday] is false, only days strictly before local today
-  /// are considered (midnight catch-up). When true, today's segment is
-  /// included (save / "write missing now").
+  /// are considered. When [rewriteExisting] is true, days already in
+  /// [_backedUpDays] are written again (overwrite).
   Future<DailyBackupRunResult> backupDaysPresent({
     required List<TrackPoint> points,
     bool includeToday = true,
+    bool rewriteExisting = false,
   }) {
     final completer = Completer<DailyBackupRunResult>();
     _queue = _queue.then((_) async {
       final result = await _backupDaysPresentUnlocked(
         points: points,
         includeToday: includeToday,
+        rewriteExisting: rewriteExisting,
       );
       completer.complete(result);
     }).catchError((Object e, StackTrace st) {
@@ -148,6 +160,7 @@ class DailyDriveBackupController extends ChangeNotifier {
   Future<DailyBackupRunResult> _backupDaysPresentUnlocked({
     required List<TrackPoint> points,
     required bool includeToday,
+    required bool rewriteExisting,
   }) async {
     if (!isConfigured) {
       return const DailyBackupRunResult(written: 0, skipped: 0, failed: 0);
@@ -159,11 +172,15 @@ class DailyDriveBackupController extends ChangeNotifier {
     for (final day in localDaysInPoints(points)) {
       if (!includeToday && !day.isBefore(today)) continue;
       final key = dayBackupKey(day);
-      if (_backedUpDays.contains(key)) {
+      if (!rewriteExisting && _backedUpDays.contains(key)) {
         skipped++;
         continue;
       }
-      final ok = await ensureDayBackedUp(day: day, allPoints: points);
+      final ok = await ensureDayBackedUp(
+        day: day,
+        allPoints: points,
+        force: rewriteExisting,
+      );
       if (ok) {
         written++;
       } else {
@@ -180,10 +197,12 @@ class DailyDriveBackupController extends ChangeNotifier {
   Future<bool> ensureDayBackedUp({
     required DateTime day,
     required List<TrackPoint> allPoints,
+    bool force = false,
   }) async {
     if (!isConfigured) return false;
     final key = dayBackupKey(day);
-    if (_backedUpDays.contains(key) || _inFlight.contains(key)) return true;
+    if (_inFlight.contains(key)) return true;
+    if (!force && _backedUpDays.contains(key)) return true;
 
     final gpx = buildDayBackupGpx(allPoints: allPoints, day: day);
     if (gpx == null) return false;

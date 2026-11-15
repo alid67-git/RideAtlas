@@ -241,7 +241,9 @@ class _DailyDriveBackupHostState extends State<_DailyDriveBackupHost>
     if (recorder == null || backup == null || !mounted) return;
     _debounce?.cancel();
     if (immediate) {
-      unawaited(backup.syncFromRecorder(recorder));
+      // Thorough: rewrite every day present in the open recording so a
+      // stale "backed up" mark cannot skip days that never landed in Drive.
+      unawaited(backup.syncFromRecorder(recorder, thorough: true));
       return;
     }
     // GPS ticks every few seconds; coalesce so Drive is not hammered and
