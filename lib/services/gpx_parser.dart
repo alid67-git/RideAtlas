@@ -251,14 +251,16 @@ double totalDistanceKm(List<TrackPoint> points) {
   return total;
 }
 
-/// Above any real vehicle speed this app expects to record - a fix that
-/// implies faster than this since the last *plausible* point before it is a
-/// reflected/multipath GPS glitch (common near junctions, tall buildings,
-/// underpasses), not real motion. Matches the threshold GpsRecorder rejects
-/// live during recording, so a route recorded before that live filter
-/// existed (or imported from another app/device) can be cleaned up the same
-/// way after the fact.
+/// Absolute ceiling: even sustained hops above this are impossible for any
+/// vehicle this app records (plane/teleport). Used as the hard reject when
+/// consecutive points keep implying extreme speed.
 const maxPlausibleTrackSpeedKmh = 300.0;
+
+/// A **single** hop implying more than this, without the next hop also
+/// staying above it, is treated as an isolated GPS outlier (multipath /
+/// frozen wrong fix). Sustained consecutive hops above this are kept —
+/// that is real riding above 120 km/h, not a glitch.
+const maxIsolatedSpikeKmh = 120.0;
 
 /// A single-hop jump has to imply at least this speed *and* cover at least
 /// [_excursionMinJumpMeters] before [findExcursionPointIndices] even
@@ -283,18 +285,20 @@ const _excursionReturnRadiusMeters = 60.0;
 /// seconds to a couple of minutes, not further out.
 const _excursionMaxLookaheadPoints = 150;
 
-/// Indices of points in [points] that imply a physically-impossible speed
-/// jump from the last plausible point before them. Comparing against the
-/// last point that itself passed this check (not just the previous point)
-/// means a run of several consecutive bad fixes gets flagged in full rather
-/// than each one anchoring the next comparison to more noise. This alone
-/// only catches a jump that's *instantly* impossible (over
-/// [maxPlausibleTrackSpeedKmh]) - see [findExcursionPointIndices] for the
-/// more common case of a jump that's individually fast-but-plausible yet
-/// snaps back to nearly where it started a few points later (confirmed in
-/// practice: a device sitting still reported one frozen, wrong coordinate
-/// for about a minute, then reported the true position again - each hop
-/// alone implied "only" ~140 km/h, not an instantly-rejectable spike).
+/// Indices of points in [points] that imply a physically-impossible or
+/// isolated GPS speed jump from the last plausible point before them.
+///
+/// Rules for a hop from the last kept point:
+/// - Always reject if above [maxKmh] ([maxPlausibleTrackSpeedKmh]) — teleport.
+/// - Reject if above [maxIsolatedSpikeKmh] (120) **and** the next hop does
+///   not also stay above that threshold — a lone glitch, not real speed.
+/// - Keep if consecutive hops stay above 120 (sustained highway / fast
+///   riding) and under the absolute ceiling.
+///
+/// Comparing against the last point that itself passed this check (not just
+/// the previous point) means a run of several consecutive bad fixes gets
+/// flagged in full. See [findExcursionPointIndices] for spike-and-return
+/// clusters that individually look "only" ~140 km/h.
 /// Used both to silently clean a route for display
 /// ([filterImplausiblePoints]) and to let a rider review exactly which
 /// points would be removed before deleting them from a saved route (see the
@@ -302,37 +306,88 @@ const _excursionMaxLookaheadPoints = 150;
 List<int> findImplausiblePointIndices(
   List<TrackPoint> points, {
   double maxKmh = maxPlausibleTrackSpeedKmh,
+  double isolatedSpikeKmh = maxIsolatedSpikeKmh,
 }) {
   final flagged = <int>{
-    ..._findInstantSpikeIndices(points, maxKmh: maxKmh),
+    ..._findInstantSpikeIndices(
+      points,
+      maxKmh: maxKmh,
+      isolatedSpikeKmh: isolatedSpikeKmh,
+    ),
     ...findExcursionPointIndices(points),
-  }.toList()..sort();
+  }.toList()
+    ..sort();
   return flagged;
+}
+
+/// Implied speed (km/h) between two timed points, or null if not computable.
+double? impliedSpeedKmh(TrackPoint from, TrackPoint to) {
+  final t0 = from.time;
+  final t1 = to.time;
+  if (t0 == null || t1 == null) return null;
+  final dtSeconds = t1.difference(t0).inMilliseconds / 1000.0;
+  if (dtSeconds <= 0) return null;
+  final meters = _distance(from.latLng, to.latLng);
+  return (meters / dtSeconds) * 3.6;
+}
+
+/// True when [from]→[to] and [to]→[next] both imply above [isolatedSpikeKmh]
+/// (and not above [maxKmh]): consecutive high-speed hops = real riding.
+bool isSustainedHighSpeedHop({
+  required TrackPoint from,
+  required TrackPoint to,
+  required TrackPoint next,
+  double isolatedSpikeKmh = maxIsolatedSpikeKmh,
+  double maxKmh = maxPlausibleTrackSpeedKmh,
+}) {
+  final inKmh = impliedSpeedKmh(from, to);
+  final outKmh = impliedSpeedKmh(to, next);
+  if (inKmh == null || outKmh == null) return false;
+  return inKmh > isolatedSpikeKmh &&
+      inKmh <= maxKmh &&
+      outKmh > isolatedSpikeKmh &&
+      outKmh <= maxKmh;
 }
 
 List<int> _findInstantSpikeIndices(
   List<TrackPoint> points, {
   double maxKmh = maxPlausibleTrackSpeedKmh,
+  double isolatedSpikeKmh = maxIsolatedSpikeKmh,
 }) {
   final flagged = <int>[];
   TrackPoint? lastPlausible;
   for (var i = 0; i < points.length; i++) {
     final p = points[i];
-    final lastTime = lastPlausible?.time;
-    if (lastPlausible == null || lastTime == null || p.time == null) {
+    final last = lastPlausible;
+    if (last == null || last.time == null || p.time == null) {
       lastPlausible = p;
       continue;
     }
-    final dtSeconds = p.time!.difference(lastTime).inMilliseconds / 1000.0;
-    if (dtSeconds <= 0) {
+    final impliedKmh = impliedSpeedKmh(last, p);
+    if (impliedKmh == null) {
       lastPlausible = p;
       continue;
     }
-    final meters = _distance(lastPlausible.latLng, p.latLng);
-    final impliedKmh = (meters / dtSeconds) * 3.6;
     if (impliedKmh > maxKmh) {
       flagged.add(i);
       continue;
+    }
+    if (impliedKmh > isolatedSpikeKmh) {
+      // Lone >120 hop without a following high-speed hop = outlier.
+      // At end of track there is no next hop to confirm — keep under the
+      // absolute ceiling (a highway finish must not drop the last fix).
+      final next = i + 1 < points.length ? points[i + 1] : null;
+      if (next != null &&
+          !isSustainedHighSpeedHop(
+            from: last,
+            to: p,
+            next: next,
+            isolatedSpikeKmh: isolatedSpikeKmh,
+            maxKmh: maxKmh,
+          )) {
+        flagged.add(i);
+        continue;
+      }
     }
     lastPlausible = p;
   }
@@ -412,8 +467,13 @@ List<int> findExcursionPointIndices(
 List<TrackPoint> filterImplausiblePoints(
   List<TrackPoint> points, {
   double maxKmh = maxPlausibleTrackSpeedKmh,
+  double isolatedSpikeKmh = maxIsolatedSpikeKmh,
 }) {
-  final flagged = findImplausiblePointIndices(points, maxKmh: maxKmh).toSet();
+  final flagged = findImplausiblePointIndices(
+    points,
+    maxKmh: maxKmh,
+    isolatedSpikeKmh: isolatedSpikeKmh,
+  ).toSet();
   if (flagged.isEmpty) return points;
   return [
     for (var i = 0; i < points.length; i++)

@@ -20,6 +20,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.133 beta',
+    date: '2026-11-15',
+    note:
+        'GPS süzgeci: anlık tek hop 120 km/s üstüyse (sonraki hop da hızlı '
+        'değilse) sıra dışı kabul edilip atılır; ardışık hop’lar 120’nin '
+        'üstündeyse gerçek hız sayılır ve iz korunur. Mutlak tavan hâlâ '
+        '~300 km/s (ışınlanma). İçe aktarmada MotionX vb. uygulamalara '
+        'göre mesafe düşük çıkıyorsa (ör. 414→384 km) çoğunlukla glitch / '
+        'spike-and-return süzgecinin nokta silmesi — ham GPX ile '
+        'karşılaştırılabilir.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.131 beta',
     date: '2026-11-15',
     note:
