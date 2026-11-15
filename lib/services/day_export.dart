@@ -97,12 +97,28 @@ TrackExport? buildDayTrackExport({
   );
 }
 
-/// Suggested file base name (no extension) for a day export.
-String dayExportBaseName(DateTime day, {String? routeName}) {
-  final key = dayBackupKey(day);
-  if (routeName == null || routeName.trim().isEmpty) {
-    return 'RideAtlas_$key';
+/// File base name (no extension) for a single calendar-day export.
+///
+/// Always the track day (`RideAtlas_yyyy-MM-dd`), never "today" / save time
+/// and never a route display name that may contain the save timestamp.
+String dayExportBaseName(DateTime day) => 'RideAtlas_${dayBackupKey(day)}';
+
+/// File base name for a full-route export from [points]' local calendar days.
+///
+/// One day → `RideAtlas_yyyy-MM-dd`; several → `RideAtlas_first_last`.
+/// Falls back to a sanitized [fallbackName] only when no timed points exist.
+String fullRouteExportBaseName(
+  List<TrackPoint> points, {
+  String? fallbackName,
+}) {
+  final days = localDaysInPoints(points);
+  if (days.length == 1) return dayExportBaseName(days.single);
+  if (days.length >= 2) {
+    return 'RideAtlas_${dayBackupKey(days.first)}_${dayBackupKey(days.last)}';
   }
-  final safe = routeName.trim().replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-  return '${safe}_$key';
+  final safe = (fallbackName ?? '').trim().replaceAll(
+    RegExp(r'[\\/:*?"<>|]'),
+    '_',
+  );
+  return safe.isEmpty ? 'RideAtlas' : safe;
 }

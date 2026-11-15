@@ -1265,14 +1265,28 @@ class _RecordScreenState extends State<RecordScreen>
   /// resume recording (the ride continues cumulatively) or reset to zero
   /// (silently - the data was just saved, nothing is lost). Dismissing the
   /// dialog stays paused.
-  Future<void> _saveRecording() async {
-    final l10n = AppLocalizations.of(context)!;
-    final defaultName = l10n.recordingDefaultName(
+  /// First GPS timestamp (or recorder start) — never wall-clock "now", so a
+  /// late save still names the ride after the day that was actually ridden.
+  DateTime _recordingNameInstant() {
+    for (final p in _recorder.points) {
+      final t = p.time;
+      if (t != null) return t.toLocal();
+    }
+    return _recorder.startedAt?.toLocal() ?? DateTime.now();
+  }
+
+  String _defaultRecordingName(AppLocalizations l10n) {
+    return l10n.recordingDefaultName(
       DateFormat(
         'd MMM yyyy HH:mm',
         Localizations.localeOf(context).languageCode,
-      ).format(DateTime.now()),
+      ).format(_recordingNameInstant()),
     );
+  }
+
+  Future<void> _saveRecording() async {
+    final l10n = AppLocalizations.of(context)!;
+    final defaultName = _defaultRecordingName(l10n);
     final controller = TextEditingController(text: defaultName);
     final name = await showDialog<String>(
       context: context,
@@ -1428,12 +1442,7 @@ class _RecordScreenState extends State<RecordScreen>
                 : null,
           ),
     ];
-    final routeName = l10n.recordingDefaultName(
-      DateFormat(
-        'd MMM yyyy HH:mm',
-        Localizations.localeOf(context).languageCode,
-      ).format(DateTime.now()),
-    );
+    final routeName = _defaultRecordingName(l10n);
 
     final format = await showDialog<TrackFormat>(
       context: context,
