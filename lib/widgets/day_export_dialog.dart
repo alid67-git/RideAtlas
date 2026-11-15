@@ -47,28 +47,36 @@ class _DayExportDialogState extends State<_DayExportDialog> {
   @override
   void initState() {
     super.initState();
-    _checked = {for (final d in widget.days) d.date};
+    // Normalize to local midnight so Set lookup matches [DayStats.date].
+    _checked = {
+      for (final d in widget.days)
+        DateTime(d.date.year, d.date.month, d.date.day),
+    };
     _destination = widget.fixedDestination ??
         (BackupFolderBridge.isSupported
             ? DayExportDestination.folder
             : DayExportDestination.share);
   }
 
+  DateTime _dayKey(DateTime day) =>
+      DateTime(day.year, day.month, day.day);
+
   void _toggleDay(DateTime day, bool? value) {
+    final key = _dayKey(day);
     setState(() {
       if (value == true) {
-        _checked.add(day);
+        _checked.add(key);
       } else if (_checked.length > 1) {
-        _checked.remove(day);
+        _checked.remove(key);
       }
     });
   }
 
   void _submit() {
-    final selected = widget.days
-        .map((d) => d.date)
-        .where(_checked.contains)
-        .toList();
+    final selected = [
+      for (final d in widget.days)
+        if (_checked.contains(_dayKey(d.date))) d.date,
+    ];
     if (_scope == DayExportScope.selectedDays && selected.isEmpty) return;
     Navigator.pop(
       context,
@@ -89,14 +97,15 @@ class _DayExportDialogState extends State<_DayExportDialog> {
     final folderOk = BackupFolderBridge.isSupported;
     final pickDestination = widget.fixedDestination == null;
 
+    // Do not put [Flexible]/[Expanded] inside a min-sized Column — the day
+    // checklist used to get 0 height and disappear between the radios.
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 36),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 400, maxHeight: 560),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
@@ -111,91 +120,92 @@ class _DayExportDialogState extends State<_DayExportDialog> {
                 ),
               ),
               const SizedBox(height: 8),
-              RadioGroup<DayExportScope>(
-                groupValue: _scope,
-                onChanged: (v) {
-                  if (v == null) return;
-                  setState(() => _scope = v);
-                },
-                child: Column(
+              Expanded(
+                child: ListView(
                   children: [
-                    RadioListTile<DayExportScope>(
-                      value: DayExportScope.fullRoute,
-                      title: Text(l10n.dayExportFullRoute),
-                      subtitle: Text(l10n.dayExportFullRouteHint),
-                      contentPadding: EdgeInsets.zero,
+                    RadioGroup<DayExportScope>(
+                      groupValue: _scope,
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() => _scope = v);
+                      },
+                      child: Column(
+                        children: [
+                          RadioListTile<DayExportScope>(
+                            value: DayExportScope.fullRoute,
+                            title: Text(l10n.dayExportFullRoute),
+                            subtitle: Text(l10n.dayExportFullRouteHint),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          RadioListTile<DayExportScope>(
+                            value: DayExportScope.selectedDays,
+                            title: Text(l10n.dayExportSelectedDays),
+                            subtitle: Text(l10n.dayExportSelectedDaysHint),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ],
+                      ),
                     ),
-                    RadioListTile<DayExportScope>(
-                      value: DayExportScope.selectedDays,
-                      title: Text(l10n.dayExportSelectedDays),
-                      subtitle: Text(l10n.dayExportSelectedDaysHint),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                    if (_scope == DayExportScope.selectedDays) ...[
+                      const Divider(height: 16),
+                      for (final day in widget.days)
+                        CheckboxListTile(
+                          value: _checked.contains(_dayKey(day.date)),
+                          onChanged: (v) => _toggleDay(day.date, v),
+                          contentPadding: EdgeInsets.zero,
+                          secondary: Container(
+                            width: 14,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: day.color,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          title: Text(
+                            '${l10n.dayLabel(day.dayNumber)} · ${dateFmt.format(day.date)}',
+                          ),
+                          subtitle: Text(
+                            '${day.distanceKm.toStringAsFixed(1)} km',
+                          ),
+                        ),
+                    ],
+                    if (pickDestination) ...[
+                      const Divider(height: 16),
+                      Text(
+                        l10n.dayExportDestinationTitle,
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 4),
+                      RadioGroup<DayExportDestination>(
+                        groupValue: _destination,
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setState(() => _destination = v);
+                        },
+                        child: Column(
+                          children: [
+                            if (folderOk)
+                              RadioListTile<DayExportDestination>(
+                                value: DayExportDestination.folder,
+                                title: Text(l10n.dayExportDestinationFolder),
+                                subtitle:
+                                    Text(l10n.dayExportDestinationFolderHint),
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            RadioListTile<DayExportDestination>(
+                              value: DayExportDestination.share,
+                              title: Text(l10n.dayExportDestinationShare),
+                              subtitle:
+                                  Text(l10n.dayExportDestinationShareHint),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-              if (_scope == DayExportScope.selectedDays) ...[
-                const Divider(height: 16),
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: widget.days.length,
-                    itemBuilder: (context, i) {
-                      final day = widget.days[i];
-                      final km = day.distanceKm.toStringAsFixed(1);
-                      return CheckboxListTile(
-                        value: _checked.contains(day.date),
-                        onChanged: (v) => _toggleDay(day.date, v),
-                        contentPadding: EdgeInsets.zero,
-                        secondary: Container(
-                          width: 14,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            color: day.color,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        title: Text(
-                          '${l10n.dayLabel(day.dayNumber)} · ${dateFmt.format(day.date)}',
-                        ),
-                        subtitle: Text('$km km'),
-                      );
-                    },
-                  ),
-                ),
-              ],
-              if (pickDestination) ...[
-                const Divider(height: 16),
-                Text(
-                  l10n.dayExportDestinationTitle,
-                  style: theme.textTheme.titleSmall,
-                ),
-                const SizedBox(height: 4),
-                RadioGroup<DayExportDestination>(
-                  groupValue: _destination,
-                  onChanged: (v) {
-                    if (v == null) return;
-                    setState(() => _destination = v);
-                  },
-                  child: Column(
-                    children: [
-                      if (folderOk)
-                        RadioListTile<DayExportDestination>(
-                          value: DayExportDestination.folder,
-                          title: Text(l10n.dayExportDestinationFolder),
-                          subtitle: Text(l10n.dayExportDestinationFolderHint),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      RadioListTile<DayExportDestination>(
-                        value: DayExportDestination.share,
-                        title: Text(l10n.dayExportDestinationShare),
-                        subtitle: Text(l10n.dayExportDestinationShareHint),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
