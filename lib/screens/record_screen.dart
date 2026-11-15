@@ -1057,10 +1057,7 @@ class _RecordScreenState extends State<RecordScreen>
                   // CPU work and heating phones during long rides.
                   intervalDuration: const Duration(seconds: 2),
                 )
-              : const LocationSettings(
-                  accuracy: LocationAccuracy.high,
-                  distanceFilter: 5,
-                ),
+              : recordingLocationSettings(),
         ).listen((pos) {
           if (!mounted) return;
           if (!isAcceptableLivePosition(pos)) return;
