@@ -20,6 +20,21 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.131 beta',
+    date: '2026-11-15',
+    note:
+        'Günlük Drive yedeği: otomatik yazma yalnızca yeni GPS noktasında '
+        'tetikleniyordu; gece auto-pause / uygulama kapalıyken tamamlanan '
+        'günler (ör. 9’dan sonrası) klasöre düşmeyebiliyordu. Artık '
+        'uygulama öne gelince, yedek ayarı yüklenince ve yerel gece '
+        'yarısından biraz sonra eksik günler yakalanıyor. Ayarlar’da '
+        '“Eksik günleri şimdi yaz” ile açık kayıttaki günler bir defada '
+        'aktarılır; klasör yeniden seçilince de catch-up çalışır. Paylaş → '
+        'günlük dışa aktarmada yedek klasörü ayarlıysa ikinci kez klasör '
+        'sorulmaz. Yazma hataları Ayarlar’da görünür; Drive truncate '
+        'reddi için sil-yeniden oluştur yedek yolu eklendi.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.130 beta',
     date: '2026-11-15',
     note:

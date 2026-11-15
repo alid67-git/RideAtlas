@@ -1456,10 +1456,13 @@ class _RecordScreenState extends State<RecordScreen>
     );
     if (files.isEmpty || !mounted) return;
 
+    final backup = context.read<DailyDriveBackupController>();
     final result = await deliverExportFiles(
       files: files,
       destination: plan.destination,
       subject: routeName,
+      existingFolderUri: backup.isConfigured ? backup.folderUri : null,
+      existingFolderName: backup.isConfigured ? backup.folderName : null,
     );
     if (!mounted) return;
     if (result == null) {

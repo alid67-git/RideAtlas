@@ -236,12 +236,27 @@ class MainActivity : FlutterActivity() {
             val tree = DocumentFile.fromTreeUri(this, Uri.parse(uriString)) ?: return false
             if (!tree.canWrite()) return false
             var doc = tree.findFile(fileName)
+            if (doc != null && doc.exists()) {
+                if (writeDocumentBytes(doc, bytes)) return true
+                // Google Drive / some SAF providers refuse truncate ("wt").
+                // Delete and recreate so a later catch-up can still land.
+                doc.delete()
+                doc = null
+            }
             if (doc == null || !doc.exists()) {
                 doc = tree.createFile("application/gpx+xml", fileName)
                     ?: tree.createFile("application/octet-stream", fileName)
             }
             val target = doc ?: return false
-            contentResolver.openOutputStream(target.uri, "wt")?.use { out ->
+            writeDocumentBytes(target, bytes)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun writeDocumentBytes(doc: DocumentFile, bytes: ByteArray): Boolean {
+        return try {
+            contentResolver.openOutputStream(doc.uri, "wt")?.use { out ->
                 out.write(bytes)
                 out.flush()
             } ?: return false

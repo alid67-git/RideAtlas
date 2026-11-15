@@ -16,6 +16,26 @@ const _folderUriKey = 'daily_drive_backup_folder_uri';
 const _folderNameKey = 'daily_drive_backup_folder_name';
 const _backedUpDaysKey = 'daily_drive_backup_days';
 
+/// Outcome of a catch-up / one-shot backup pass over the track points.
+class DailyBackupRunResult {
+  const DailyBackupRunResult({
+    required this.written,
+    required this.skipped,
+    required this.failed,
+  });
+
+  /// Days newly written to the folder in this pass.
+  final int written;
+
+  /// Days already marked backed up (left alone).
+  final int skipped;
+
+  /// Days that had points but could not be written.
+  final int failed;
+
+  bool get hadWork => written > 0 || failed > 0;
+}
+
 /// Backs up **one local calendar day at a time** from a long multi-day
 /// recording into a user-picked folder (typically Google Drive via Android
 /// SAF). Never uploads the cumulative full session - only that day's
@@ -31,6 +51,8 @@ class DailyDriveBackupController extends ChangeNotifier {
   String? _lastSuccessKey;
   /// Days currently being written - avoids duplicate parallel uploads.
   final Set<String> _inFlight = {};
+  /// Serializes catch-up passes so GPS-tick storms don't pile up.
+  Future<void> _queue = Future<void>.value();
 
   bool get isLoading => _loading;
   bool get enabled => _enabled;
@@ -94,26 +116,65 @@ class DailyDriveBackupController extends ChangeNotifier {
   /// (strictly before today) that has not been backed up yet.
   Future<void> syncFromRecorder(GpsRecorder recorder) async {
     if (!isConfigured || recorder.isIdle) return;
-    final today = calendarDayLocal(DateTime.now());
     final points = List<TrackPoint>.from(recorder.points);
-    for (final day in localDaysInPoints(points)) {
-      if (!day.isBefore(today)) continue;
-      await ensureDayBackedUp(day: day, allPoints: points);
-    }
+    await backupDaysPresent(points: points, includeToday: false);
   }
 
-  /// After mid-ride save / finish: also allow backing up today's segment
-  /// (the day is "closed" for that save). Still one file per day only.
-  Future<void> backupDaysPresent({
+  /// After mid-ride save / finish / manual catch-up: write each present
+  /// local day that is not yet marked backed up. Still one file per day.
+  ///
+  /// When [includeToday] is false, only days strictly before local today
+  /// are considered (midnight catch-up). When true, today's segment is
+  /// included (save / "write missing now").
+  Future<DailyBackupRunResult> backupDaysPresent({
     required List<TrackPoint> points,
     bool includeToday = true,
+  }) {
+    final completer = Completer<DailyBackupRunResult>();
+    _queue = _queue.then((_) async {
+      final result = await _backupDaysPresentUnlocked(
+        points: points,
+        includeToday: includeToday,
+      );
+      completer.complete(result);
+    }).catchError((Object e, StackTrace st) {
+      if (!completer.isCompleted) {
+        completer.completeError(e, st);
+      }
+    });
+    return completer.future;
+  }
+
+  Future<DailyBackupRunResult> _backupDaysPresentUnlocked({
+    required List<TrackPoint> points,
+    required bool includeToday,
   }) async {
-    if (!isConfigured) return;
+    if (!isConfigured) {
+      return const DailyBackupRunResult(written: 0, skipped: 0, failed: 0);
+    }
     final today = calendarDayLocal(DateTime.now());
+    var written = 0;
+    var skipped = 0;
+    var failed = 0;
     for (final day in localDaysInPoints(points)) {
       if (!includeToday && !day.isBefore(today)) continue;
-      await ensureDayBackedUp(day: day, allPoints: points);
+      final key = dayBackupKey(day);
+      if (_backedUpDays.contains(key)) {
+        skipped++;
+        continue;
+      }
+      final ok = await ensureDayBackedUp(day: day, allPoints: points);
+      if (ok) {
+        written++;
+      } else {
+        failed++;
+      }
     }
+    return DailyBackupRunResult(
+      written: written,
+      skipped: skipped,
+      failed: failed,
+    );
   }
 
   Future<bool> ensureDayBackedUp({

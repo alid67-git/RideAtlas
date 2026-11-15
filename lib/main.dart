@@ -152,6 +152,11 @@ class _DailyNoonUpdateHostState extends State<_DailyNoonUpdateHost> {
 
 /// While a multi-day recording runs, uploads each **completed** local day
 /// (not the full cumulative track) into the user-picked Drive/SAF folder.
+///
+/// Catch-up also runs when:
+/// - backup settings finish loading / become configured (folder pick)
+/// - the app returns to foreground (paused overnight with no new GPS ticks)
+/// so missing days are not left waiting for the next motion event.
 class _DailyDriveBackupHost extends StatefulWidget {
   const _DailyDriveBackupHost({required this.child});
 
@@ -161,32 +166,108 @@ class _DailyDriveBackupHost extends StatefulWidget {
   State<_DailyDriveBackupHost> createState() => _DailyDriveBackupHostState();
 }
 
-class _DailyDriveBackupHostState extends State<_DailyDriveBackupHost> {
+class _DailyDriveBackupHostState extends State<_DailyDriveBackupHost>
+    with WidgetsBindingObserver {
   GpsRecorder? _recorder;
+  DailyDriveBackupController? _backup;
   var _listening = false;
+  /// After [DailyDriveBackupController.load] finishes; avoids treating
+  /// every busy/error [notifyListeners] as a reason to re-sync.
+  var _backupReady = false;
+  var _backupWasConfigured = false;
+  Timer? _debounce;
+  Timer? _midnightTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final recorder = context.read<GpsRecorder>();
-    if (_recorder == recorder && _listening) return;
+    final backup = context.read<DailyDriveBackupController>();
+    if (_recorder == recorder && _backup == backup && _listening) return;
+
     _recorder?.removeListener(_onRecorder);
+    _backup?.removeListener(_onBackupChanged);
     _recorder = recorder;
+    _backup = backup;
     _recorder!.addListener(_onRecorder);
+    _backup!.addListener(_onBackupChanged);
     _listening = true;
+    _scheduleMidnightCatchUp();
+    _requestSync(immediate: true);
   }
 
-  void _onRecorder() {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _scheduleMidnightCatchUp();
+      _requestSync(immediate: true);
+    }
+  }
+
+  void _onRecorder() => _requestSync();
+
+  void _onBackupChanged() {
+    final backup = _backup;
+    if (backup == null || backup.isLoading) return;
+    final configured = backup.isConfigured;
+    if (!_backupReady) {
+      _backupReady = true;
+      _backupWasConfigured = configured;
+      if (configured) _requestSync(immediate: true);
+      return;
+    }
+    // Became configured (enabled + folder) — catch up without waiting for
+    // the next GPS point (auto-pause can be silent for hours).
+    if (configured && !_backupWasConfigured) {
+      _backupWasConfigured = true;
+      _requestSync(immediate: true);
+      return;
+    }
+    if (!configured) _backupWasConfigured = false;
+  }
+
+  void _requestSync({bool immediate = false}) {
     final recorder = _recorder;
-    if (recorder == null || !mounted) return;
-    unawaited(
-      context.read<DailyDriveBackupController>().syncFromRecorder(recorder),
-    );
+    final backup = _backup;
+    if (recorder == null || backup == null || !mounted) return;
+    _debounce?.cancel();
+    if (immediate) {
+      unawaited(backup.syncFromRecorder(recorder));
+      return;
+    }
+    // GPS ticks every few seconds; coalesce so Drive is not hammered and
+    // a long point list is not copied on every fix.
+    _debounce = Timer(const Duration(seconds: 8), () {
+      if (!mounted) return;
+      unawaited(backup.syncFromRecorder(recorder));
+    });
+  }
+
+  /// Fires shortly after local midnight so a recording left open (and often
+  /// auto-paused) still uploads yesterday without needing a new GPS fix.
+  void _scheduleMidnightCatchUp() {
+    _midnightTimer?.cancel();
+    final now = DateTime.now();
+    final next = DateTime(now.year, now.month, now.day + 1, 0, 1);
+    _midnightTimer = Timer(next.difference(now), () {
+      _requestSync(immediate: true);
+      _scheduleMidnightCatchUp();
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _debounce?.cancel();
+    _midnightTimer?.cancel();
     _recorder?.removeListener(_onRecorder);
+    _backup?.removeListener(_onBackupChanged);
     super.dispose();
   }
 
