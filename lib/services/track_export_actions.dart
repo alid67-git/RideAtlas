@@ -135,13 +135,18 @@ List<PreparedExportFile> preparePlanExportFiles({
   required TrackFormat format,
 }) {
   if (plan.scope == DayExportScope.fullRoute) {
-    final safe = routeName.trim().replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-    final base = safe.isEmpty ? 'RideAtlas' : safe;
+    final days = localDaysInPoints(points);
+    final base = fullRouteExportBaseName(points, fallbackName: routeName);
+    // Embed the calendar day(s) in metadata when known; otherwise keep the
+    // library / dialog name for share sheets that show track title.
+    final embedName = days.length == 1
+        ? dayBackupTrackName(days.single)
+        : (routeName.trim().isEmpty ? base : routeName.trim());
     return [
       PreparedExportFile(
         baseName: base,
         export: buildTrackExport(
-          name: routeName,
+          name: embedName,
           points: points,
           waypoints: waypoints,
           format: format,
@@ -157,12 +162,12 @@ List<PreparedExportFile> preparePlanExportFiles({
       waypoints: waypoints,
       day: day,
       format: format,
-      nameOverride: '${routeName.trim()} ${dayBackupKey(day)}',
+      nameOverride: dayBackupTrackName(day),
     );
     if (export == null) continue;
     out.add(
       PreparedExportFile(
-        baseName: dayExportBaseName(day, routeName: routeName),
+        baseName: dayExportBaseName(day),
         export: export,
       ),
     );

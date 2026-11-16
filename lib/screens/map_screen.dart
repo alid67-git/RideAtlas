@@ -645,10 +645,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       );
     }
 
-    // Defaults to the route's own saved name - riders only need to type
-    // something different when they actually want to (e.g. a merged
-    // route's auto-generated "A + B" name), not on every single export.
-    // Day-split files append yyyy-MM-dd themselves.
+    // Defaults to the route's own saved name (share subject / metadata).
+    // On-disk file names always use the track calendar day(s)
+    // (RideAtlas_yyyy-MM-dd), not this dialog text.
     final nameController = TextEditingController(text: route.name);
     final name = await showDialog<String>(
       context: context,

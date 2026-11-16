@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.142 beta',
+    date: '2026-11-16',
+    noteTr:
+        'Kayıt dışa aktarırken dosya adına bugünün (kaydetme anı) tarihi '
+        'yazılıyordu. Artık her dosya, o parçanın GPS takvim gününü kullanır '
+        '(RideAtlas_yyyy-MM-dd; çok gün tek dosyada first_last).',
+    noteEn:
+        'Saving/exporting named files with today’s (save-time) date. Files now '
+        'use each segment’s GPS calendar day (RideAtlas_yyyy-MM-dd; multi-day '
+        'single file uses first_last).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.141 beta',
     date: '2026-11-15',
     noteTr:

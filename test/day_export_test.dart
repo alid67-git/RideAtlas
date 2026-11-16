@@ -66,8 +66,29 @@ void main() {
     });
   });
 
+  group('dayExportBaseName / fullRouteExportBaseName', () {
+    test('day file uses calendar day, not route display name', () {
+      expect(dayExportBaseName(day1), 'RideAtlas_2026-10-12');
+    });
+
+    test('full route with two days uses first_last keys', () {
+      expect(
+        fullRouteExportBaseName(samplePoints(), fallbackName: 'Tour'),
+        'RideAtlas_2026-10-12_2026-10-13',
+      );
+    });
+
+    test('full route with one day uses that day', () {
+      final oneDay = samplePoints().take(2).toList();
+      expect(
+        fullRouteExportBaseName(oneDay, fallbackName: 'Kayıt 16 Kas 2026'),
+        'RideAtlas_2026-10-12',
+      );
+    });
+  });
+
   group('preparePlanExportFiles', () {
-    test('selected days produces one file per day', () {
+    test('selected days produces one file per day named by that day', () {
       final plan = DayExportPlan(
         scope: DayExportScope.selectedDays,
         destination: DayExportDestination.share,
@@ -75,17 +96,17 @@ void main() {
       );
       final files = preparePlanExportFiles(
         plan: plan,
-        routeName: 'Tour',
+        routeName: 'Kayıt 16 Kas 2026 01:20',
         points: samplePoints(),
         waypoints: const [],
         format: TrackFormat.gpx,
       );
       expect(files.length, 2);
-      expect(files[0].baseName, 'Tour_2026-10-12');
-      expect(files[1].baseName, 'Tour_2026-10-13');
+      expect(files[0].baseName, 'RideAtlas_2026-10-12');
+      expect(files[1].baseName, 'RideAtlas_2026-10-13');
     });
 
-    test('full route produces a single file', () {
+    test('full route produces a single file named by day span', () {
       final plan = const DayExportPlan(
         scope: DayExportScope.fullRoute,
         destination: DayExportDestination.share,
@@ -99,7 +120,7 @@ void main() {
         format: TrackFormat.gpx,
       );
       expect(files.length, 1);
-      expect(files.single.baseName, 'Tour');
+      expect(files.single.baseName, 'RideAtlas_2026-10-12_2026-10-13');
     });
 
     test('selecting only day 1 exports that day alone', () {
@@ -116,6 +137,7 @@ void main() {
         format: TrackFormat.gpx,
       );
       expect(files.length, 1);
+      expect(files.single.baseName, 'RideAtlas_2026-10-12');
       final text = String.fromCharCodes(files.single.export.bytes);
       expect(text, isNot(contains('41.02')));
     });
