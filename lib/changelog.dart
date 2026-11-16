@@ -26,6 +26,20 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.144 beta',
+    date: '2026-11-16',
+    noteTr:
+        'Kayıt devam ederken de çok günlük izler gün gün renklenir; haritada '
+        'Gün · tarih etiketleri ve üstte gün şeridi çıkar. Etikete, şeride '
+        'veya ize dokununca o günün detayı açılır; detaydan aynı noktaya '
+        'not / fotoğraf eklenebilir.',
+    noteEn:
+        'While recording continues, multi-day tracks are color-coded by day '
+        'with Day · date labels and a chip strip. Tap a label, chip, or '
+        'track for that day’s detail; from the sheet you can still add a '
+        'note / photo at the tapped point.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.143 beta',
     date: '2026-11-16',
     noteTr:

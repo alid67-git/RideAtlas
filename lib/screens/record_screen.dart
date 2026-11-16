@@ -45,6 +45,7 @@ import '../services/track_display_simplify.dart';
 import '../services/track_export_actions.dart';
 import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';
+import '../widgets/day_detail_sheet.dart';
 import '../widgets/day_export_dialog.dart';
 import '../widgets/heading_cone.dart';
 import '../widgets/recording_indicator.dart';
@@ -55,7 +56,7 @@ import '../widgets/route_photo_strip.dart' show PhotoViewerDialog;
 import '../widgets/map_attribution.dart';
 import 'analysis_sheet.dart' show AnalysisStatCard;
 import 'location_picker_screen.dart';
-import 'map_screen.dart' show MapStylePickerDialog;
+import 'map_screen.dart' show MapStylePickerDialog, buildTrackPolylines;
 import 'ride_photo_picker_screen.dart';
 import 'settings_screen.dart';
 
@@ -142,6 +143,11 @@ class _RecordScreenState extends State<RecordScreen>
   final _headingListenable = ValueNotifier<double?>(null);
   List<LatLng> _liveLineCache = [];
   int _liveLineCacheCount = 0;
+  /// Calendar-day split of the live track (recomputed when point count changes).
+  List<DayStats> _liveDays = const [];
+  int _liveDaysPointCount = -1;
+  /// null = all days; otherwise only these day numbers (same as RouteMapScreen).
+  Set<int>? _liveVisibleDayNumbers;
   bool _starting = false;
   bool _saving = false;
 
@@ -1255,6 +1261,9 @@ class _RecordScreenState extends State<RecordScreen>
     _savedPointCount = -1;
     _liveLineCache = [];
     _liveLineCacheCount = 0;
+    _liveDays = const [];
+    _liveDaysPointCount = -1;
+    _liveVisibleDayNumbers = null;
     _sessionAnnotations.clear();
     await _recorder.discard();
   }
@@ -1929,6 +1938,7 @@ class _RecordScreenState extends State<RecordScreen>
                         builder: (_, _, _) =>
                             _buildMiniStatsRow(context, l10n, recorder),
                       ),
+                      _buildLiveDayChipStrip(context, l10n, recorder),
                     ],
                     if (context.watch<AppUpdateController>().showBanner) ...[
                       const SizedBox(height: 8),
@@ -2145,6 +2155,61 @@ class _RecordScreenState extends State<RecordScreen>
             child: _StatRow(
               label: l10n.currentAltitudeLabel,
               value: altitude == null ? '—' : '${altitude.round()} m',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Day chips under mini stats while a multi-day session is in progress.
+  Widget _buildLiveDayChipStrip(
+    BuildContext context,
+    AppLocalizations l10n,
+    GpsRecorder recorder,
+  ) {
+    _syncLiveDays(recorder.points);
+    if (_liveDays.length < 2) return const SizedBox.shrink();
+    final locale = Localizations.localeOf(context).languageCode;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.recordingLiveDaysCount(_liveDays.length),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _liveDays.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 6),
+              itemBuilder: (context, i) {
+                final day = _liveDays[i];
+                final selected = _liveVisibleDayNumbers == null ||
+                    _liveVisibleDayNumbers!.contains(day.dayNumber);
+                final short = DateFormat('d MMM', locale).format(day.date);
+                return FilterChip(
+                  selected: selected && _liveVisibleDayNumbers?.length == 1,
+                  showCheckmark: false,
+                  avatar: CircleAvatar(
+                    backgroundColor: day.color,
+                    radius: 6,
+                  ),
+                  label: Text('${l10n.dayLabel(day.dayNumber)} · $short'),
+                  onSelected: (_) {
+                    _fitToLiveDay(day);
+                    _openLiveDayDetail(day);
+                  },
+                );
+              },
             ),
           ),
         ],
@@ -2603,6 +2668,75 @@ class _RecordScreenState extends State<RecordScreen>
     _liveLineCacheCount = points.length;
   }
 
+  void _syncLiveDays(List<TrackPoint> points) {
+    if (points.length == _liveDaysPointCount) return;
+    _liveDaysPointCount = points.length;
+    _liveDays = splitIntoDays(points);
+    final filter = _liveVisibleDayNumbers;
+    if (filter != null) {
+      final valid = {for (final d in _liveDays) d.dayNumber};
+      final next = {for (final n in filter) if (valid.contains(n)) n};
+      _liveVisibleDayNumbers = next.isEmpty ? null : next;
+    }
+  }
+
+  List<DayStats> get _liveVisibleDays {
+    final filter = _liveVisibleDayNumbers;
+    if (filter == null) return _liveDays;
+    return [for (final d in _liveDays) if (filter.contains(d.dayNumber)) d];
+  }
+
+  List<Polyline> _buildLiveTrackPolylines(List<TrackPoint> points) {
+    _syncLiveDays(points);
+    if (_liveDays.length < 2) {
+      _syncLiveLineCache(points);
+      if (_liveLineCache.length < 2) return const [];
+      return [
+        Polyline(
+          points: _liveLineCache,
+          strokeWidth: 4,
+          color: const Color(0xFFE53935),
+        ),
+      ];
+    }
+    return buildTrackPolylines(
+      points: points,
+      days: _liveDays,
+      visibleDayNumbers: _liveVisibleDayNumbers,
+    );
+  }
+
+  void _fitToLiveDay(DayStats day) {
+    final pts = [for (final p in day.points) p.latLng];
+    if (pts.isEmpty) return;
+    if (pts.length < 2) {
+      _mapController.move(pts.first, 14);
+      return;
+    }
+    fitMapToBounds(
+      _mapController,
+      bounds: LatLngBounds.fromPoints(pts),
+    );
+  }
+
+  void _openLiveDayDetail(DayStats day, {LatLng? noteAt}) {
+    showDayDetailSheet(
+      context: context,
+      day: day,
+      onAddNote: noteAt == null
+          ? null
+          : () => unawaited(_addAnnotationAt(noteAt)),
+      onShowOnlyThisDay: () {
+        setState(() => _liveVisibleDayNumbers = {day.dayNumber});
+        _fitToLiveDay(day);
+      },
+      onShowAllDays: _liveVisibleDayNumbers == null
+          ? null
+          : () {
+              setState(() => _liveVisibleDayNumbers = null);
+            },
+    );
+  }
 
   void _toggleTrackLabel({
     required String id,
@@ -2664,10 +2798,49 @@ class _RecordScreenState extends State<RecordScreen>
   }
 
   /// Rough geographic hit-test: nearest polyline within ~35 m * 2^(15-zoom).
-  /// Tapping the live track while a session is active opens note/photo add.
+  /// Multi-day live: day segment → day detail (note optional). Single-day /
+  /// idle: live line still opens note/photo add.
   void _onMapTap(TapPosition tapPosition, LatLng latlng) {
     final l10n = AppLocalizations.of(context)!;
-    final liveActive = !_recorder.isIdle && _liveLineCache.length >= 2;
+    _syncLiveDays(_recorder.points);
+    final multiDayLive =
+        !_recorder.isIdle && _liveDays.length >= 2 && _recorder.points.length >= 2;
+    if (multiDayLive) {
+      final visible = _liveVisibleDays;
+      final dayHit = findNearestTrackHit(
+        tap: latlng,
+        zoom: _mapController.camera.zoom,
+        tracks: [
+          for (final d in visible)
+            (
+              id: 'live-day-${d.dayNumber}',
+              name: '${d.dayNumber}',
+              points: [for (final p in d.points) p.latLng],
+            ),
+        ],
+      );
+      if (dayHit != null) {
+        final prefix = 'live-day-';
+        if (dayHit.id.startsWith(prefix)) {
+          final num = int.tryParse(dayHit.id.substring(prefix.length));
+          DayStats? day;
+          for (final d in visible) {
+            if (d.dayNumber == num) {
+              day = d;
+              break;
+            }
+          }
+          if (day != null) {
+            _openLiveDayDetail(day, noteAt: dayHit.point);
+            return;
+          }
+        }
+      }
+    }
+
+    final liveActive = !_recorder.isIdle &&
+        (_liveDays.length < 2) &&
+        _liveLineCache.length >= 2;
     final hit = findNearestTrackHit(
       tap: latlng,
       zoom: _mapController.camera.zoom,
@@ -2920,16 +3093,35 @@ class _RecordScreenState extends State<RecordScreen>
         ListenableBuilder(
           listenable: Listenable.merge([recorder, _overlayPolylines]),
           builder: (context, _) {
-            _syncLiveLineCache(recorder.points);
+            final livePolys = _buildLiveTrackPolylines(recorder.points);
             return PolylineLayer(
+              simplificationTolerance: 0.4,
               polylines: [
                 ..._overlayPolylines.value,
-                if (_liveLineCache.length > 1)
-                  Polyline(
-                    points: _liveLineCache,
-                    strokeWidth: 4,
-                    color: const Color(0xFFE53935),
-                  ),
+                ...livePolys,
+              ],
+            );
+          },
+        ),
+        ListenableBuilder(
+          listenable: recorder,
+          builder: (context, _) {
+            _syncLiveDays(recorder.points);
+            if (_liveDays.length < 2) return const SizedBox.shrink();
+            return MarkerLayer(
+              markers: [
+                for (final day in _liveVisibleDays)
+                  if (day.points.isNotEmpty)
+                    Marker(
+                      point: dayLabelAnchor(day),
+                      width: 108,
+                      height: 28,
+                      alignment: Alignment.center,
+                      child: DayMapLabel(
+                        day: day,
+                        onTap: () => _openLiveDayDetail(day),
+                      ),
+                    ),
               ],
             );
           },
