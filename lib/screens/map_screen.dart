@@ -348,19 +348,32 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   }
 
   void _openDayDetail(DayStats day) {
+    final previousFilter = _visibleDayNumbers;
+    var keepFocus = false;
     showDayDetailSheet(
       context: context,
       day: day,
-      onShowOnlyThisDay: () {
+      days: _days,
+      startAtFirstDay: true,
+      onDayChanged: (d) {
         setState(() {
-          _visibleDayNumbers = {day.dayNumber};
+          _visibleDayNumbers = {d.dayNumber};
           _rebuildPolylines();
         });
-        _fitToDay(day);
+        _fitToDay(d);
       },
-      onShowAllDays: _visibleDayNumbers == null
+      onShowOnlyThisDay: (d) {
+        keepFocus = true;
+        setState(() {
+          _visibleDayNumbers = {d.dayNumber};
+          _rebuildPolylines();
+        });
+        _fitToDay(d);
+      },
+      onShowAllDays: previousFilter == null
           ? null
           : () {
+              keepFocus = true;
               setState(() {
                 _visibleDayNumbers = null;
                 _rebuildPolylines();
@@ -368,7 +381,13 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
               final route = _route;
               if (route != null) _fitToRoute(route);
             },
-    );
+    ).whenComplete(() {
+      if (!mounted || keepFocus) return;
+      setState(() {
+        _visibleDayNumbers = previousFilter;
+        _rebuildPolylines();
+      });
+    });
   }
 
   void _fitToDay(DayStats day) {

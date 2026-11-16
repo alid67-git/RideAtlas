@@ -917,6 +917,7 @@ class _DailyTab extends StatelessWidget {
         for (final day in days) ...[
           _DayCard(
             day: day,
+            days: days,
             geoLoading: geoLoading,
             hasGeography: geography != null,
           ),
@@ -930,11 +931,13 @@ class _DailyTab extends StatelessWidget {
 class _DayCard extends StatelessWidget {
   const _DayCard({
     required this.day,
+    required this.days,
     required this.geoLoading,
     required this.hasGeography,
   });
 
   final DayStats day;
+  final List<DayStats> days;
   final bool geoLoading;
   final bool hasGeography;
 
@@ -952,7 +955,12 @@ class _DayCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => showDayDetailSheet(context: context, day: day),
+        onTap: () => showDayDetailSheet(
+          context: context,
+          day: day,
+          days: days,
+          startAtFirstDay: true,
+        ),
         child: Padding(
       padding: const EdgeInsets.all(12),
       child: Column(
