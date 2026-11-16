@@ -69,9 +69,12 @@ const _helpSectionsTr = <HelpSection>[
         'istediğiniz an bu sığdırmaya geri dönebilirsiniz - harita '
         'döndürülmüş olsa bile önce kuzeye çevirip doğru şekilde sığdırır. '
         'Sağ alttaki başka bir ikonla harita türünü (sokak, uydu, topo, '
-        'koyu, sade) değiştirebilirsiniz. Birden çok günlük rotalarda gün '
-        'filtresiyle sadece belirli günleri gösterebilir, pusula ikonuyla '
-        'haritayı kuzeye çevirebilirsiniz. Mola ve geceleme noktaları '
+        'koyu, sade) değiştirebilirsiniz. Birden çok günlük rotalarda her '
+        'gün farklı renkte çizilir; haritada "Gün 1 · tarih" etiketleri '
+        'görünür. Etikete, üstteki gün şeridine veya renkli ize dokununca '
+        'o günün km ve detay sayfası açılır. Gün filtresiyle sadece '
+        'belirli günleri gösterebilir, pusula ikonuyla haritayı kuzeye '
+        'çevirebilirsiniz. Mola ve geceleme noktaları '
         'başlangıçta gizlidir; üst çubuktaki düğmeyle istediğiniz zaman '
         'açıp kapatabilirsiniz. Fotoğraf/video konumlarını gösteren ayrı '
         'bir düğme de aynı çubukta yer alır.',
@@ -86,7 +89,7 @@ const _helpSectionsTr = <HelpSection>[
         'duraklamalar ve gecelemeler), Hava durumu (rota boyunca günlük '
         'hava koşulları, internet gerektirir) ve Günlük (rota birden fazla '
         'güne yayılıyorsa gün gün özet - her günün kendi mesafesi, süresi '
-        've sürüş/mola dağılımı). '
+        've sürüş/mola dağılımı; bir güne dokununca ayrı detay sayfası). '
         'Güzergâh, Molalar, Hava durumu ve Günlük sekmeleri ilk '
         'açıldıklarında hesaplanır; bir kez hesaplandıktan sonra tekrar '
         'tekrar yeniden işlenmez.',
@@ -335,8 +338,11 @@ const _helpSectionsEn = <HelpSection>[
         'the map has been rotated, it resets to north-up first so the '
         'fit is always correct. Another icon in the bottom right switches '
         'the map type (street, satellite, topo, dark, clean). For routes '
-        'spanning several days, a day filter lets you show only certain '
-        'days, and the compass icon resets the map to north-up. Stop and '
+        'spanning several days, each day is drawn in its own color with '
+        '"Day 1 · date" labels on the map; tapping a label, the day chip '
+        'strip, or the colored track opens that day’s km and details. A '
+        'day filter still lets you show only certain days, and the '
+        'compass icon resets the map to north-up. Stop and '
         'overnight-stay markers are hidden by default - toggle them on or '
         'off any time with the button in the top bar, and a separate '
         'button in the same bar shows or hides photo/video locations.',
@@ -351,7 +357,8 @@ const _helpSectionsEn = <HelpSection>[
         'minutes and overnight stays), Weather (daily conditions along '
         'the route, needs internet) and Daily (a day-by-day breakdown for '
         'multi-day routes - each day\'s own distance, duration and riding/'
-        'rest split). Route, Stops, Weather and Daily are computed '
+        'rest split; tap a day for a dedicated detail sheet). Route, '
+        'Stops, Weather and Daily are computed '
         'the first time you open them, not recomputed on every rebuild.',
   ),
   HelpSection(

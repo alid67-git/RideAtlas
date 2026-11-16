@@ -26,6 +26,22 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.143 beta',
+    date: '2026-11-16',
+    noteTr:
+        'Çok günlük rotada her gün renkli çizilir; haritada “Gün 1 · tarih” '
+        'etiketleri ve üstte gün şeridi var. Etikete, şeride veya renkli '
+        'ize dokununca o günün km, süre, tırmanış/iniş ve detay sayfası '
+        'açılır (yalnızca o günü haritada gösterme seçeneğiyle). Analiz → '
+        'Günlük kartları da aynı sayfayı açar.',
+    noteEn:
+        'Multi-day routes stay color-coded per day, with “Day 1 · date” '
+        'map labels and a day chip strip. Tap a label, chip, or colored '
+        'track for that day’s km, time, climb/descent details (optional '
+        'show-only-this-day on the map). Analysis → Daily cards open the '
+        'same sheet.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.142 beta',
     date: '2026-11-16',
     noteTr:

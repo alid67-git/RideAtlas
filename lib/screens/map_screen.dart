@@ -27,6 +27,7 @@ import '../services/route_geography.dart';
 import '../services/track_display_simplify.dart';
 import '../services/track_export_actions.dart';
 import '../services/track_io.dart';
+import '../widgets/day_detail_sheet.dart';
 import '../widgets/day_export_dialog.dart';
 import '../widgets/recording_indicator.dart';
 import '../widgets/route_photo_strip.dart';
@@ -337,6 +338,81 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         }),
       ),
     );
+  }
+
+  List<DayStats> get _visibleDays {
+    final all = _days;
+    final filter = _visibleDayNumbers;
+    if (filter == null) return all;
+    return [for (final d in all) if (filter.contains(d.dayNumber)) d];
+  }
+
+  void _openDayDetail(DayStats day) {
+    showDayDetailSheet(
+      context: context,
+      day: day,
+      onShowOnlyThisDay: () {
+        setState(() {
+          _visibleDayNumbers = {day.dayNumber};
+          _rebuildPolylines();
+        });
+        _fitToDay(day);
+      },
+      onShowAllDays: _visibleDayNumbers == null
+          ? null
+          : () {
+              setState(() {
+                _visibleDayNumbers = null;
+                _rebuildPolylines();
+              });
+              final route = _route;
+              if (route != null) _fitToRoute(route);
+            },
+    );
+  }
+
+  void _fitToDay(DayStats day) {
+    final pts = [for (final p in day.points) p.latLng];
+    if (pts.isEmpty) return;
+    if (pts.length < 2) {
+      _mapController.move(pts.first, 14);
+      return;
+    }
+    fitMapToBounds(
+      _mapController,
+      bounds: LatLngBounds.fromPoints(pts),
+    );
+  }
+
+  /// Tap near a day-colored segment → that day's detail sheet.
+  void _onMapTap(TapPosition tapPosition, LatLng latlng) {
+    if (_days.length < 2 || _trackDrawing) return;
+    final visible = _visibleDays;
+    if (visible.isEmpty) return;
+    final hit = findNearestTrackHit(
+      tap: latlng,
+      zoom: _mapController.camera.zoom,
+      tracks: [
+        for (final d in visible)
+          (
+            id: '${d.dayNumber}',
+            name: '${d.dayNumber}',
+            points: [for (final p in d.points) p.latLng],
+          ),
+      ],
+    );
+    if (hit == null) return;
+    final num = int.tryParse(hit.id);
+    if (num == null) return;
+    DayStats? day;
+    for (final d in visible) {
+      if (d.dayNumber == num) {
+        day = d;
+        break;
+      }
+    }
+    if (day == null) return;
+    _openDayDetail(day);
   }
 
   GpxRoute? get _route {
@@ -1057,7 +1133,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
 
     return FlutterMap(
       mapController: _mapController,
-      options: MapOptions(initialCenter: center, initialZoom: 12),
+      options: MapOptions(
+        initialCenter: center,
+        initialZoom: 12,
+        onTap: _onMapTap,
+      ),
       children: [
         TileLayer(
           // Force a fresh tile cache when the rider switches base style -
@@ -1081,6 +1161,19 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         ),
         MarkerLayer(
           markers: [
+            if (trackReady && _days.length > 1)
+              for (final day in _visibleDays)
+                if (day.points.isNotEmpty)
+                  Marker(
+                    point: dayLabelAnchor(day),
+                    width: 108,
+                    height: 28,
+                    alignment: Alignment.center,
+                    child: DayMapLabel(
+                      day: day,
+                      onTap: () => _openDayDetail(day),
+                    ),
+                  ),
             if (trackReady)
               for (final w in _waypoints ?? const <Waypoint>[])
                 Marker(
@@ -1300,9 +1393,55 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                         color: Theme.of(context).colorScheme.outline,
                       ),
                     ),
+                  if (_days.length > 1) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      AppLocalizations.of(context)!.daysCountLabel(_days.length),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
+            if (_days.length > 1 && !_trackDrawing) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 36,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _days.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 6),
+                  itemBuilder: (context, i) {
+                    final day = _days[i];
+                    final selected = _visibleDayNumbers == null ||
+                        _visibleDayNumbers!.contains(day.dayNumber);
+                    final short = DateFormat(
+                      'd MMM',
+                      Localizations.localeOf(context).languageCode,
+                    ).format(day.date);
+                    final l10n = AppLocalizations.of(context)!;
+                    return FilterChip(
+                      selected: selected && _visibleDayNumbers?.length == 1,
+                      showCheckmark: false,
+                      avatar: CircleAvatar(
+                        backgroundColor: day.color,
+                        radius: 6,
+                      ),
+                      label: Text('${l10n.dayLabel(day.dayNumber)} · $short'),
+                      onSelected: (_) {
+                        _fitToDay(day);
+                        _openDayDetail(day);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
           ],
         ),
       ),

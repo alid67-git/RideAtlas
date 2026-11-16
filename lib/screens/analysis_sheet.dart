@@ -11,6 +11,7 @@ import '../services/daily_analysis.dart';
 import '../services/gpx_parser.dart';
 import '../services/route_geography.dart';
 import '../services/weather_service.dart';
+import '../widgets/day_detail_sheet.dart';
 
 /// Tabbed route analysis: overview, elevation, countries, stops, weather.
 class AnalysisSheet extends StatefulWidget {
@@ -946,12 +947,14 @@ class _DayCard extends StatelessWidget {
       Localizations.localeOf(context).languageCode,
     );
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
         borderRadius: BorderRadius.circular(12),
-      ),
+        onTap: () => showDayDetailSheet(context: context, day: day),
+        child: Padding(
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -975,6 +978,10 @@ class _DayCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ],
           ),
@@ -1040,6 +1047,8 @@ class _DayCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+        ),
       ),
     );
   }
