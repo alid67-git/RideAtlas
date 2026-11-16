@@ -30,6 +30,8 @@ Future<void> showDayDetailSheet({
   required DayStats day,
   VoidCallback? onShowOnlyThisDay,
   VoidCallback? onShowAllDays,
+  /// Live recording: open note/photo pin after closing this sheet.
+  VoidCallback? onAddNote,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -39,6 +41,7 @@ Future<void> showDayDetailSheet({
       day: day,
       onShowOnlyThisDay: onShowOnlyThisDay,
       onShowAllDays: onShowAllDays,
+      onAddNote: onAddNote,
     ),
   );
 }
@@ -49,11 +52,13 @@ class DayDetailSheet extends StatelessWidget {
     required this.day,
     this.onShowOnlyThisDay,
     this.onShowAllDays,
+    this.onAddNote,
   });
 
   final DayStats day;
   final VoidCallback? onShowOnlyThisDay;
   final VoidCallback? onShowAllDays;
+  final VoidCallback? onAddNote;
 
   @override
   Widget build(BuildContext context) {
@@ -189,9 +194,21 @@ class DayDetailSheet extends StatelessWidget {
                   ],
                 ),
               ],
-              if (onShowOnlyThisDay != null || onShowAllDays != null) ...[
+              if (onAddNote != null ||
+                  onShowOnlyThisDay != null ||
+                  onShowAllDays != null) ...[
                 const SizedBox(height: 12),
-                if (onShowOnlyThisDay != null)
+                if (onAddNote != null)
+                  FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onAddNote!();
+                    },
+                    icon: const Icon(Icons.add_location_alt),
+                    label: Text(l10n.dayDetailAddNote),
+                  ),
+                if (onShowOnlyThisDay != null) ...[
+                  const SizedBox(height: 8),
                   FilledButton.tonal(
                     onPressed: () {
                       Navigator.pop(context);
@@ -199,6 +216,7 @@ class DayDetailSheet extends StatelessWidget {
                     },
                     child: Text(l10n.dayDetailShowOnlyThisDay),
                   ),
+                ],
                 if (onShowAllDays != null) ...[
                   const SizedBox(height: 8),
                   TextButton(
