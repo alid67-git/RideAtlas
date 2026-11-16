@@ -2720,22 +2720,36 @@ class _RecordScreenState extends State<RecordScreen>
   }
 
   void _openLiveDayDetail(DayStats day, {LatLng? noteAt}) {
+    _syncLiveDays(_recorder.points);
+    final previousFilter = _liveVisibleDayNumbers;
+    var keepFocus = false;
     showDayDetailSheet(
       context: context,
       day: day,
+      days: _liveDays,
+      startAtFirstDay: true,
       onAddNote: noteAt == null
           ? null
           : () => unawaited(_addAnnotationAt(noteAt)),
-      onShowOnlyThisDay: () {
-        setState(() => _liveVisibleDayNumbers = {day.dayNumber});
-        _fitToLiveDay(day);
+      onDayChanged: (d) {
+        setState(() => _liveVisibleDayNumbers = {d.dayNumber});
+        _fitToLiveDay(d);
       },
-      onShowAllDays: _liveVisibleDayNumbers == null
+      onShowOnlyThisDay: (d) {
+        keepFocus = true;
+        setState(() => _liveVisibleDayNumbers = {d.dayNumber});
+        _fitToLiveDay(d);
+      },
+      onShowAllDays: previousFilter == null
           ? null
           : () {
+              keepFocus = true;
               setState(() => _liveVisibleDayNumbers = null);
             },
-    );
+    ).whenComplete(() {
+      if (!mounted || keepFocus) return;
+      setState(() => _liveVisibleDayNumbers = previousFilter);
+    });
   }
 
   void _toggleTrackLabel({

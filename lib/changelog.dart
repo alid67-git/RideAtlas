@@ -26,6 +26,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.145 beta',
+    date: '2026-11-16',
+    noteTr:
+        'Gün detayı her zaman 1. günden açılır; sağ/sol oklarla günler arası '
+        'geçiş. Seçili günün güzergâhı mini haritada çizilir; haritaya '
+        'dokununca tam ekran harita açılır, gün bilgileri üstte/altta '
+        'görünür.',
+    noteEn:
+        'Day detail always opens on Day 1; left/right arrows move between '
+        'days. The selected day’s track is drawn on a mini map; tap it for '
+        'a fullscreen map with day stats overlaid top and bottom.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.144 beta',
     date: '2026-11-16',
     noteTr:
