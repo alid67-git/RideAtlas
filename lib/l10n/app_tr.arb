@@ -135,6 +135,8 @@
   "dayFilterTooltip": "Günleri filtrele",
   "dayFilterTitle": "Hangi günler gösterilsin?",
   "dayFilterShowAll": "Tüm günler",
+  "dayDetailSubtitle": "Bu güne ait mesafe ve detaylar",
+  "dayDetailShowOnlyThisDay": "Haritada yalnızca bu günü göster",
   "northUpTooltip": "Kuzeyi yukarı al",
   "fitRouteTooltip": "Tüm izi göster",
   "showStopsTooltip": "Molaları ve gecelemeleri göster",

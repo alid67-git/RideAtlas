@@ -120,6 +120,8 @@
   "dayFilterTooltip": "Filter days",
   "dayFilterTitle": "Which days to show?",
   "dayFilterShowAll": "All days",
+  "dayDetailSubtitle": "Distance and details for this day",
+  "dayDetailShowOnlyThisDay": "Show only this day on the map",
   "northUpTooltip": "Reset to north",
   "fitRouteTooltip": "Fit whole route",
   "showStopsTooltip": "Show stops and overnight stays",
