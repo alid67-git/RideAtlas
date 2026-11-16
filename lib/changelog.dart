@@ -26,6 +26,19 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.141 beta',
+    date: '2026-11-15',
+    noteTr:
+        'Çok günlük dışa aktarma diyaloğunda “Seçili günler” seçilince gün '
+        'işaret kutuları (1. gün, 2. gün, …) görünmüyordu — liste Flexible + '
+        'min Column yüzünden sıfır yükseklik alıyordu. Kaydırılabilir gövde '
+        'ile düzeltildi.',
+    noteEn:
+        'In the multi-day export dialog, picking “Selected days” did not show '
+        'the day checkboxes (day 1, day 2, …) — a Flexible inside a min-sized '
+        'Column gave the list zero height. Fixed with a scrollable body.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.140 beta',
     date: '2026-11-15',
     noteTr:
