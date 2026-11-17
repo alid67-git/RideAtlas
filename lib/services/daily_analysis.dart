@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart' show Color;
-import 'package:latlong2/latlong.dart';
 
 import '../models/track_point.dart';
+import 'driven_path.dart';
 import 'route_geography.dart';
-
-const _distance = Distance();
 
 /// Cycled per day so multi-day trips can be told apart at a glance, both on
 /// the map (one polyline per day) and in the daily analysis tab.
@@ -57,13 +55,11 @@ class DayStats {
   final double? maxElevation;
   final double? minElevation;
 
-  /// Wall-clock span of the day's points, minus [restDuration]. Null if the
-  /// day has fewer than two timestamped points.
+  /// Driven active time (Day Atlas–style path legs). Falls back to wall-clock
+  /// span minus [restDuration] when no legs qualify.
   final Duration? ridingDuration;
 
-  /// Sum of detected-stop durations ([RouteGeography.stops]) that started on
-  /// this day. Zero (not null) when geography hasn't been computed yet, so
-  /// [ridingDuration] still reflects the raw wall-clock span until it has.
+  /// Idle within the day: max of geography stops and (span − driven active).
   final Duration restDuration;
 
   final List<String> countries;
@@ -106,7 +102,9 @@ List<DayStats> splitIntoDays(
     final day = days[i];
     final dayPoints = groups[day]!;
 
-    var distanceKm = 0.0;
+    // Day Atlas–style driven km (not raw polyline length).
+    final distanceKm = drivenDistanceMeters(dayPoints) / 1000.0;
+    final activeRiding = drivenActiveDuration(dayPoints);
     var gain = 0.0;
     var loss = 0.0;
     double? minEle;
@@ -124,7 +122,6 @@ List<DayStats> splitIntoDays(
       }
       if (j > 0) {
         final prev = dayPoints[j - 1];
-        distanceKm += _distance(prev.latLng, p.latLng) / 1000.0;
         if (prev.elevation != null && p.elevation != null) {
           final diff = p.elevation! - prev.elevation!;
           if (diff > 0) {
@@ -166,8 +163,15 @@ List<DayStats> splitIntoDays(
       }
     }
 
+    // Prefer driven active time; fall back to span − geography rests.
     Duration? riding;
-    if (span != null) {
+    if (activeRiding > Duration.zero) {
+      riding = activeRiding;
+      if (span != null) {
+        final idle = span - activeRiding;
+        if (idle > restDuration) restDuration = idle;
+      }
+    } else if (span != null) {
       final r = span - restDuration;
       riding = r.isNegative ? Duration.zero : r;
     }

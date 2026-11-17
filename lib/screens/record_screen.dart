@@ -150,6 +150,9 @@ class _RecordScreenState extends State<RecordScreen>
   Set<int>? _liveVisibleDayNumbers;
   /// Day chip strip under mini stats — toggled by the Ruta (route) button.
   bool _showLiveDayChips = false;
+  /// Multi-day live track starts as one red line; tap the red line (or open
+  /// chips via Ruta) to expand into day-colored segments + labels.
+  bool _liveDayBreakdownMode = false;
   bool _starting = false;
   bool _saving = false;
 
@@ -1267,6 +1270,7 @@ class _RecordScreenState extends State<RecordScreen>
     _liveDaysPointCount = -1;
     _liveVisibleDayNumbers = null;
     _showLiveDayChips = false;
+    _liveDayBreakdownMode = false;
     _sessionAnnotations.clear();
     await _recorder.discard();
   }
@@ -1829,7 +1833,13 @@ class _RecordScreenState extends State<RecordScreen>
             ),
             onPressed: () {
               if (multiDayLive) {
-                setState(() => _showLiveDayChips = !_showLiveDayChips);
+                setState(() {
+                  _showLiveDayChips = !_showLiveDayChips;
+                  // Opening the strip also expands the day-colored track.
+                  if (_showLiveDayChips) {
+                    _liveDayBreakdownMode = true;
+                  }
+                });
                 return;
               }
               unawaited(openOverlayMenu());
@@ -2166,34 +2176,24 @@ class _RecordScreenState extends State<RecordScreen>
                   Text(l10n.speedLabel, style: theme.textTheme.titleMedium),
                 ],
               ),
-              // Translucent wash over the speed digits so the number still
-              // peeks through, while the label stays unmistakable.
+              // Light wash + diagonal red slash + pause mark — speed digits
+              // stay readable; no cramped “Otomatik” text on the pill.
               if (autoPaused)
                 Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: const Color(0xB3D84315),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: Text(
-                          l10n.autoPausedLabel,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.2,
-                            height: 1.15,
-                            shadows: const [
-                              Shadow(
-                                color: Colors.black87,
-                                blurRadius: 6,
-                                offset: Offset(0, 1),
-                              ),
-                            ],
+                  child: Semantics(
+                    label: l10n.autoPausedLabel,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0x55E65100),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: CustomPaint(
+                        painter: const _AutoPauseSlashPainter(),
+                        child: const Center(
+                          child: Icon(
+                            Icons.pause_rounded,
+                            size: 52,
+                            color: Color(0xE6FFFFFF),
                           ),
                         ),
                       ),
@@ -2758,7 +2758,8 @@ class _RecordScreenState extends State<RecordScreen>
 
   List<Polyline> _buildLiveTrackPolylines(List<TrackPoint> points) {
     _syncLiveDays(points);
-    if (_liveDays.length < 2) {
+    // Single-day, or multi-day still in “one red line” mode.
+    if (_liveDays.length < 2 || !_liveDayBreakdownMode) {
       _syncLiveLineCache(points);
       if (_liveLineCache.length < 2) return const [];
       return [
@@ -2797,7 +2798,7 @@ class _RecordScreenState extends State<RecordScreen>
       context: context,
       day: day,
       days: _liveDays,
-      startAtFirstDay: true,
+      startAtFirstDay: false,
       onAddNote: noteAt == null
           ? null
           : () => unawaited(_addAnnotationAt(noteAt)),
@@ -2882,14 +2883,35 @@ class _RecordScreenState extends State<RecordScreen>
   }
 
   /// Rough geographic hit-test: nearest polyline within ~35 m * 2^(15-zoom).
-  /// Multi-day live: day segment → day detail (note optional). Single-day /
-  /// idle: live line still opens note/photo add.
+  /// Multi-day live: red line tap → expand day colors; day segment → detail.
+  /// Single-day: live line opens note/photo add.
   void _onMapTap(TapPosition tapPosition, LatLng latlng) {
     final l10n = AppLocalizations.of(context)!;
     _syncLiveDays(_recorder.points);
     final multiDayLive =
         !_recorder.isIdle && _liveDays.length >= 2 && _recorder.points.length >= 2;
-    if (multiDayLive) {
+
+    if (multiDayLive && !_liveDayBreakdownMode) {
+      _syncLiveLineCache(_recorder.points);
+      final hitRed = findNearestTrackHit(
+        tap: latlng,
+        zoom: _mapController.camera.zoom,
+        tracks: [
+          if (_liveLineCache.length >= 2)
+            (
+              id: _liveTrackLabelId,
+              name: l10n.recordingLiveTrackLabel,
+              points: _liveLineCache,
+            ),
+        ],
+      );
+      if (hitRed != null) {
+        setState(() => _liveDayBreakdownMode = true);
+        return;
+      }
+    }
+
+    if (multiDayLive && _liveDayBreakdownMode) {
       final visible = _liveVisibleDays;
       final dayHit = findNearestTrackHit(
         tap: latlng,
@@ -2920,6 +2942,13 @@ class _RecordScreenState extends State<RecordScreen>
           }
         }
       }
+      // Empty map tap collapses back to the single red line.
+      setState(() {
+        _liveDayBreakdownMode = false;
+        _showLiveDayChips = false;
+        _liveVisibleDayNumbers = null;
+      });
+      return;
     }
 
     final liveActive = !_recorder.isIdle &&
@@ -3191,7 +3220,9 @@ class _RecordScreenState extends State<RecordScreen>
           listenable: recorder,
           builder: (context, _) {
             _syncLiveDays(recorder.points);
-            if (_liveDays.length < 2) return const SizedBox.shrink();
+            if (_liveDays.length < 2 || !_liveDayBreakdownMode) {
+              return const SizedBox.shrink();
+            }
             return MarkerLayer(
               markers: [
                 for (final day in _liveVisibleDays)
@@ -3864,4 +3895,27 @@ class _AnimatedNumberState extends State<_AnimatedNumber>
       builder: (context, _) => widget.builder(context, _animation.value),
     );
   }
+}
+
+/// Diagonal red slash across the speed pill (top-right → bottom-left).
+class _AutoPauseSlashPainter extends CustomPainter {
+  const _AutoPauseSlashPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xE6C62828)
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    // Top-right → bottom-left, inset so it stays inside the rounded pill.
+    canvas.drawLine(
+      Offset(size.width * 0.88, size.height * 0.18),
+      Offset(size.width * 0.12, size.height * 0.82),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -215,6 +215,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   /// blank from the filter alone.
   Set<int>? _visibleDayNumbers;
 
+  /// Multi-day routes start as one red line; tap expands day colors / labels.
+  bool _dayBreakdownMode = false;
+
   /// Whether detected-stop pins (rest stops and overnight stays) are drawn
   /// on the map. Off by default so a ride's first view is uncluttered; a
   /// button lets riders reveal them when they want the detail.
@@ -333,6 +336,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         days: days,
         selected: _visibleDayNumbers,
         onChanged: (selected) => setState(() {
+          _dayBreakdownMode = true;
           _visibleDayNumbers = selected;
           _rebuildPolylines();
         }),
@@ -348,13 +352,19 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   }
 
   void _openDayDetail(DayStats day) {
+    if (!_dayBreakdownMode) {
+      setState(() {
+        _dayBreakdownMode = true;
+        _rebuildPolylines();
+      });
+    }
     final previousFilter = _visibleDayNumbers;
     var keepFocus = false;
     showDayDetailSheet(
       context: context,
       day: day,
       days: _days,
-      startAtFirstDay: true,
+      startAtFirstDay: false,
       onDayChanged: (d) {
         setState(() {
           _visibleDayNumbers = {d.dayNumber};
@@ -403,9 +413,33 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
   }
 
-  /// Tap near a day-colored segment → that day's detail sheet.
+  /// Multi-day: red line tap → expand day colors; day segment → detail.
   void _onMapTap(TapPosition tapPosition, LatLng latlng) {
     if (_days.length < 2 || _trackDrawing) return;
+    final points = _points;
+    if (points == null || points.length < 2) return;
+
+    if (!_dayBreakdownMode) {
+      final hitRed = findNearestTrackHit(
+        tap: latlng,
+        zoom: _mapController.camera.zoom,
+        tracks: [
+          (
+            id: 'full',
+            name: 'full',
+            points: [for (final p in points) p.latLng],
+          ),
+        ],
+      );
+      if (hitRed != null) {
+        setState(() {
+          _dayBreakdownMode = true;
+          _rebuildPolylines();
+        });
+      }
+      return;
+    }
+
     final visible = _visibleDays;
     if (visible.isEmpty) return;
     final hit = findNearestTrackHit(
@@ -420,7 +454,14 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
           ),
       ],
     );
-    if (hit == null) return;
+    if (hit == null) {
+      setState(() {
+        _dayBreakdownMode = false;
+        _visibleDayNumbers = null;
+        _rebuildPolylines();
+      });
+      return;
+    }
     final num = int.tryParse(hit.id);
     if (num == null) return;
     DayStats? day;
@@ -461,6 +502,14 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     final points = _points;
     if (points == null || points.isEmpty) {
       _polylines = const [];
+      return;
+    }
+    if (_days.length < 2 || !_dayBreakdownMode) {
+      _polylines = buildTrackPolylines(
+        points: points,
+        days: const [],
+        visibleDayNumbers: null,
+      );
       return;
     }
     _polylines = buildTrackPolylines(
@@ -1180,7 +1229,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         ),
         MarkerLayer(
           markers: [
-            if (trackReady && _days.length > 1)
+            if (trackReady && _days.length > 1 && _dayBreakdownMode)
               for (final day in _visibleDays)
                 if (day.points.isNotEmpty)
                   Marker(
@@ -1426,7 +1475,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                 ],
               ),
             ),
-            if (_days.length > 1 && !_trackDrawing) ...[
+            if (_days.length > 1 && !_trackDrawing && _dayBreakdownMode) ...[
               const SizedBox(height: 8),
               SizedBox(
                 height: 36,

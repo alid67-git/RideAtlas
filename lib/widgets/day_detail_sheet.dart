@@ -96,8 +96,9 @@ Future<void> showDayDetailSheet({
   required DayStats day,
   /// All trip days (ordered). Defaults to `[day]`.
   List<DayStats>? days,
-  /// When true (default for multi-day), open on Day 1 even if [day] is later.
-  bool startAtFirstDay = true,
+  /// When true, open on Day 1 even if [day] is later. Default false so a
+  /// tapped day opens on that day; left/right still pages the full list.
+  bool startAtFirstDay = false,
   ValueChanged<DayStats>? onShowOnlyThisDay,
   VoidCallback? onShowAllDays,
   /// Live recording: open note/photo pin after closing this sheet.
