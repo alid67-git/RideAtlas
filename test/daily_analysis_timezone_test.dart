@@ -51,13 +51,14 @@ void main() {
       }
       // 20:00 UTC (= 23:00 TR) on the 27th and 22:00 UTC (= 01:00 TR on
       // the 28th) share a UTC date but not a local one.
+      // ~1.1 km hops in 90 s ≈ 44 km/h so Day Atlas–style driven filter keeps them.
       final evening = DateTime.utc(2026, 8, 27, 20);
       final afterMidnight = DateTime.utc(2026, 8, 27, 22);
       final points = <TrackPoint>[
         _pt(41.0, 29.0, time: evening),
-        _pt(41.01, 29.01, time: evening.add(const Duration(minutes: 30))),
-        _pt(41.02, 29.02, time: afterMidnight),
-        _pt(41.03, 29.03, time: afterMidnight.add(const Duration(minutes: 30))),
+        _pt(41.01, 29.0, time: evening.add(const Duration(seconds: 90))),
+        _pt(41.1, 29.0, time: afterMidnight),
+        _pt(41.11, 29.0, time: afterMidnight.add(const Duration(seconds: 90))),
       ];
       final days = splitIntoDays(points);
       expect(days, hasLength(2));

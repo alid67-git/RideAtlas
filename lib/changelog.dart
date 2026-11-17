@@ -26,6 +26,20 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.148 beta',
+    date: '2026-11-17',
+    noteTr:
+        'Gün kartı mesafesi Day Atlas tarzı “sürülmüş km” (park/jitter/sıçrama '
+        'hariç). Çok günlük kayıt/rota önce tek kırmızı iz; ize dokununca '
+        'gün renkleri + etiketler, güne dokununca detay. Hız kartında '
+        'otomatik duraklatma: kırmızı eğik çizgi + durak ikonu.',
+    noteEn:
+        'Day-card distance is Day Atlas–style driven km (no park jitter / '
+        'jumps). Multi-day tracks start as one red line; tap to expand day '
+        'colors/labels, tap a day for detail. Auto-pause on the speed pill '
+        'is a red slash + pause icon.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.147 beta',
     date: '2026-11-17',
     noteTr:
