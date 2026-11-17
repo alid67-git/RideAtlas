@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.147 beta',
+    date: '2026-11-17',
+    noteTr:
+        'Android güncelleme indirirken uygulama donup “RideAtlas yanıt '
+        'vermiyor” diyordu: ~70 MB APK artık arka planda (ayrı isolate) '
+        'iner; ilerleme arayüzü yeniden çizimi de seyreltildi.',
+    noteEn:
+        'Updating on Android could freeze with “RideAtlas isn’t responding”: '
+        'the ~70 MB APK now downloads on a background isolate, and progress '
+        'UI rebuilds are throttled.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.146 beta',
     date: '2026-11-17',
     noteTr:

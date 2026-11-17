@@ -553,7 +553,11 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final showUpdateBanner = context.watch<AppUpdateController>().showBanner;
+    // Only rebuild when the banner appears/disappears — not on every download
+    // progress tick (that used to rebuild the whole home map and ANR).
+    final showUpdateBanner = context.select<AppUpdateController, bool>(
+      (c) => c.showBanner,
+    );
     final recordingInProgress = !context.watch<GpsRecorder>().isIdle;
     return Scaffold(
       body: Stack(

@@ -1981,10 +1981,18 @@ class _RecordScreenState extends State<RecordScreen>
                       if (_showLiveDayChips)
                         _buildLiveDayChipStrip(context, l10n, recorder),
                     ],
-                    if (context.watch<AppUpdateController>().showBanner) ...[
-                      const SizedBox(height: 8),
-                      const AppUpdateBanner(),
-                    ],
+                    // Selector: progress ticks must not rebuild this whole
+                    // chrome column (map overlays / day chips / stats).
+                    Selector<AppUpdateController, bool>(
+                      selector: (_, c) => c.showBanner,
+                      builder: (context, show, _) {
+                        if (!show) return const SizedBox.shrink();
+                        return const Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: AppUpdateBanner(),
+                        );
+                      },
+                    ),
                   ],
                 ),
                 ),
@@ -2385,11 +2393,16 @@ class _RecordScreenState extends State<RecordScreen>
                     ],
                   ),
                 ),
-                if (context.watch<AppUpdateController>().showBanner)
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
-                    child: AppUpdateBanner(),
-                  ),
+                Selector<AppUpdateController, bool>(
+                  selector: (_, c) => c.showBanner,
+                  builder: (context, show, _) {
+                    if (!show) return const SizedBox.shrink();
+                    return const Padding(
+                      padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      child: AppUpdateBanner(),
+                    );
+                  },
+                ),
                 // Total duration lives here, above the auto-paused banner,
                 // rather than paired with "Aktif sürüş süresi" below the
                 // hero speed number - that slot now holds "Mola süresi"

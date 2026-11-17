@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -128,78 +129,149 @@ Future<UpdateInfo?> checkForAndroidUpdate(String currentVersion) async {
   return result.info;
 }
 
-/// Streams [info]'s APK to a temp file (reporting [onProgress]), then hands
-/// it to the system installer. Throws on HTTP/write/installer failure so the
-/// caller can fall back to a browser download.
-Future<void> downloadAndInstallUpdate(
-  UpdateInfo info, {
-  UpdateDownloadProgress? onProgress,
-}) async {
-  final client = http.Client();
+class _DownloadIsolateArgs {
+  const _DownloadIsolateArgs({
+    required this.url,
+    required this.path,
+    required this.sendPort,
+  });
+
+  final String url;
+  final String path;
+  final SendPort sendPort;
+}
+
+/// Downloads the APK on a background isolate (HTTP + disk write). Messages:
+/// `int` = bytes received so far, `'done'` = success, `'error:…'` = failure.
+@pragma('vm:entry-point')
+void _downloadApkIsolate(_DownloadIsolateArgs args) async {
+  HttpClient? client;
+  IOSink? sink;
   try {
-    final request = http.Request('GET', Uri.parse(info.downloadUrl));
-    final response = await client
-        .send(request)
-        .timeout(const Duration(minutes: 8));
+    client = HttpClient()..connectionTimeout = const Duration(seconds: 30);
+    final request = await client.getUrl(Uri.parse(args.url));
+    request.headers.set(HttpHeaders.userAgentHeader, 'RideAtlas');
+    final response = await request.close().timeout(const Duration(minutes: 8));
     if (response.statusCode != 200) {
-      throw HttpException('HTTP ${response.statusCode}');
+      args.sendPort.send('error:HTTP ${response.statusCode}');
+      return;
     }
 
-    final total = response.contentLength ??
-        (info.sizeBytes > 0 ? info.sizeBytes : null);
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/RideAtlas-update.apk');
+    final file = File(args.path);
     if (await file.exists()) {
       try {
         await file.delete();
       } catch (_) {}
     }
-
-    final sink = file.openWrite();
+    sink = file.openWrite();
     var received = 0;
-    var lastPct = -1;
-    var lastReceivedForUnknown = 0;
-    onProgress?.call(0, total);
-
-    try {
-      await for (final chunk in response.stream) {
-        sink.add(chunk);
-        received += chunk.length;
-        if (total != null && total > 0) {
-          final pct = received * 100 ~/ total;
-          if (pct != lastPct || received >= total) {
-            lastPct = pct;
-            onProgress?.call(received, total);
-          }
-        } else if (received - lastReceivedForUnknown >= 256 * 1024) {
-          lastReceivedForUnknown = received;
-          onProgress?.call(received, total);
-        }
+    var lastReport = 0;
+    await for (final chunk in response) {
+      sink.add(chunk);
+      received += chunk.length;
+      // Coarse progress from the worker so the UI isolate isn't flooded.
+      if (received - lastReport >= 512 * 1024) {
+        lastReport = received;
+        args.sendPort.send(received);
       }
-    } finally {
-      await sink.close();
     }
+    await sink.flush();
+    await sink.close();
+    sink = null;
+    client.close(force: true);
+    client = null;
 
     if (!await file.exists() || await file.length() < 1024) {
-      throw const HttpException('Downloaded file is invalid or empty.');
+      args.sendPort.send('error:Downloaded file is invalid or empty.');
+      return;
     }
+    args.sendPort.send(received);
+    args.sendPort.send('done');
+  } catch (e) {
+    try {
+      await sink?.close();
+    } catch (_) {}
+    try {
+      client?.close(force: true);
+    } catch (_) {}
+    args.sendPort.send('error:$e');
+  }
+}
 
-    onProgress?.call(received, total ?? received);
+/// Streams [info]'s APK to a temp file on a **background isolate** (so a
+/// ~70 MB write never ANRs the UI), reporting [onProgress], then hands the
+/// file to the system installer on the main isolate.
+Future<void> downloadAndInstallUpdate(
+  UpdateInfo info, {
+  UpdateDownloadProgress? onProgress,
+}) async {
+  final totalHint = info.sizeBytes > 0 ? info.sizeBytes : null;
+  final dir = await getTemporaryDirectory();
+  final path = '${dir.path}/RideAtlas-update.apk';
+  onProgress?.call(0, totalHint);
 
-    final result = await OpenFilex.open(file.path);
-    if (result.type != ResultType.done) {
-      throw Exception(result.message);
+  final port = ReceivePort();
+  final errorPort = ReceivePort();
+  final done = Completer<void>();
+  var lastReceived = 0;
+
+  void fail(Object error) {
+    if (!done.isCompleted) done.completeError(error);
+  }
+
+  final sub = port.listen((message) {
+    if (message is int) {
+      lastReceived = message;
+      onProgress?.call(message, totalHint ?? message);
+      return;
     }
-    // The installer screen is now open on top of us, but this process keeps
-    // running underneath it - once the install finishes, the rider could
-    // swipe back into this same stale process instead of the fresh APK.
-    // Close it shortly after handing off to the installer.
-    if (Platform.isAndroid) {
-      unawaited(Future<void>.delayed(const Duration(milliseconds: 600), () {
-        SystemNavigator.pop();
-      }));
+    if (message == 'done') {
+      if (!done.isCompleted) done.complete();
+      return;
     }
+    if (message is String && message.startsWith('error:')) {
+      fail(HttpException(message.substring(6)));
+    }
+  });
+  final errSub = errorPort.listen((message) {
+    fail(Exception('Download isolate error: $message'));
+  });
+
+  try {
+    await Isolate.spawn(
+      _downloadApkIsolate,
+      _DownloadIsolateArgs(
+        url: info.downloadUrl,
+        path: path,
+        sendPort: port.sendPort,
+      ),
+      onError: errorPort.sendPort,
+      errorsAreFatal: true,
+    );
+    await done.future.timeout(const Duration(minutes: 10));
   } finally {
-    client.close();
+    await sub.cancel();
+    await errSub.cancel();
+    port.close();
+    errorPort.close();
+  }
+
+  onProgress?.call(
+    lastReceived > 0 ? lastReceived : (totalHint ?? 0),
+    totalHint ?? lastReceived,
+  );
+
+  final result = await OpenFilex.open(path);
+  if (result.type != ResultType.done) {
+    throw Exception(result.message);
+  }
+  // The installer screen is now open on top of us, but this process keeps
+  // running underneath it - once the install finishes, the rider could
+  // swipe back into this same stale process instead of the fresh APK.
+  // Close it shortly after handing off to the installer.
+  if (Platform.isAndroid) {
+    unawaited(Future<void>.delayed(const Duration(milliseconds: 600), () {
+      SystemNavigator.pop();
+    }));
   }
 }
