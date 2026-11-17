@@ -26,6 +26,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.150 beta',
+    date: '2026-11-17',
+    noteTr:
+        'Çok günlük haritada aynı noktaya binen gün yazıları çapraz kaydırılır; '
+        'alttaki etiketler azıcık görünür kalır.',
+    noteEn:
+        'On multi-day maps, stacked day labels cascade diagonally so lower '
+        'pills still peek out from underneath.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.149 beta',
     date: '2026-11-17',
     noteTr:

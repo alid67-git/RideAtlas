@@ -3223,20 +3223,27 @@ class _RecordScreenState extends State<RecordScreen>
             if (_liveDays.length < 2 || !_liveDayBreakdownMode) {
               return const SizedBox.shrink();
             }
+            final labeled = [
+              for (final day in _liveVisibleDays)
+                if (day.points.isNotEmpty) day,
+            ];
+            final offsets = dayLabelStackOffsets(labeled);
             return MarkerLayer(
               markers: [
-                for (final day in _liveVisibleDays)
-                  if (day.points.isNotEmpty)
-                    Marker(
-                      point: dayLabelAnchor(day),
-                      width: 108,
-                      height: 28,
-                      alignment: Alignment.center,
+                for (var i = 0; i < labeled.length; i++)
+                  Marker(
+                    point: dayLabelAnchor(labeled[i]),
+                    width: 108 + offsets[i].dx.abs() + 8,
+                    height: 28 + offsets[i].dy.abs() + 8,
+                    alignment: Alignment.center,
+                    child: Transform.translate(
+                      offset: offsets[i],
                       child: DayMapLabel(
-                        day: day,
-                        onTap: () => _openLiveDayDetail(day),
+                        day: labeled[i],
+                        onTap: () => _openLiveDayDetail(labeled[i]),
                       ),
                     ),
+                  ),
               ],
             );
           },
