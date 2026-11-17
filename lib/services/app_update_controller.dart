@@ -31,6 +31,10 @@ class AppUpdateController extends ChangeNotifier {
   /// Bytes received / expected while [installing]. Null until the first chunk.
   (int received, int total)? downloadProgress;
 
+  /// Last time [reportDownloadProgress] called [notifyListeners] — throttled
+  /// so a multi-MB APK does not rebuild the whole tree on every percent.
+  DateTime? _lastProgressNotify;
+
   Timer? _dailyNoonTimer;
   Future<void> Function()? _onUpdateFound;
 
@@ -123,17 +127,28 @@ class AppUpdateController extends ChangeNotifier {
     if (installing) return;
     installing = true;
     downloadProgress = null;
+    _lastProgressNotify = null;
     notifyListeners();
   }
 
   void reportDownloadProgress(int received, int total) {
     downloadProgress = (received, total);
+    final now = DateTime.now();
+    final finished = total > 0 && received >= total;
+    final last = _lastProgressNotify;
+    if (!finished &&
+        last != null &&
+        now.difference(last) < const Duration(milliseconds: 300)) {
+      return;
+    }
+    _lastProgressNotify = now;
     notifyListeners();
   }
 
   void endInstall({required bool success}) {
     installing = false;
     downloadProgress = null;
+    _lastProgressNotify = null;
     if (success) dismissed = true;
     notifyListeners();
   }
