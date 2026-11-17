@@ -148,6 +148,8 @@ class _RecordScreenState extends State<RecordScreen>
   int _liveDaysPointCount = -1;
   /// null = all days; otherwise only these day numbers (same as RouteMapScreen).
   Set<int>? _liveVisibleDayNumbers;
+  /// Day chip strip under mini stats — toggled by the Ruta (route) button.
+  bool _showLiveDayChips = false;
   bool _starting = false;
   bool _saving = false;
 
@@ -1264,6 +1266,7 @@ class _RecordScreenState extends State<RecordScreen>
     _liveDays = const [];
     _liveDaysPointCount = -1;
     _liveVisibleDayNumbers = null;
+    _showLiveDayChips = false;
     _sessionAnnotations.clear();
     await _recorder.discard();
   }
@@ -1771,21 +1774,32 @@ class _RecordScreenState extends State<RecordScreen>
       valueListenable: _overlayPolylines,
       builder: (context, overlays, _) {
         final scheme = Theme.of(context).colorScheme;
-        final active = overlays.isNotEmpty;
-        return Material(
-          color: active
-              ? scheme.primary
-              : scheme.surface.withValues(alpha: 0.92),
-          shape: const CircleBorder(),
-          elevation: 2,
-          child: PopupMenuButton<_OverlayMenuAction>(
-            tooltip: l10n.recordOverlayTooltip,
-            icon: Icon(
-              Icons.route,
-              color: active ? scheme.onPrimary : null,
+        final overlayActive = overlays.isNotEmpty;
+        _syncLiveDays(_recorder.points);
+        final multiDayLive =
+            !_recorder.isIdle && _liveDays.length >= 2;
+        final daysOpen = multiDayLive && _showLiveDayChips;
+        final highlighted = overlayActive || daysOpen;
+
+        Future<void> openOverlayMenu() async {
+          final box = context.findRenderObject() as RenderBox?;
+          final overlay =
+              Overlay.of(context).context.findRenderObject() as RenderBox?;
+          if (box == null || overlay == null) return;
+          final position = RelativeRect.fromRect(
+            Rect.fromPoints(
+              box.localToGlobal(Offset.zero, ancestor: overlay),
+              box.localToGlobal(
+                box.size.bottomRight(Offset.zero),
+                ancestor: overlay,
+              ),
             ),
-            onSelected: _handleOverlayMenuAction,
-            itemBuilder: (context) => [
+            Offset.zero & overlay.size,
+          );
+          final action = await showMenu<_OverlayMenuAction>(
+            context: context,
+            position: position,
+            items: [
               PopupMenuItem(
                 value: _OverlayMenuAction.pick,
                 child: Text(l10n.recordOverlaySelectMenuItem),
@@ -1795,6 +1809,32 @@ class _RecordScreenState extends State<RecordScreen>
                 child: Text(l10n.recordOverlayImportMenuItem),
               ),
             ],
+          );
+          if (action != null) await _handleOverlayMenuAction(action);
+        }
+
+        return Material(
+          color: highlighted
+              ? scheme.primary
+              : scheme.surface.withValues(alpha: 0.92),
+          shape: const CircleBorder(),
+          elevation: 2,
+          child: IconButton(
+            tooltip: multiDayLive
+                ? l10n.recordingToggleDayChipsTooltip
+                : l10n.recordOverlayTooltip,
+            icon: Icon(
+              Icons.route,
+              color: highlighted ? scheme.onPrimary : null,
+            ),
+            onPressed: () {
+              if (multiDayLive) {
+                setState(() => _showLiveDayChips = !_showLiveDayChips);
+                return;
+              }
+              unawaited(openOverlayMenu());
+            },
+            onLongPress: () => unawaited(openOverlayMenu()),
           ),
         );
       },
@@ -1938,15 +1978,12 @@ class _RecordScreenState extends State<RecordScreen>
                         builder: (_, _, _) =>
                             _buildMiniStatsRow(context, l10n, recorder),
                       ),
-                      _buildLiveDayChipStrip(context, l10n, recorder),
+                      if (_showLiveDayChips)
+                        _buildLiveDayChipStrip(context, l10n, recorder),
                     ],
                     if (context.watch<AppUpdateController>().showBanner) ...[
                       const SizedBox(height: 8),
                       const AppUpdateBanner(),
-                    ],
-                    if (recorder.isAutoPaused) ...[
-                      const SizedBox(height: 8),
-                      _buildAutoPausedBanner(context, l10n),
                     ],
                   ],
                 ),
@@ -2079,6 +2116,7 @@ class _RecordScreenState extends State<RecordScreen>
         final maxDigitsWidth = constraints.maxWidth.isFinite
             ? (constraints.maxWidth - 40).clamp(48.0, 320.0)
             : 320.0;
+        final autoPaused = recorder.isAutoPaused;
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           decoration: BoxDecoration(
@@ -2088,32 +2126,72 @@ class _RecordScreenState extends State<RecordScreen>
               BoxShadow(color: Colors.black26, blurRadius: 6),
             ],
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              // One centered line: shrink the glyphs if needed, never wrap.
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxDigitsWidth),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: _AnimatedNumber(
-                    value: recorder.currentSpeedKmh,
-                    builder: (context, value) => Text(
-                      value.round().toString(),
-                      maxLines: 1,
-                      softWrap: false,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 92,
-                        fontWeight: FontWeight.w800,
-                        height: 1,
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // One centered line: shrink the glyphs if needed, never wrap.
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxDigitsWidth),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: _AnimatedNumber(
+                        value: recorder.currentSpeedKmh,
+                        builder: (context, value) => Text(
+                          value.round().toString(),
+                          maxLines: 1,
+                          softWrap: false,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 92,
+                            fontWeight: FontWeight.w800,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Text(l10n.speedLabel, style: theme.textTheme.titleMedium),
+                ],
+              ),
+              // Translucent wash over the speed digits so the number still
+              // peeks through, while the label stays unmistakable.
+              if (autoPaused)
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xB3D84315),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Text(
+                          l10n.autoPausedLabel,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.2,
+                            height: 1.15,
+                            shadows: const [
+                              Shadow(
+                                color: Colors.black87,
+                                blurRadius: 6,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              Text(l10n.speedLabel, style: theme.textTheme.titleMedium),
             ],
           ),
         );
@@ -2213,27 +2291,6 @@ class _RecordScreenState extends State<RecordScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  /// Map page's own auto-paused banner, shown below the mini stats row.
-  Widget _buildAutoPausedBanner(BuildContext context, AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
-      ),
-      child: Text(
-        l10n.autoPausedLabel,
-        textAlign: TextAlign.center,
-        style: theme.textTheme.titleSmall?.copyWith(
-          color: theme.colorScheme.onTertiaryContainer,
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }

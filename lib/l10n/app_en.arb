@@ -188,6 +188,7 @@
   "updateDownloadProgress": "{percent} — RideAtlas.apk",
   "@updateDownloadProgress": {"placeholders": {"percent": {"type": "String"}}},
   "recordOverlayTooltip": "Show saved routes",
+  "recordingToggleDayChipsTooltip": "Show / hide day chips (long-press: saved route)",
   "recordOverlayTitle": "Routes to show on the map",
   "recordOverlayShow": "Show",
   "recordOverlayShowCount": "Show ({count})",

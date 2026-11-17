@@ -26,6 +26,20 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.146 beta',
+    date: '2026-11-17',
+    noteTr:
+        'Kayıt haritasında Gün 1 / Gün 2 şeridi varsayılan gizli; Ruta '
+        'ikonuna basınca açılır, tekrar basınca kapanır (uzun basınca '
+        'kayıtlı rota menüsü). Ayrı “Otomatik duraklatıldı” bandı kalktı; '
+        'yazı hız kartının üzerinde şeffaf katman olarak görünür.',
+    noteEn:
+        'On the recording map, Day 1 / Day 2 chips stay hidden until you '
+        'tap Ruta (tap again to hide; long-press for saved-route menu). '
+        'The separate auto-pause banner is gone — the label overlays the '
+        'speed card translucently instead.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.145 beta',
     date: '2026-11-16',
     noteTr:
