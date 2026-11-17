@@ -361,49 +361,47 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Close alone at this sheet’s top-left — not mixed into ◀ / ▶.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ),
               Row(
                 children: [
-                  IconButton(
-                    tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        if (multi)
-                          IconButton(
-                            tooltip: l10n.dayDetailPreviousDay,
-                            onPressed: _canPrev ? () => _go(-1) : null,
-                            icon: const Icon(Icons.chevron_left),
-                          ),
-                        Container(
-                          width: 14,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            color: day.color,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '${l10n.dayLabel(day.dayNumber)} · ${dateFmt.format(day.date)}',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (multi)
-                          IconButton(
-                            tooltip: l10n.dayDetailNextDay,
-                            onPressed: _canNext ? () => _go(1) : null,
-                            icon: const Icon(Icons.chevron_right),
-                          ),
-                      ],
+                  if (multi)
+                    IconButton(
+                      tooltip: l10n.dayDetailPreviousDay,
+                      onPressed: _canPrev ? () => _go(-1) : null,
+                      icon: const Icon(Icons.chevron_left),
+                    ),
+                  Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: day.color,
+                      shape: BoxShape.circle,
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${l10n.dayLabel(day.dayNumber)} · ${dateFmt.format(day.date)}',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (multi)
+                    IconButton(
+                      tooltip: l10n.dayDetailNextDay,
+                      onPressed: _canNext ? () => _go(1) : null,
+                      icon: const Icon(Icons.chevron_right),
+                    ),
                 ],
               ),
               if (multi)
