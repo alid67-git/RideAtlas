@@ -351,6 +351,31 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     return [for (final d in all) if (filter.contains(d.dayNumber)) d];
   }
 
+  /// Day pills with a diagonal cascade when midpoints sit on top of each other.
+  List<Marker> _dayMapLabelMarkers() {
+    final labeled = [
+      for (final day in _visibleDays)
+        if (day.points.isNotEmpty) day,
+    ];
+    final offsets = dayLabelStackOffsets(labeled);
+    return [
+      for (var i = 0; i < labeled.length; i++)
+        Marker(
+          point: dayLabelAnchor(labeled[i]),
+          width: 108 + offsets[i].dx.abs() + 8,
+          height: 28 + offsets[i].dy.abs() + 8,
+          alignment: Alignment.center,
+          child: Transform.translate(
+            offset: offsets[i],
+            child: DayMapLabel(
+              day: labeled[i],
+              onTap: () => _openDayDetail(labeled[i]),
+            ),
+          ),
+        ),
+    ];
+  }
+
   void _openDayDetail(DayStats day) {
     if (!_dayBreakdownMode) {
       setState(() {
@@ -1230,18 +1255,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         MarkerLayer(
           markers: [
             if (trackReady && _days.length > 1 && _dayBreakdownMode)
-              for (final day in _visibleDays)
-                if (day.points.isNotEmpty)
-                  Marker(
-                    point: dayLabelAnchor(day),
-                    width: 108,
-                    height: 28,
-                    alignment: Alignment.center,
-                    child: DayMapLabel(
-                      day: day,
-                      onTap: () => _openDayDetail(day),
-                    ),
-                  ),
+              ..._dayMapLabelMarkers(),
             if (trackReady)
               for (final w in _waypoints ?? const <Waypoint>[])
                 Marker(

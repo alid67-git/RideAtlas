@@ -15,6 +15,14 @@ import '../services/track_display_simplify.dart';
 const _metaBoxName = 'rideatlas_meta';
 const _mapStyleKey = 'base_map_style_id';
 
+const _dayLabelDistance = Distance();
+
+/// Days whose midpoints fall within this radius share a stack cascade so
+/// overlapping pills still peek out from under each other.
+const kDayLabelClusterMeters = 180.0;
+const kDayLabelStackStepX = 14.0;
+const kDayLabelStackStepY = 16.0;
+
 /// Midpoint of a day's track for map labels.
 LatLng dayLabelAnchor(DayStats day) {
   final pts = day.points;
@@ -23,6 +31,47 @@ LatLng dayLabelAnchor(DayStats day) {
   }
   if (pts.length == 1) return pts.first.latLng;
   return pts[pts.length ~/ 2].latLng;
+}
+
+/// Pixel offsets (same order as [days]) so labels whose anchors sit nearly
+/// on top of each other cascade down-right and remain partly visible.
+List<Offset> dayLabelStackOffsets(
+  List<DayStats> days, {
+  double clusterMeters = kDayLabelClusterMeters,
+}) {
+  final n = days.length;
+  final offsets = List<Offset>.filled(n, Offset.zero);
+  if (n < 2) return offsets;
+
+  final anchors = [for (final d in days) dayLabelAnchor(d)];
+  final visited = List<bool>.filled(n, false);
+
+  for (var i = 0; i < n; i++) {
+    if (visited[i] || days[i].points.isEmpty) continue;
+    final cluster = <int>[];
+    final queue = <int>[i];
+    visited[i] = true;
+    while (queue.isNotEmpty) {
+      final u = queue.removeAt(0);
+      cluster.add(u);
+      for (var v = 0; v < n; v++) {
+        if (visited[v] || days[v].points.isEmpty) continue;
+        if (_dayLabelDistance(anchors[u], anchors[v]) <= clusterMeters) {
+          visited[v] = true;
+          queue.add(v);
+        }
+      }
+    }
+    if (cluster.length < 2) continue;
+    cluster.sort((a, b) => days[a].dayNumber.compareTo(days[b].dayNumber));
+    for (var rank = 0; rank < cluster.length; rank++) {
+      offsets[cluster[rank]] = Offset(
+        rank * kDayLabelStackStepX,
+        rank * kDayLabelStackStepY,
+      );
+    }
+  }
+  return offsets;
 }
 
 String _formatDuration(AppLocalizations l10n, Duration d) {
