@@ -26,6 +26,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.149 beta',
+    date: '2026-11-17',
+    noteTr:
+        'Gün detay sheet’ine kapat (×) eklendi (sol üst). Büyük haritada × '
+        'sağ/sol okların yanından çıkarıldı; ekranın sol üstüne alındı.',
+    noteEn:
+        'Day detail sheet now has a top-left close (×). On the full map, × '
+        'moved off the prev/next row to that screen’s top-left corner.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.148 beta',
     date: '2026-11-17',
     noteTr:

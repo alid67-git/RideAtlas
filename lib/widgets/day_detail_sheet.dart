@@ -361,6 +361,15 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Close alone at this sheet’s top-left — not mixed into ◀ / ▶.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ),
               Row(
                 children: [
                   if (multi)
@@ -566,7 +575,7 @@ class _DayTrackMapPageState extends State<DayTrackMapPage> {
       fitMapToBounds(
         _mapController,
         bounds: LatLngBounds.fromPoints(pts),
-        padding: const EdgeInsets.fromLTRB(40, 100, 40, 160),
+        padding: const EdgeInsets.fromLTRB(40, 140, 40, 160),
       );
     } catch (_) {}
   }
@@ -623,76 +632,88 @@ class _DayTrackMapPageState extends State<DayTrackMapPage> {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Material(
-                    color: theme.colorScheme.surface.withValues(alpha: 0.92),
-                    shape: const CircleBorder(),
-                    elevation: 2,
-                    child: IconButton(
-                      tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (multi)
-                    Material(
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Material(
                       color: theme.colorScheme.surface.withValues(alpha: 0.92),
                       shape: const CircleBorder(),
                       elevation: 2,
                       child: IconButton(
-                        tooltip: l10n.dayDetailPreviousDay,
-                        onPressed: _canPrev ? () => _go(-1) : null,
-                        icon: const Icon(Icons.chevron_left),
-                      ),
-                    ),
-                  Expanded(
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface.withValues(alpha: 0.92),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black26, blurRadius: 6),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${l10n.dayLabel(day.dayNumber)} · ${dateFmt.format(day.date)}',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          Text(
-                            '${day.distanceKm.toStringAsFixed(1)} km',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: day.color,
-                            ),
-                          ),
-                        ],
+                        tooltip: MaterialLocalizations.of(context)
+                            .closeButtonTooltip,
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
                       ),
                     ),
                   ),
-                  if (multi)
-                    Material(
-                      color: theme.colorScheme.surface.withValues(alpha: 0.92),
-                      shape: const CircleBorder(),
-                      elevation: 2,
-                      child: IconButton(
-                        tooltip: l10n.dayDetailNextDay,
-                        onPressed: _canNext ? () => _go(1) : null,
-                        icon: const Icon(Icons.chevron_right),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      if (multi)
+                        Material(
+                          color:
+                              theme.colorScheme.surface.withValues(alpha: 0.92),
+                          shape: const CircleBorder(),
+                          elevation: 2,
+                          child: IconButton(
+                            tooltip: l10n.dayDetailPreviousDay,
+                            onPressed: _canPrev ? () => _go(-1) : null,
+                            icon: const Icon(Icons.chevron_left),
+                          ),
+                        ),
+                      Expanded(
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface
+                                .withValues(alpha: 0.92),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black26, blurRadius: 6),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${l10n.dayLabel(day.dayNumber)} · ${dateFmt.format(day.date)}',
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                '${day.distanceKm.toStringAsFixed(1)} km',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: day.color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
+                      if (multi)
+                        Material(
+                          color:
+                              theme.colorScheme.surface.withValues(alpha: 0.92),
+                          shape: const CircleBorder(),
+                          elevation: 2,
+                          child: IconButton(
+                            tooltip: l10n.dayDetailNextDay,
+                            onPressed: _canNext ? () => _go(1) : null,
+                            icon: const Icon(Icons.chevron_right),
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             ),
