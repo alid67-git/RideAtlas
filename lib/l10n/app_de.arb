@@ -188,6 +188,7 @@
   "updateDownloadProgress": "{percent} — RideAtlas.apk",
   "@updateDownloadProgress": {"placeholders": {"percent": {"type": "String"}}},
   "recordOverlayTooltip": "Gespeicherte Strecken zeigen",
+  "recordingToggleDayChipsTooltip": "Tagesleiste ein-/ausblenden (lang: gespeicherte Strecke)",
   "recordOverlayTitle": "Auf der Karte anzuzeigende Strecken",
   "recordOverlayShow": "Anzeigen",
   "recordOverlayShowCount": "Anzeigen ({count})",

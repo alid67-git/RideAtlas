@@ -210,6 +210,7 @@
   "updateDownloadProgress": "{percent} — RideAtlas.apk",
   "@updateDownloadProgress": {"placeholders": {"percent": {"type": "String"}}},
   "recordOverlayTooltip": "Kayıtlı rota göster",
+  "recordingToggleDayChipsTooltip": "Gün şeridini göster / gizle (uzun bas: kayıtlı rota)",
   "recordOverlayTitle": "Haritada gösterilecek rotalar",
   "recordOverlayShow": "Göster",
   "recordOverlayShowCount": "Göster ({count})",
