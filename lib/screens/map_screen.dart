@@ -364,7 +364,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       context: context,
       day: day,
       days: _days,
-      startAtFirstDay: true,
+      startAtFirstDay: false,
       onDayChanged: (d) {
         setState(() {
           _visibleDayNumbers = {d.dayNumber};

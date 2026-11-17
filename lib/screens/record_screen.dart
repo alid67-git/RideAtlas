@@ -2798,7 +2798,7 @@ class _RecordScreenState extends State<RecordScreen>
       context: context,
       day: day,
       days: _liveDays,
-      startAtFirstDay: true,
+      startAtFirstDay: false,
       onAddNote: noteAt == null
           ? null
           : () => unawaited(_addAnnotationAt(noteAt)),

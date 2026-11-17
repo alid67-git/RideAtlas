@@ -959,7 +959,7 @@ class _DayCard extends StatelessWidget {
           context: context,
           day: day,
           days: days,
-          startAtFirstDay: true,
+          startAtFirstDay: false,
         ),
         child: Padding(
       padding: const EdgeInsets.all(12),
