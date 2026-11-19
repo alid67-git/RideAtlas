@@ -211,7 +211,7 @@
   "recordImportIntoRecordingNeedActive": "Starten oder fortsetzen Sie zuerst eine Aufzeichnung, dann fehlende Tage importieren.",
   "recordImportIntoRecordingNoTimedPoints": "Die Datei hat keine zeitgestempelten Punkte — keine Kalendertage zuordenbar.",
   "recordImportIntoRecordingTitle": "In diese Aufzeichnung einfügen?",
-  "recordImportIntoRecordingMessage": "{dayCount} Tag(e) aus dem Import ({days}) werden eingefügt oder ersetzt; danach können Sie weiter aufzeichnen.\n\nAndere Tage dieser Sitzung bleiben unverändert.",
+  "recordImportIntoRecordingMessage": "Für {dayCount} Tag(e) ({days}): vorhandene Punkte an diesen Tagen werden gelöscht und durch Ihre Datei ersetzt. Danach können Sie weiter aufzeichnen.\n\nAndere Tage dieser Sitzung bleiben unverändert.",
   "@recordImportIntoRecordingMessage": {
     "placeholders": {
       "dayCount": {"type": "int"},

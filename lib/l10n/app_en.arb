@@ -211,7 +211,7 @@
   "recordImportIntoRecordingNeedActive": "Start or resume a recording first, then import the missing days.",
   "recordImportIntoRecordingNoTimedPoints": "That file has no timed track points — cannot place them on calendar days.",
   "recordImportIntoRecordingTitle": "Add into this recording?",
-  "recordImportIntoRecordingMessage": "{dayCount} day(s) will be filled or replaced from the import ({days}), then you can resume recording.\n\nOther days in this session stay as they are.",
+  "recordImportIntoRecordingMessage": "For {dayCount} day(s) ({days}): any existing points on those days are deleted and replaced by your file. Then you can resume recording.\n\nOther days in this session stay as they are.",
   "@recordImportIntoRecordingMessage": {
     "placeholders": {
       "dayCount": {"type": "int"},

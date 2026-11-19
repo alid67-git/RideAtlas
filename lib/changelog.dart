@@ -30,12 +30,12 @@ const kChangelog = <ChangelogEntry>[
     date: '2026-11-19',
     noteTr:
         'Kayıt ekranında “Bu kayda ekle (eksik gün)…”: başka uygulamadan GPX/KML '
-        'ile eksik günleri canlı çok günlük kayda yazıp devam edebilirsiniz '
-        '(o günlerdeki mevcut iz üzerine yazılır).',
+        'ile günleri canlı çok günlük kayda ekleyip devam edebilirsiniz '
+        '(o günlerdeki mevcut iz silinir, senin dosyan yazılır).',
     noteEn:
-        'Record screen “Add into this recording…”: import GPX/KML missing days '
-        'into a live multi-day session and keep recording (replaces those '
-        'calendar days in the session).',
+        'Record screen “Add into this recording…”: import GPX/KML days into a '
+        'live multi-day session and keep recording (those calendar days’ '
+        'existing points are deleted, then your file is written).',
   ),
   ChangelogEntry(
     version: 'v1.4.150 beta',

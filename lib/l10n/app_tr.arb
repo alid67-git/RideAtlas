@@ -233,7 +233,7 @@
   "recordImportIntoRecordingNeedActive": "Önce kaydı başlatın veya sürdürün, sonra eksik günleri içe aktarın.",
   "recordImportIntoRecordingNoTimedPoints": "Dosyada zaman damgalı nokta yok — takvim gününe yerleştirilemez.",
   "recordImportIntoRecordingTitle": "Bu kayda eklensin mi?",
-  "recordImportIntoRecordingMessage": "İçe aktarılan {dayCount} gün ({days}) bu kayda yazılacak veya üzerine yazılacak; sonra kayda devam edebilirsiniz.\n\nOturumdaki diğer günler olduğu gibi kalır.",
+  "recordImportIntoRecordingMessage": "İçe aktarılan {dayCount} gün ({days}): o günlerdeki mevcut kayıt silinir, senin dosyan yazılır. Sonra kayda devam edebilirsiniz.\n\nOturumdaki diğer günler olduğu gibi kalır.",
   "@recordImportIntoRecordingMessage": {
     "placeholders": {
       "dayCount": {"type": "int"},
