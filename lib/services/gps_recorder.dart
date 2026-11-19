@@ -10,6 +10,7 @@ import '../models/track_point.dart';
 import 'battery_info.dart';
 import 'gps_fix_filter.dart';
 import 'gpx_parser.dart';
+import 'live_recording_merge.dart';
 import 'native_recording.dart';
 
 const _distance = Distance();
@@ -877,6 +878,97 @@ class GpsRecorder extends ChangeNotifier {
       unawaited(_persistSession());
     }
     notifyListeners();
+  }
+
+  /// Folds an external track into this unfinished session: for every local
+  /// calendar day present in [incoming], existing live points on that day
+  /// are replaced; other days are kept. Sorts by GPS time, rewrites the
+  /// Android JSONL when supported, and leaves the session **paused** so the
+  /// rider can check the map before resuming.
+  ///
+  /// Returns a no-op result (empty [LiveRecordingMergeResult.replacedDays])
+  /// when [incoming] has no timed points. Throws if the recorder is idle.
+  Future<LiveRecordingMergeResult> mergeExternalPoints(
+    List<TrackPoint> incoming,
+  ) async {
+    if (isIdle) {
+      throw StateError('Cannot merge into an idle recording');
+    }
+
+    // Pull any buffered native fixes while still unlocked, then pause so
+    // Android stops appending during the JSONL rewrite and the rider can
+    // review before resuming. Pausing first would sticky-lock and drop the
+    // drained hops as "noise".
+    if (NativeRecording.isSupported) {
+      await _drainNativePoints();
+    }
+    if (isRecording) {
+      pause();
+    }
+
+    final result = mergePointsReplacingImportedDays(
+      existing: List<TrackPoint>.from(_points),
+      incoming: incoming,
+    );
+    if (result.replacedDays.isEmpty) {
+      notifyListeners();
+      return result;
+    }
+
+    _points
+      ..clear()
+      ..addAll(result.points);
+    _recomputeDistanceMeters();
+    _seenNativeTimeMs
+      ..clear()
+      ..addAll([
+        for (final p in _points)
+          if (p.time != null) p.time!.toUtc().millisecondsSinceEpoch,
+      ]);
+
+    DateTime? earliestGps;
+    for (final p in _points) {
+      final t = p.time;
+      if (t == null) continue;
+      if (earliestGps == null || t.isBefore(earliestGps)) earliestGps = t;
+    }
+    if (earliestGps != null) {
+      final localStart = earliestGps.toLocal();
+      if (_startedAt == null || localStart.isBefore(_startedAt!)) {
+        _startedAt = localStart;
+      }
+    }
+
+    if (_points.isNotEmpty) {
+      _currentAltitude = _points.last.elevation;
+    }
+
+    if (NativeRecording.isSupported) {
+      final maps = <Map<String, Object?>>[
+        for (final p in _points)
+          {
+            'latitude': p.latLng.latitude,
+            'longitude': p.latLng.longitude,
+            'altitude': p.elevation ?? 0.0,
+            'speed': 0.0,
+            'bearing': 0.0,
+            'timeMs': p.time?.toUtc().millisecondsSinceEpoch ?? 0,
+            'accuracy': 0.0,
+          },
+      ];
+      try {
+        await NativeRecording.replaceAllPoints(maps);
+        _nativeIngestedCount = maps.length;
+      } catch (_) {
+        // Dart buffer is already updated; disk rewrite failure still leaves
+        // the in-memory ride correct for this process.
+        _nativeIngestedCount = maps.length;
+      }
+      unawaited(_persistSession());
+    }
+
+    notifyListeners();
+    return result;
   }
 
   /// Ends the session and returns the recorded points, resetting to idle.

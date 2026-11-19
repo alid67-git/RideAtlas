@@ -90,6 +90,19 @@ class DailyDriveBackupController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Drops backed-up markers for [days] so the next catch-up re-uploads
+  /// after a live-session day was replaced by an external import.
+  Future<void> forgetBackedUpDays(Iterable<DateTime> days) async {
+    var changed = false;
+    for (final day in days) {
+      if (_backedUpDays.remove(dayBackupKey(day))) changed = true;
+    }
+    if (!changed) return;
+    final box = await Hive.openBox<String>(_metaBoxName);
+    await box.put(_backedUpDaysKey, _encodeDaySet(_backedUpDays));
+    notifyListeners();
+  }
+
   Future<bool> pickFolder() async {
     final picked = await BackupFolderBridge.pickFolder();
     if (picked == null) return false;

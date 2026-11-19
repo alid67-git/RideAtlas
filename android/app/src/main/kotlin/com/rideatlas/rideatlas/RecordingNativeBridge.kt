@@ -210,6 +210,26 @@ object RecordingNativeBridge {
                 RecordingLocationService.clearPoints(ctx)
                 result.success(null)
             }
+            "replaceAllPoints" -> {
+                val raw = call.argument<List<*>>("points") ?: emptyList<Any?>()
+                val mapped =
+                    raw.mapNotNull { item ->
+                        val p = item as? Map<*, *> ?: return@mapNotNull null
+                        val lat = (p["latitude"] as? Number)?.toDouble() ?: return@mapNotNull null
+                        val lng = (p["longitude"] as? Number)?.toDouble() ?: return@mapNotNull null
+                        mapOf<String, Any>(
+                            "latitude" to lat,
+                            "longitude" to lng,
+                            "altitude" to ((p["altitude"] as? Number)?.toDouble() ?: 0.0),
+                            "speed" to ((p["speed"] as? Number)?.toDouble() ?: 0.0),
+                            "bearing" to ((p["bearing"] as? Number)?.toDouble() ?: 0.0),
+                            "timeMs" to ((p["timeMs"] as? Number)?.toLong() ?: 0L),
+                            "accuracy" to ((p["accuracy"] as? Number)?.toDouble() ?: 0.0),
+                        )
+                    }
+                RecordingLocationService.rewritePoints(ctx, mapped)
+                result.success(mapped.size)
+            }
             else -> result.notImplemented()
         }
     }

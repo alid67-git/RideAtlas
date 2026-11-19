@@ -188,6 +188,18 @@ class NativeRecording {
     await _methods.invokeMethod<void>('clearOrphanedPoints');
   }
 
+  /// Rewrites the live Android JSONL buffer (and in-memory list) to match
+  /// Dart after importing missing days into an unfinished recording.
+  /// Prefer pausing first so the location callback cannot append mid-write.
+  static Future<int> replaceAllPoints(
+    List<Map<String, Object?>> points,
+  ) async {
+    final count = await _methods.invokeMethod<int>('replaceAllPoints', {
+      'points': points,
+    });
+    return count ?? points.length;
+  }
+
   static List<Map<Object?, Object?>> _castPointList(List<dynamic>? raw) {
     if (raw == null) return const [];
     return raw.map((e) => Map<Object?, Object?>.from(e as Map)).toList();

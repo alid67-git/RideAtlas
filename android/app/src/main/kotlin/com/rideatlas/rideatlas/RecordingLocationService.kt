@@ -70,6 +70,43 @@ class RecordingLocationService : Service() {
             sessionFile(context).delete()
         }
 
+        /**
+         * Replaces the in-memory buffer and the JSONL file atomically so Dart
+         * can import missing calendar days into an unfinished multi-day ride
+         * without losing the live session. Caller should pause first so the
+         * location callback does not append mid-rewrite.
+         */
+        fun rewritePoints(context: Context, newPoints: List<Map<String, Any>>) {
+            synchronized(points) {
+                points.clear()
+                points.addAll(newPoints)
+            }
+            try {
+                val tmp = File(context.filesDir, "$POINTS_FILE.tmp")
+                tmp.bufferedWriter().use { out ->
+                    for (point in newPoints) {
+                        val json =
+                            JSONObject()
+                                .put("latitude", point["latitude"])
+                                .put("longitude", point["longitude"])
+                                .put("altitude", point["altitude"])
+                                .put("speed", point["speed"])
+                                .put("bearing", point["bearing"])
+                                .put("timeMs", point["timeMs"])
+                                .put("accuracy", point["accuracy"])
+                        out.appendLine(json.toString())
+                    }
+                }
+                val target = pointsFile(context)
+                if (!tmp.renameTo(target)) {
+                    tmp.copyTo(target, overwrite = true)
+                    tmp.delete()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to rewrite recording points", e)
+            }
+        }
+
         fun pointsFile(context: Context): File =
             File(context.filesDir, POINTS_FILE)
 

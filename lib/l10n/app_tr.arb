@@ -229,6 +229,24 @@
   "recordOverlayHideAllMenuItem": "Tümünü gizle",
   "recordOverlaySelectMenuItem": "Rota seç...",
   "recordOverlayImportMenuItem": "İçe aktar...",
+  "recordImportIntoRecordingMenuItem": "Bu kayda ekle (eksik gün)...",
+  "recordImportIntoRecordingNeedActive": "Önce kaydı başlatın veya sürdürün, sonra eksik günleri içe aktarın.",
+  "recordImportIntoRecordingNoTimedPoints": "Dosyada zaman damgalı nokta yok — takvim gününe yerleştirilemez.",
+  "recordImportIntoRecordingTitle": "Bu kayda eklensin mi?",
+  "recordImportIntoRecordingMessage": "İçe aktarılan {dayCount} gün ({days}): o günlerdeki mevcut kayıt silinir, senin dosyan yazılır. Sonra kayda devam edebilirsiniz.\n\nOturumdaki diğer günler olduğu gibi kalır.",
+  "@recordImportIntoRecordingMessage": {
+    "placeholders": {
+      "dayCount": {"type": "int"},
+      "days": {"type": "String"}
+    }
+  },
+  "recordImportIntoRecordingConfirm": "Ekle",
+  "recordImportIntoRecordingSuccess": "{dayCount} gün bu kayda eklendi. Hazır olunca devam edin.",
+  "@recordImportIntoRecordingSuccess": {
+    "placeholders": {
+      "dayCount": {"type": "int"}
+    }
+  },
   "recenterTooltip": "Konumuma dön",
   "photoMediaTypeLabel": "Fotoğraf",
   "videoMediaTypeLabel": "Video",
