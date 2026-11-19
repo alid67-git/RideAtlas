@@ -69,4 +69,47 @@ void main() {
     expect(result.points, hasLength(1));
     expect(result.points.single.latLng, const LatLng(7.0, 98.0));
   });
+
+  test('replaceSingleCalendarDay removes only the target day', () {
+    final existing = [
+      _pt(DateTime(2026, 11, 17, 9), 7.0, 98.0),
+      _pt(DateTime(2026, 11, 18, 9), 7.5, 98.5),
+      _pt(DateTime(2026, 11, 19, 9), 8.0, 99.0),
+    ];
+    final incoming = [
+      _pt(DateTime(2026, 11, 18, 10), 7.6, 98.6),
+      _pt(DateTime(2026, 11, 18, 14), 7.7, 98.7),
+    ];
+    final result = replaceSingleCalendarDay(
+      existing: existing,
+      targetDay: DateTime(2026, 11, 18),
+      incoming: incoming,
+    );
+    expect(result.replacedDays, [DateTime(2026, 11, 18)]);
+    expect(result.points.map((p) => p.time!.day), [17, 18, 18, 19]);
+    expect(
+      result.points.where((p) => p.time!.day == 18).map((p) => p.latLng.latitude),
+      [7.6, 7.7],
+    );
+  });
+
+  test('replaceSingleCalendarDay accepts single-day file on another date', () {
+    final existing = [
+      _pt(DateTime(2026, 11, 18, 9), 7.5, 98.5),
+      _pt(DateTime(2026, 11, 19, 9), 8.0, 99.0),
+    ];
+    // One-day export stamped on a different calendar day (TZ skew).
+    final incoming = [
+      _pt(DateTime(2026, 11, 17, 10), 1.0, 2.0),
+      _pt(DateTime(2026, 11, 17, 12), 1.1, 2.1),
+    ];
+    final result = replaceSingleCalendarDay(
+      existing: existing,
+      targetDay: DateTime(2026, 11, 18),
+      incoming: incoming,
+    );
+    expect(result.replacedDays, [DateTime(2026, 11, 18)]);
+    expect(result.points.where((p) => p.time!.day == 18), isEmpty);
+    expect(result.points.map((p) => p.latLng.latitude), [1.0, 1.1, 8.0]);
+  });
 }

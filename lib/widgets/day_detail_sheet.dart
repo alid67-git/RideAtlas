@@ -154,6 +154,9 @@ Future<void> showDayDetailSheet({
   VoidCallback? onAddNote,
   /// Called when the rider pages to another day (parent may refocus the map).
   ValueChanged<DayStats>? onDayChanged,
+  /// Replace this day's track from a GPX/KML. Return true after a successful
+  /// revise so the sheet can close.
+  Future<bool> Function(DayStats day)? onReviseDay,
 }) {
   final all = List<DayStats>.of(days ?? [day]);
   if (all.isEmpty) all.add(day);
@@ -176,6 +179,7 @@ Future<void> showDayDetailSheet({
       onShowAllDays: onShowAllDays,
       onAddNote: onAddNote,
       onDayChanged: onDayChanged,
+      onReviseDay: onReviseDay,
     ),
   );
 }
@@ -189,6 +193,7 @@ class DayDetailSheet extends StatefulWidget {
     this.onShowAllDays,
     this.onAddNote,
     this.onDayChanged,
+    this.onReviseDay,
   });
 
   final List<DayStats> days;
@@ -197,6 +202,7 @@ class DayDetailSheet extends StatefulWidget {
   final VoidCallback? onShowAllDays;
   final VoidCallback? onAddNote;
   final ValueChanged<DayStats>? onDayChanged;
+  final Future<bool> Function(DayStats day)? onReviseDay;
 
   @override
   State<DayDetailSheet> createState() => _DayDetailSheetState();
@@ -207,11 +213,24 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
   BaseMapStyle _mapStyle = kBaseMapStyles.first;
   final _mapController = MapController();
   int _openedWithNoteIndex = -1;
+  bool _revising = false;
 
   DayStats get _day => widget.days[_index];
 
   bool get _canPrev => _index > 0;
   bool get _canNext => _index < widget.days.length - 1;
+
+  Future<void> _runRevise() async {
+    final revise = widget.onReviseDay;
+    if (revise == null || _revising) return;
+    setState(() => _revising = true);
+    try {
+      final ok = await revise(_day);
+      if (ok && mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _revising = false);
+    }
+  }
 
   @override
   void initState() {
@@ -410,14 +429,29 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Close alone at this sheet’s top-left — not mixed into ◀ / ▶.
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
+              // Close top-left; revise (GPX replace) top-right when available.
+              Row(
+                children: [
+                  IconButton(
+                    tooltip:
+                        MaterialLocalizations.of(context).closeButtonTooltip,
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                  const Spacer(),
+                  if (widget.onReviseDay != null)
+                    IconButton(
+                      tooltip: l10n.dayDetailReviseTooltip,
+                      onPressed: _revising ? null : _runRevise,
+                      icon: _revising
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.upload_file),
+                    ),
+                ],
               ),
               Row(
                 children: [
@@ -520,6 +554,7 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
                 ),
               ],
               if (showNote ||
+                  widget.onReviseDay != null ||
                   widget.onShowOnlyThisDay != null ||
                   widget.onShowAllDays != null) ...[
                 const SizedBox(height: 12),
@@ -532,6 +567,14 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
                     icon: const Icon(Icons.add_location_alt),
                     label: Text(l10n.dayDetailAddNote),
                   ),
+                if (widget.onReviseDay != null) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _revising ? null : _runRevise,
+                    icon: const Icon(Icons.upload_file),
+                    label: Text(l10n.dayDetailReviseButton),
+                  ),
+                ],
                 if (widget.onShowOnlyThisDay != null) ...[
                   const SizedBox(height: 8),
                   FilledButton.tonal(

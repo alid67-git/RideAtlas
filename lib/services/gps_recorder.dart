@@ -915,9 +915,29 @@ class GpsRecorder extends ChangeNotifier {
       return result;
     }
 
+    await _installMergedPoints(result.points);
+    return result;
+  }
+
+  /// Installs a precomputed full track (e.g. [replaceSingleCalendarDay]) into
+  /// the live buffer and Android JSONL. Leaves the session paused.
+  Future<void> installMergedPoints(List<TrackPoint> points) async {
+    if (isIdle) {
+      throw StateError('Cannot install into an idle recording');
+    }
+    if (NativeRecording.isSupported) {
+      await _drainNativePoints();
+    }
+    if (isRecording) {
+      pause();
+    }
+    await _installMergedPoints(points);
+  }
+
+  Future<void> _installMergedPoints(List<TrackPoint> points) async {
     _points
       ..clear()
-      ..addAll(result.points);
+      ..addAll(points);
     _recomputeDistanceMeters();
     _seenNativeTimeMs
       ..clear()
@@ -960,15 +980,12 @@ class GpsRecorder extends ChangeNotifier {
         await NativeRecording.replaceAllPoints(maps);
         _nativeIngestedCount = maps.length;
       } catch (_) {
-        // Dart buffer is already updated; disk rewrite failure still leaves
-        // the in-memory ride correct for this process.
         _nativeIngestedCount = maps.length;
       }
       unawaited(_persistSession());
     }
 
     notifyListeners();
-    return result;
   }
 
   /// Ends the session and returns the recorded points, resetting to idle.

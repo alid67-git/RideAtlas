@@ -11,8 +11,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/import_errors.dart';
 import '../models/base_map_style.dart';
 import '../models/gpx_route.dart';
+import '../models/parsed_track.dart';
 import '../models/route_photo.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
@@ -22,6 +24,8 @@ import '../repositories/route_repository.dart';
 import '../services/daily_analysis.dart';
 import '../services/day_export.dart';
 import '../services/exif_gps.dart';
+import '../services/gpx_parser.dart';
+import '../services/live_recording_merge.dart';
 import '../services/map_camera_fit.dart';
 import '../services/route_geography.dart';
 import '../services/track_display_simplify.dart';
@@ -390,6 +394,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       day: day,
       days: _days,
       startAtFirstDay: false,
+      onReviseDay: _reviseSavedRouteDay,
       onDayChanged: (d) {
         setState(() {
           _visibleDayNumbers = {d.dayNumber};
@@ -423,6 +428,133 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         _rebuildPolylines();
       });
     });
+  }
+
+  /// Replace one calendar day on the saved route with a picked GPX/KML.
+  Future<bool> _reviseSavedRouteDay(DayStats day) async {
+    final route = _route;
+    final existing = _points;
+    if (route == null || existing == null) return false;
+    final l10n = AppLocalizations.of(context)!;
+
+    final picked = await pickTrackFiles();
+    if (picked == null || picked.files.isEmpty || !mounted) return false;
+    final file = picked.files.single;
+    if (!isSupportedTrackFileName(file.name)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.unsupportedTrackFileType)),
+      );
+      return false;
+    }
+    final bytes = await readPickedTrackBytes(file);
+    if (bytes == null) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.fileNotReadable)),
+      );
+      return false;
+    }
+
+    late final List<TrackPoint> incoming;
+    try {
+      final xml = decodeTrackBytes(bytes, fileName: file.name);
+      incoming = parseTrackXml(xml).points;
+    } on FormatException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(importFormatErrorMessage(l10n, e))),
+        );
+      }
+      return false;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
+        );
+      }
+      return false;
+    }
+    if (!mounted) return false;
+
+    final preview = replaceSingleCalendarDay(
+      existing: existing,
+      targetDay: day.date,
+      incoming: incoming,
+    );
+    if (preview.replacedDays.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dayDetailReviseNoPoints)),
+      );
+      return false;
+    }
+
+    final dayLabel =
+        '${l10n.dayLabel(day.dayNumber)} · ${DateFormat('d MMM y', Localizations.localeOf(context).languageCode).format(day.date)}';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.dayDetailReviseTitle),
+        content: Text(l10n.dayDetailReviseMessage(dayLabel)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.dayDetailReviseConfirm),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return false;
+
+    try {
+      final repo = context.read<RouteRepository>();
+      final oldXml = await repo.readTrackContent(route);
+      final oldParsed = parseTrackXml(oldXml);
+      final xml = exportTrack(
+        name: route.name,
+        points: preview.points,
+        waypoints: oldParsed.waypoints,
+        format: TrackFormat.gpx,
+      );
+      final metadata = buildRouteMetadata(
+        id: route.id,
+        name: route.name,
+        importedAt: route.importedAt,
+        parsed: ParsedTrack(
+          points: preview.points,
+          waypoints: oldParsed.waypoints,
+          suggestedName: null,
+        ),
+        batteryStartPercent: route.batteryStartPercent,
+        batteryEndPercent: route.batteryEndPercent,
+      );
+      await repo.updateContent(
+        id: route.id,
+        xml: xml,
+        metadata: metadata,
+      );
+      if (!mounted) return true;
+      await context
+          .read<DailyDriveBackupController>()
+          .forgetBackedUpDays(preview.replacedDays);
+      if (!mounted) return true;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dayDetailReviseSuccess)),
+      );
+      // Repo listener reloads the map; force a load if snapshot is stale.
+      unawaited(_load());
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
+        );
+      }
+      return false;
+    }
   }
 
   void _fitToDay(DayStats day) {

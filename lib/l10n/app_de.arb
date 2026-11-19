@@ -123,6 +123,18 @@
   "dayDetailSubtitle": "Distanz und Details für diesen Tag",
   "dayDetailShowOnlyThisDay": "Nur diesen Tag auf der Karte zeigen",
   "dayDetailAddNote": "Notiz / Foto an diesem Punkt",
+  "dayDetailReviseTooltip": "Diesen Tag mit GPX/KML ersetzen",
+  "dayDetailReviseButton": "Tag per GPX revidieren",
+  "dayDetailReviseTitle": "Diesen Tag revidieren?",
+  "dayDetailReviseMessage": "Vorhandene Spur für {dayLabel} wird gelöscht und durch Ihre Datei ersetzt.",
+  "@dayDetailReviseMessage": {
+    "placeholders": {
+      "dayLabel": {"type": "String"}
+    }
+  },
+  "dayDetailReviseConfirm": "Revidieren",
+  "dayDetailReviseNoPoints": "Die Datei hat keine zeitgestempelten Punkte für diesen Tag.",
+  "dayDetailReviseSuccess": "Tag revidiert.",
   "dayDetailPreviousDay": "Vorheriger Tag",
   "dayDetailNextDay": "Nächster Tag",
   "dayDetailTapMapFullscreen": "Große Karte",
