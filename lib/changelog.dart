@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.151 beta',
+    date: '2026-11-19',
+    noteTr:
+        'Kayıt ekranında “Bu kayda ekle (eksik gün)…”: başka uygulamadan GPX/KML '
+        'ile eksik günleri canlı çok günlük kayda yazıp devam edebilirsiniz '
+        '(o günlerdeki mevcut iz üzerine yazılır).',
+    noteEn:
+        'Record screen “Add into this recording…”: import GPX/KML missing days '
+        'into a live multi-day session and keep recording (replaces those '
+        'calendar days in the session).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.150 beta',
     date: '2026-11-17',
     noteTr:

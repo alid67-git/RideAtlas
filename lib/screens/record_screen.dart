@@ -36,6 +36,7 @@ import '../services/exif_gps.dart';
 import '../services/gallery_scan.dart';
 import '../services/gps_recorder.dart';
 import '../services/live_location.dart';
+import '../services/live_recording_merge.dart';
 import '../services/gpx_parser.dart';
 import '../services/app_update_controller.dart';
 import '../services/map_camera_fit.dart';
@@ -589,6 +590,8 @@ class _RecordScreenState extends State<RecordScreen>
         await _pickReferenceRoutes();
       case _OverlayMenuAction.importFile:
         await _importReferenceRoute();
+      case _OverlayMenuAction.importIntoRecording:
+        await _importIntoLiveRecording();
     }
   }
 
@@ -653,6 +656,125 @@ class _RecordScreenState extends State<RecordScreen>
       context,
     ).showSnackBar(SnackBar(content: Text(l10n.importedRoutesCount(1))));
     _setShowMap(true);
+  }
+
+  /// Imports GPX/KML from another app into the **current** unfinished
+  /// recording: replaces live points on the imported calendar days, keeps
+  /// other days, then leaves the session paused so the rider can resume.
+  Future<void> _importIntoLiveRecording() async {
+    final recorder = context.read<GpsRecorder>();
+    final l10n = AppLocalizations.of(context)!;
+    if (recorder.isIdle) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.recordImportIntoRecordingNeedActive)),
+      );
+      return;
+    }
+
+    final result = await pickTrackFiles(allowMultiple: true);
+    if (result == null || result.files.isEmpty || !mounted) return;
+
+    final incoming = <TrackPoint>[];
+    for (final file in result.files) {
+      if (!isSupportedTrackFileName(file.name)) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.unsupportedTrackFileType)),
+        );
+        return;
+      }
+      final bytes = await readPickedTrackBytes(file);
+      if (bytes == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.fileNotReadable)),
+        );
+        return;
+      }
+      try {
+        final xml = decodeTrackBytes(bytes, fileName: file.name);
+        final parsed = parseTrackXml(xml);
+        incoming.addAll(parsed.points);
+      } on FormatException catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(importFormatErrorMessage(l10n, e))),
+          );
+        }
+        return;
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
+
+    final preview = mergePointsReplacingImportedDays(
+      existing: recorder.points,
+      incoming: incoming,
+    );
+    if (preview.replacedDays.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.recordImportIntoRecordingNoTimedPoints)),
+      );
+      return;
+    }
+
+    final locale = Localizations.localeOf(context).languageCode;
+    final dayFmt = DateFormat('d MMM y', locale);
+    final dayList = [
+      for (final d in preview.replacedDays) dayFmt.format(d),
+    ].join(', ');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.recordImportIntoRecordingTitle),
+        content: Text(
+          l10n.recordImportIntoRecordingMessage(
+            preview.replacedDays.length,
+            dayList,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.recordImportIntoRecordingConfirm),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    try {
+      final merged = await recorder.mergeExternalPoints(incoming);
+      if (!mounted) return;
+      _liveDaysPointCount = -1;
+      _syncLiveDays(recorder.points);
+      await context
+          .read<DailyDriveBackupController>()
+          .forgetBackedUpDays(merged.replacedDays);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            l10n.recordImportIntoRecordingSuccess(merged.replacedDays.length),
+          ),
+        ),
+      );
+      _setShowMap(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
+      );
+    }
   }
 
   /// Lets the rider optionally overlay one or more saved GPX tracks under
@@ -1812,6 +1934,11 @@ class _RecordScreenState extends State<RecordScreen>
                 value: _OverlayMenuAction.importFile,
                 child: Text(l10n.recordOverlayImportMenuItem),
               ),
+              if (!_recorder.isIdle)
+                PopupMenuItem(
+                  value: _OverlayMenuAction.importIntoRecording,
+                  child: Text(l10n.recordImportIntoRecordingMenuItem),
+                ),
             ],
           );
           if (action != null) await _handleOverlayMenuAction(action);
@@ -3512,7 +3639,7 @@ class _OverlayTrack {
   final Color color;
 }
 
-enum _OverlayMenuAction { pick, importFile }
+enum _OverlayMenuAction { pick, importFile, importIntoRecording }
 
 /// One row of the map page's stacked duration/distance/altitude box - label
 /// on the left, value on the right, both on one line.

@@ -207,6 +207,24 @@
   "recordOverlayHideAllMenuItem": "Hide all",
   "recordOverlaySelectMenuItem": "Select route...",
   "recordOverlayImportMenuItem": "Import...",
+  "recordImportIntoRecordingMenuItem": "Add into this recording...",
+  "recordImportIntoRecordingNeedActive": "Start or resume a recording first, then import the missing days.",
+  "recordImportIntoRecordingNoTimedPoints": "That file has no timed track points — cannot place them on calendar days.",
+  "recordImportIntoRecordingTitle": "Add into this recording?",
+  "recordImportIntoRecordingMessage": "{dayCount} day(s) will be filled or replaced from the import ({days}), then you can resume recording.\n\nOther days in this session stay as they are.",
+  "@recordImportIntoRecordingMessage": {
+    "placeholders": {
+      "dayCount": {"type": "int"},
+      "days": {"type": "String"}
+    }
+  },
+  "recordImportIntoRecordingConfirm": "Add",
+  "recordImportIntoRecordingSuccess": "Added {dayCount} day(s) into this recording. Resume when ready.",
+  "@recordImportIntoRecordingSuccess": {
+    "placeholders": {
+      "dayCount": {"type": "int"}
+    }
+  },
   "recenterTooltip": "Back to my location",
   "photoMediaTypeLabel": "Photo",
   "videoMediaTypeLabel": "Video",
