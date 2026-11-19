@@ -26,6 +26,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.152 beta',
+    date: '2026-11-19',
+    noteTr:
+        'Kayıt sırasında rota ikonuna kısa basış menüyü açar; “Bu kayda ekle '
+        '(eksik gün)…” orada. Gün şeridi de aynı menüden.',
+    noteEn:
+        'While recording, a short tap on the route icon opens the menu; '
+        '“Add into this recording…” is there. Day chips are in the same menu.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.151 beta',
     date: '2026-11-19',
     noteTr:
