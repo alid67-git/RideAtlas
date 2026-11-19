@@ -2931,6 +2931,7 @@ class _RecordScreenState extends State<RecordScreen>
       day: day,
       days: _liveDays,
       startAtFirstDay: false,
+      onReviseDay: _reviseLiveDay,
       onAddNote: noteAt == null
           ? null
           : () => unawaited(_addAnnotationAt(noteAt)),
@@ -2953,6 +2954,106 @@ class _RecordScreenState extends State<RecordScreen>
       if (!mounted || keepFocus) return;
       setState(() => _liveVisibleDayNumbers = previousFilter);
     });
+  }
+
+  /// Replace one calendar day in the live session with a picked GPX/KML.
+  Future<bool> _reviseLiveDay(DayStats day) async {
+    final recorder = context.read<GpsRecorder>();
+    final l10n = AppLocalizations.of(context)!;
+    if (recorder.isIdle) return false;
+
+    final picked = await pickTrackFiles();
+    if (picked == null || picked.files.isEmpty || !mounted) return false;
+    final file = picked.files.single;
+    if (!isSupportedTrackFileName(file.name)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.unsupportedTrackFileType)),
+      );
+      return false;
+    }
+    final bytes = await readPickedTrackBytes(file);
+    if (bytes == null) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.fileNotReadable)),
+      );
+      return false;
+    }
+
+    late final List<TrackPoint> incoming;
+    try {
+      final xml = decodeTrackBytes(bytes, fileName: file.name);
+      incoming = parseTrackXml(xml).points;
+    } on FormatException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(importFormatErrorMessage(l10n, e))),
+        );
+      }
+      return false;
+    } catch (e) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
+      );
+      return false;
+    }
+    if (!mounted) return false;
+
+    final preview = replaceSingleCalendarDay(
+      existing: recorder.points,
+      targetDay: day.date,
+      incoming: incoming,
+    );
+    if (preview.replacedDays.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dayDetailReviseNoPoints)),
+      );
+      return false;
+    }
+
+    final dayLabel =
+        '${l10n.dayLabel(day.dayNumber)} · ${DateFormat('d MMM y', Localizations.localeOf(context).languageCode).format(day.date)}';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.dayDetailReviseTitle),
+        content: Text(l10n.dayDetailReviseMessage(dayLabel)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.dayDetailReviseConfirm),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return false;
+
+    try {
+      await recorder.installMergedPoints(preview.points);
+      if (!mounted) return true;
+      _liveDaysPointCount = -1;
+      _syncLiveDays(recorder.points);
+      await context
+          .read<DailyDriveBackupController>()
+          .forgetBackedUpDays(preview.replacedDays);
+      if (!mounted) return true;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.dayDetailReviseSuccess)),
+      );
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
+        );
+      }
+      return false;
+    }
   }
 
   void _toggleTrackLabel({

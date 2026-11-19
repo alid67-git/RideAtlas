@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.153 beta',
+    date: '2026-11-19',
+    noteTr:
+        'Gün detay sheet’inde yükle ikonu ve “Bu günü GPX ile revize et”: o '
+        'günün izi silinir, seçtiğin GPX/KML yazılır (kayıtlı rota ve canlı '
+        'kayıt).',
+    noteEn:
+        'Day detail sheet: upload icon and “Revise this day from GPX” delete '
+        'that day’s track and write your GPX/KML (saved routes and live '
+        'recording).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.152 beta',
     date: '2026-11-19',
     noteTr:

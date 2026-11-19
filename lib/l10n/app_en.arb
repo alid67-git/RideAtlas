@@ -123,6 +123,18 @@
   "dayDetailSubtitle": "Distance and details for this day",
   "dayDetailShowOnlyThisDay": "Show only this day on the map",
   "dayDetailAddNote": "Add note / photo at this point",
+  "dayDetailReviseTooltip": "Replace this day with GPX/KML",
+  "dayDetailReviseButton": "Revise this day from GPX",
+  "dayDetailReviseTitle": "Revise this day?",
+  "dayDetailReviseMessage": "Existing track for {dayLabel} will be deleted and replaced by your file.",
+  "@dayDetailReviseMessage": {
+    "placeholders": {
+      "dayLabel": {"type": "String"}
+    }
+  },
+  "dayDetailReviseConfirm": "Revise",
+  "dayDetailReviseNoPoints": "That file has no timed points that can replace this day.",
+  "dayDetailReviseSuccess": "Day revised.",
   "dayDetailPreviousDay": "Previous day",
   "dayDetailNextDay": "Next day",
   "dayDetailTapMapFullscreen": "Full map",

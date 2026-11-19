@@ -1,5 +1,6 @@
 import '../models/track_point.dart';
 import 'daily_analysis.dart';
+import 'daily_backup.dart';
 import 'gpx_parser.dart';
 
 /// Outcome of folding an external track into a live multi-day recording.
@@ -18,6 +19,64 @@ class LiveRecordingMergeResult {
 
   /// Timed points taken from the import (before glitch filtering).
   final int addedPointCount;
+}
+
+/// Replaces points on one local calendar [targetDay] with [incoming].
+///
+/// Prefers import points that already fall on [targetDay]. If none do, but
+/// the import is a single calendar day (typical one-day export with a
+/// timezone skew), uses that whole file as the replacement while still
+/// removing [targetDay] from [existing]. Multi-day imports with no matching
+/// day return an empty [LiveRecordingMergeResult.replacedDays].
+LiveRecordingMergeResult replaceSingleCalendarDay({
+  required List<TrackPoint> existing,
+  required DateTime targetDay,
+  required List<TrackPoint> incoming,
+}) {
+  final key = DateTime(targetDay.year, targetDay.month, targetDay.day);
+  var replacement = [
+    for (final p in incoming)
+      if (p.time != null && calendarDayLocal(p.time!) == key) p,
+  ];
+  if (replacement.isEmpty) {
+    final days = localDaysInPoints(incoming);
+    if (days.length == 1) {
+      replacement = [for (final p in incoming) if (p.time != null) p];
+    }
+  }
+  if (replacement.isEmpty) {
+    return LiveRecordingMergeResult(
+      points: List<TrackPoint>.of(existing),
+      replacedDays: const [],
+      addedPointCount: 0,
+    );
+  }
+
+  final kept = <TrackPoint>[];
+  for (final p in existing) {
+    final t = p.time;
+    if (t == null) {
+      kept.add(p);
+      continue;
+    }
+    if (calendarDayLocal(t) != key) kept.add(p);
+  }
+
+  final merged = <TrackPoint>[...kept, ...replacement];
+  merged.sort((a, b) {
+    final at = a.time;
+    final bt = b.time;
+    if (at == null && bt == null) return 0;
+    if (at == null) return 1;
+    if (bt == null) return -1;
+    return at.compareTo(bt);
+  });
+
+  return LiveRecordingMergeResult(
+    points: filterImplausiblePoints(merged),
+    replacedDays: [key],
+    addedPointCount: replacement.length,
+  );
 }
 
 /// Keeps live points whose local day is **not** present in [incoming], then
