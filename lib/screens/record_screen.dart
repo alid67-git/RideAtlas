@@ -586,6 +586,13 @@ class _RecordScreenState extends State<RecordScreen>
 
   Future<void> _handleOverlayMenuAction(_OverlayMenuAction action) async {
     switch (action) {
+      case _OverlayMenuAction.toggleDayChips:
+        setState(() {
+          _showLiveDayChips = !_showLiveDayChips;
+          if (_showLiveDayChips) {
+            _liveDayBreakdownMode = true;
+          }
+        });
       case _OverlayMenuAction.pick:
         await _pickReferenceRoutes();
       case _OverlayMenuAction.importFile:
@@ -1894,7 +1901,9 @@ class _RecordScreenState extends State<RecordScreen>
     );
   }
 
-  /// Top-left track-management menu: show all / hide all / select / import.
+  /// Top-left track-management menu: day chips / select / import / add into
+  /// this recording. Always opens on tap so “Bu kayda ekle” is findable
+  /// (multi-day used to only toggle chips on short press).
   Widget _buildOverlayMenuButton(AppLocalizations l10n) {
     return ValueListenableBuilder<List<Polyline>>(
       valueListenable: _overlayPolylines,
@@ -1926,6 +1935,15 @@ class _RecordScreenState extends State<RecordScreen>
             context: context,
             position: position,
             items: [
+              if (multiDayLive)
+                PopupMenuItem(
+                  value: _OverlayMenuAction.toggleDayChips,
+                  child: Text(
+                    _showLiveDayChips
+                        ? l10n.recordingHideDayChipsMenuItem
+                        : l10n.recordingShowDayChipsMenuItem,
+                  ),
+                ),
               PopupMenuItem(
                 value: _OverlayMenuAction.pick,
                 child: Text(l10n.recordOverlaySelectMenuItem),
@@ -1951,27 +1969,14 @@ class _RecordScreenState extends State<RecordScreen>
           shape: const CircleBorder(),
           elevation: 2,
           child: IconButton(
-            tooltip: multiDayLive
-                ? l10n.recordingToggleDayChipsTooltip
+            tooltip: !_recorder.isIdle
+                ? l10n.recordingRouteMenuTooltip
                 : l10n.recordOverlayTooltip,
             icon: Icon(
               Icons.route,
               color: highlighted ? scheme.onPrimary : null,
             ),
-            onPressed: () {
-              if (multiDayLive) {
-                setState(() {
-                  _showLiveDayChips = !_showLiveDayChips;
-                  // Opening the strip also expands the day-colored track.
-                  if (_showLiveDayChips) {
-                    _liveDayBreakdownMode = true;
-                  }
-                });
-                return;
-              }
-              unawaited(openOverlayMenu());
-            },
-            onLongPress: () => unawaited(openOverlayMenu()),
+            onPressed: () => unawaited(openOverlayMenu()),
           ),
         );
       },
@@ -3639,7 +3644,12 @@ class _OverlayTrack {
   final Color color;
 }
 
-enum _OverlayMenuAction { pick, importFile, importIntoRecording }
+enum _OverlayMenuAction {
+  toggleDayChips,
+  pick,
+  importFile,
+  importIntoRecording,
+}
 
 /// One row of the map page's stacked duration/distance/altitude box - label
 /// on the left, value on the right, both on one line.
