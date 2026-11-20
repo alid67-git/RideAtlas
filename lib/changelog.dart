@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.156 beta',
+    date: '2026-11-20',
+    noteTr:
+        'Gün revize onay penceresi “Üzerine yazılacak gün” ve “Yüklenecek '
+        'dosya”yu ayrı satırlarda gösterir; hangi günün silinip hangi GPX’in '
+        'yazılacağı netleşir.',
+    noteEn:
+        'Day-revise confirm lists “Day to overwrite” and “File to load” on '
+        'separate lines so it’s clear which day is deleted and which GPX '
+        'is written.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.155 beta',
     date: '2026-11-20',
     noteTr:

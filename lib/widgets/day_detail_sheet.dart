@@ -184,6 +184,68 @@ Future<void> showDayDetailSheet({
   );
 }
 
+/// Confirms overwriting [dayLabel] with [fileName]. Returns true if confirmed.
+Future<bool> confirmDayReviseDialog({
+  required BuildContext context,
+  required String dayLabel,
+  required String fileName,
+}) async {
+  final l10n = AppLocalizations.of(context)!;
+  final theme = Theme.of(context);
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(l10n.dayDetailReviseTitle),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.dayDetailReviseOverwriteDayLabel,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            dayLabel,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            l10n.dayDetailReviseFromFileLabel,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            fileName,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(l10n.dayDetailReviseWarning),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(l10n.cancel),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: Text(l10n.dayDetailReviseConfirm),
+        ),
+      ],
+    ),
+  );
+  return ok == true;
+}
+
 class DayDetailSheet extends StatefulWidget {
   const DayDetailSheet({
     super.key,

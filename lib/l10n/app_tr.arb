@@ -143,12 +143,16 @@
   "dayDetailReviseTooltip": "Bu günü GPX/KML ile değiştir",
   "dayDetailReviseButton": "Bu günü GPX ile revize et",
   "dayDetailReviseTitle": "Bu gün revize edilsin mi?",
-  "dayDetailReviseMessage": "{dayLabel} için mevcut iz silinir; seçtiğin dosya yazılır.",
+  "dayDetailReviseOverwriteDayLabel": "Üzerine yazılacak gün",
+  "dayDetailReviseFromFileLabel": "Yüklenecek dosya",
+  "dayDetailReviseMessage": "{dayLabel} için mevcut iz silinir; seçtiğin dosya ({fileName}) yazılır.",
   "@dayDetailReviseMessage": {
     "placeholders": {
-      "dayLabel": {"type": "String"}
+      "dayLabel": {"type": "String"},
+      "fileName": {"type": "String"}
     }
   },
+  "dayDetailReviseWarning": "Bu günün mevcut kaydı silinir; yerine dosyadaki iz yazılır. Diğer günlere dokunulmaz.",
   "dayDetailReviseConfirm": "Revize et",
   "dayDetailReviseNoPoints": "Dosyada bu güne yerleştirilecek zaman damgalı nokta yok.",
   "dayDetailReviseSuccess": "Gün revize edildi.",

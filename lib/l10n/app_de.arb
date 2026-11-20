@@ -128,12 +128,16 @@
   "dayDetailReviseTooltip": "Diesen Tag mit GPX/KML ersetzen",
   "dayDetailReviseButton": "Tag per GPX revidieren",
   "dayDetailReviseTitle": "Diesen Tag revidieren?",
-  "dayDetailReviseMessage": "Vorhandene Spur für {dayLabel} wird gelöscht und durch Ihre Datei ersetzt.",
+  "dayDetailReviseOverwriteDayLabel": "Zu überschreibender Tag",
+  "dayDetailReviseFromFileLabel": "Zu ladende Datei",
+  "dayDetailReviseMessage": "Vorhandene Spur für {dayLabel} wird gelöscht und durch {fileName} ersetzt.",
   "@dayDetailReviseMessage": {
     "placeholders": {
-      "dayLabel": {"type": "String"}
+      "dayLabel": {"type": "String"},
+      "fileName": {"type": "String"}
     }
   },
+  "dayDetailReviseWarning": "Die aktuelle Spur dieses Tages wird gelöscht; die Spur aus der Datei wird geschrieben. Andere Tage bleiben unverändert.",
   "dayDetailReviseConfirm": "Revidieren",
   "dayDetailReviseNoPoints": "Die Datei hat keine zeitgestempelten Punkte für diesen Tag.",
   "dayDetailReviseSuccess": "Tag revidiert.",
