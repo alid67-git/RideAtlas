@@ -11,6 +11,9 @@ import '../services/day_export.dart';
 /// Returns null if cancelled. [days] must have length ≥ 2.
 /// When [fixedDestination] is set, the destination radios are hidden and
 /// that value is used (e.g. recording save already asked folder vs share).
+///
+/// Destination stays pinned above the action buttons so a long day list
+/// cannot push “Nereye kaydedilsin?” off-screen.
 Future<DayExportPlan?> showDayExportDialog({
   required BuildContext context,
   required List<DayStats> days,
@@ -58,8 +61,7 @@ class _DayExportDialogState extends State<_DayExportDialog> {
             : DayExportDestination.share);
   }
 
-  DateTime _dayKey(DateTime day) =>
-      DateTime(day.year, day.month, day.day);
+  DateTime _dayKey(DateTime day) => DateTime(day.year, day.month, day.day);
 
   void _toggleDay(DateTime day, bool? value) {
     final key = _dayKey(day);
@@ -169,43 +171,44 @@ class _DayExportDialogState extends State<_DayExportDialog> {
                           ),
                         ),
                     ],
-                    if (pickDestination) ...[
-                      const Divider(height: 16),
-                      Text(
-                        l10n.dayExportDestinationTitle,
-                        style: theme.textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 4),
-                      RadioGroup<DayExportDestination>(
-                        groupValue: _destination,
-                        onChanged: (v) {
-                          if (v == null) return;
-                          setState(() => _destination = v);
-                        },
-                        child: Column(
-                          children: [
-                            if (folderOk)
-                              RadioListTile<DayExportDestination>(
-                                value: DayExportDestination.folder,
-                                title: Text(l10n.dayExportDestinationFolder),
-                                subtitle:
-                                    Text(l10n.dayExportDestinationFolderHint),
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                            RadioListTile<DayExportDestination>(
-                              value: DayExportDestination.share,
-                              title: Text(l10n.dayExportDestinationShare),
-                              subtitle:
-                                  Text(l10n.dayExportDestinationShareHint),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
+              // Destination pinned — always visible above Continue.
+              if (pickDestination) ...[
+                const Divider(height: 16),
+                Text(
+                  l10n.dayExportDestinationTitle,
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(height: 4),
+                RadioGroup<DayExportDestination>(
+                  groupValue: _destination,
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _destination = v);
+                  },
+                  child: Column(
+                    children: [
+                      if (folderOk)
+                        RadioListTile<DayExportDestination>(
+                          value: DayExportDestination.folder,
+                          title: Text(l10n.dayExportDestinationFolder),
+                          subtitle: Text(l10n.dayExportDestinationFolderHint),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      RadioListTile<DayExportDestination>(
+                        value: DayExportDestination.share,
+                        title: Text(l10n.dayExportDestinationShare),
+                        subtitle: Text(l10n.dayExportDestinationShareHint),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,

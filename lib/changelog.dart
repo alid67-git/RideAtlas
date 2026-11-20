@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.154 beta',
+    date: '2026-11-20',
+    noteTr:
+        'Çok günlük dışa aktarmada gün seçiminden sonra tekrar isim sorulmaz '
+        '(dosya adı zaten RideAtlas_tarih). “Nereye kaydedilsin?” gün '
+        'listesinin altında sabit kalır; tek günlükte de klasör/paylaş sorulur.',
+    noteEn:
+        'Multi-day export no longer asks for a file name after day selection '
+        '(files stay RideAtlas_date). “Where?” stays pinned under the day '
+        'list; single-day export also asks folder vs share.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.153 beta',
     date: '2026-11-19',
     noteTr:
