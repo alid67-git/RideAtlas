@@ -490,25 +490,13 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     }
 
     final dayLabel =
-        '${l10n.dayLabel(day.dayNumber)} · ${DateFormat('d MMM y', Localizations.localeOf(context).languageCode).format(day.date)}';
-    final ok = await showDialog<bool>(
+        '${l10n.dayLabel(day.dayNumber)} · ${DateFormat('d MMMM yyyy, EEEE', Localizations.localeOf(context).languageCode).format(day.date)}';
+    final ok = await confirmDayReviseDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.dayDetailReviseTitle),
-        content: Text(l10n.dayDetailReviseMessage(dayLabel)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.dayDetailReviseConfirm),
-          ),
-        ],
-      ),
+      dayLabel: dayLabel,
+      fileName: file.name,
     );
-    if (ok != true || !mounted) return false;
+    if (!ok || !mounted) return false;
 
     try {
       final repo = context.read<RouteRepository>();

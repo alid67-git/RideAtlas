@@ -128,12 +128,16 @@
   "dayDetailReviseTooltip": "Replace this day with GPX/KML",
   "dayDetailReviseButton": "Revise this day from GPX",
   "dayDetailReviseTitle": "Revise this day?",
-  "dayDetailReviseMessage": "Existing track for {dayLabel} will be deleted and replaced by your file.",
+  "dayDetailReviseOverwriteDayLabel": "Day to overwrite",
+  "dayDetailReviseFromFileLabel": "File to load",
+  "dayDetailReviseMessage": "Existing track for {dayLabel} will be deleted and replaced by {fileName}.",
   "@dayDetailReviseMessage": {
     "placeholders": {
-      "dayLabel": {"type": "String"}
+      "dayLabel": {"type": "String"},
+      "fileName": {"type": "String"}
     }
   },
+  "dayDetailReviseWarning": "This day’s current track is deleted; the file’s track is written instead. Other days are unchanged.",
   "dayDetailReviseConfirm": "Revise",
   "dayDetailReviseNoPoints": "That file has no timed points that can replace this day.",
   "dayDetailReviseSuccess": "Day revised.",
