@@ -120,6 +120,8 @@
   "dayFilterTooltip": "Filter days",
   "dayFilterTitle": "Which days to show?",
   "dayFilterShowAll": "All days",
+  "dayBreakdownShowTooltip": "Show day by day",
+  "dayBreakdownHideTooltip": "Back to one red line",
   "dayDetailSubtitle": "Distance and details for this day",
   "dayDetailShowOnlyThisDay": "Show only this day on the map",
   "dayDetailAddNote": "Add note / photo at this point",

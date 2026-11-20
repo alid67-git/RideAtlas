@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.155 beta',
+    date: '2026-11-20',
+    noteTr:
+        'Çok günlük rota ve canlı kayıtta sağdaki takvim ikonu gün gün '
+        'görünümü açar/kapatır (renkli günler + şerit). İze tıklamak yavaş '
+        'veya zor geldiği için artık ikon yeterli.',
+    noteEn:
+        'On multi-day saved routes and live recording, the right-side '
+        'calendar icon toggles day-by-day view (colored days + chips). No '
+        'need to tap the thin track line.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.154 beta',
     date: '2026-11-20',
     noteTr:
