@@ -154,6 +154,8 @@ Future<void> showDayDetailSheet({
   VoidCallback? onAddNote,
   /// Called when the rider pages to another day (parent may refocus the map).
   ValueChanged<DayStats>? onDayChanged,
+  /// Export this day's track (destination + format). Does not close the sheet.
+  Future<void> Function(DayStats day)? onExportDay,
   /// Replace this day's track from a GPX/KML. Return true after a successful
   /// revise so the sheet can close.
   Future<bool> Function(DayStats day)? onReviseDay,
@@ -179,6 +181,7 @@ Future<void> showDayDetailSheet({
       onShowAllDays: onShowAllDays,
       onAddNote: onAddNote,
       onDayChanged: onDayChanged,
+      onExportDay: onExportDay,
       onReviseDay: onReviseDay,
     ),
   );
@@ -255,6 +258,7 @@ class DayDetailSheet extends StatefulWidget {
     this.onShowAllDays,
     this.onAddNote,
     this.onDayChanged,
+    this.onExportDay,
     this.onReviseDay,
   });
 
@@ -264,6 +268,7 @@ class DayDetailSheet extends StatefulWidget {
   final VoidCallback? onShowAllDays;
   final VoidCallback? onAddNote;
   final ValueChanged<DayStats>? onDayChanged;
+  final Future<void> Function(DayStats day)? onExportDay;
   final Future<bool> Function(DayStats day)? onReviseDay;
 
   @override
@@ -276,6 +281,7 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
   final _mapController = MapController();
   int _openedWithNoteIndex = -1;
   bool _revising = false;
+  bool _exporting = false;
 
   DayStats get _day => widget.days[_index];
 
@@ -284,13 +290,24 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
 
   Future<void> _runRevise() async {
     final revise = widget.onReviseDay;
-    if (revise == null || _revising) return;
+    if (revise == null || _revising || _exporting) return;
     setState(() => _revising = true);
     try {
       final ok = await revise(_day);
       if (ok && mounted) Navigator.pop(context);
     } finally {
       if (mounted) setState(() => _revising = false);
+    }
+  }
+
+  Future<void> _runExport() async {
+    final export = widget.onExportDay;
+    if (export == null || _exporting || _revising) return;
+    setState(() => _exporting = true);
+    try {
+      await export(_day);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
   }
 
@@ -491,7 +508,7 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Close top-left; revise (GPX replace) top-right when available.
+              // Close top-left; export this day top-right (revise stays below).
               Row(
                 children: [
                   IconButton(
@@ -501,17 +518,17 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
                     icon: const Icon(Icons.close),
                   ),
                   const Spacer(),
-                  if (widget.onReviseDay != null)
+                  if (widget.onExportDay != null)
                     IconButton(
-                      tooltip: l10n.dayDetailReviseTooltip,
-                      onPressed: _revising ? null : _runRevise,
-                      icon: _revising
+                      tooltip: l10n.dayExportThisDayTooltip,
+                      onPressed: _exporting ? null : _runExport,
+                      icon: _exporting
                           ? const SizedBox(
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(Icons.upload_file),
+                          : const Icon(Icons.ios_share),
                     ),
                 ],
               ),

@@ -28,7 +28,8 @@ import '../services/gpx_parser.dart';
 import '../services/live_recording_merge.dart';
 import '../services/map_camera_fit.dart';
 import '../services/route_geography.dart';
-import '../services/run_day_export.dart' show pickExportDestination;
+import '../services/run_day_export.dart'
+    show exportSingleCalendarDay, pickExportDestination;
 import '../services/track_display_simplify.dart';
 import '../services/track_export_actions.dart';
 import '../services/track_io.dart';
@@ -395,6 +396,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       day: day,
       days: _days,
       startAtFirstDay: false,
+      onExportDay: _exportSavedRouteDay,
       onReviseDay: _reviseSavedRouteDay,
       onDayChanged: (d) {
         setState(() {
@@ -429,6 +431,20 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         _rebuildPolylines();
       });
     });
+  }
+
+  /// Export one calendar day: destination → format → RideAtlas_yyyy-MM-dd.
+  Future<void> _exportSavedRouteDay(DayStats day) async {
+    final route = _route;
+    final points = _points;
+    if (route == null || points == null) return;
+    await exportSingleCalendarDay(
+      context: context,
+      routeName: route.name,
+      points: points,
+      waypoints: _waypoints ?? const [],
+      day: day.date,
+    );
   }
 
   /// Replace one calendar day on the saved route with a picked GPX/KML.

@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.157 beta',
+    date: '2026-11-21',
+    noteTr:
+        'Gün detayında sağ üst ikon artık o günü dışa aktarır: nereye '
+        '(klasör/paylaş) ve format sorulur; dosya adı RideAtlas_yyyy-MM-dd. '
+        'GPX ile revize altta “Bu günü GPX ile revize et” butonunda kalır.',
+    noteEn:
+        'Day-detail top-right icon exports that day: asks where (folder/'
+        'share) then format; file name is RideAtlas_yyyy-MM-dd. GPX revise '
+        'stays on the bottom “Revise this day from GPX” button.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.156 beta',
     date: '2026-11-20',
     noteTr:

@@ -43,6 +43,7 @@ import '../services/map_camera_fit.dart';
 import '../services/track_heading.dart';
 import '../services/track_display_loader.dart';
 import '../services/track_display_simplify.dart';
+import '../services/run_day_export.dart' show exportSingleCalendarDay;
 import '../services/track_export_actions.dart';
 import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';
@@ -2966,6 +2967,7 @@ class _RecordScreenState extends State<RecordScreen>
       day: day,
       days: _liveDays,
       startAtFirstDay: false,
+      onExportDay: _exportLiveDay,
       onReviseDay: _reviseLiveDay,
       onAddNote: noteAt == null
           ? null
@@ -2989,6 +2991,33 @@ class _RecordScreenState extends State<RecordScreen>
       if (!mounted || keepFocus) return;
       setState(() => _liveVisibleDayNumbers = previousFilter);
     });
+  }
+
+  /// Export one live calendar day: destination → format → RideAtlas_yyyy-MM-dd.
+  Future<void> _exportLiveDay(DayStats day) async {
+    final recorder = context.read<GpsRecorder>();
+    final l10n = AppLocalizations.of(context)!;
+    if (recorder.isIdle) return;
+    final waypoints = [
+      for (final a in _sessionAnnotations)
+        if (a.hasNote || a.hasPhoto)
+          Waypoint(
+            latLng: a.latLng,
+            name: a.hasNote
+                ? a.note!.trim()
+                : l10n.recordingPhotoWaypointName,
+            description: a.hasPhoto && a.hasNote
+                ? l10n.recordingPhotoWaypointName
+                : null,
+          ),
+    ];
+    await exportSingleCalendarDay(
+      context: context,
+      routeName: _defaultRecordingName(l10n),
+      points: recorder.points,
+      waypoints: waypoints,
+      day: day.date,
+    );
   }
 
   /// Replace one calendar day in the live session with a picked GPX/KML.
