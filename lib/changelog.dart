@@ -26,6 +26,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.158 beta',
+    date: '2026-11-21',
+    noteTr:
+        '“Klasöre kaydet” her seferinde klasör seçiciyi açar; Ayarlar’daki '
+        'günlük yedek klasörüne sessizce yazmaz.',
+    noteEn:
+        '“Save to folder” always opens the folder picker; it no longer '
+        'silently writes into the Settings daily-backup folder.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.157 beta',
     date: '2026-11-21',
     noteTr:
