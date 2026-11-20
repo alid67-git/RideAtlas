@@ -28,6 +28,7 @@ import '../services/gpx_parser.dart';
 import '../services/live_recording_merge.dart';
 import '../services/map_camera_fit.dart';
 import '../services/route_geography.dart';
+import '../services/run_day_export.dart' show pickExportDestination;
 import '../services/track_display_simplify.dart';
 import '../services/track_export_actions.dart';
 import '../services/track_io.dart';
@@ -917,6 +918,24 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     if (points == null) return;
     final l10n = AppLocalizations.of(context)!;
 
+    // What / where first — file names are RideAtlas_yyyy-MM-dd; no second
+    // “rename” dialog (that used to feel redundant after day selection).
+    final days = splitIntoDays(points);
+    late final DayExportPlan plan;
+    if (days.length >= 2) {
+      final chosen = await showDayExportDialog(context: context, days: days);
+      if (chosen == null || !mounted) return;
+      plan = chosen;
+    } else {
+      final destination = await pickExportDestination(context);
+      if (destination == null || !mounted) return;
+      plan = DayExportPlan(
+        scope: DayExportScope.fullRoute,
+        destination: destination,
+        selectedDays: const [],
+      );
+    }
+
     final format = await showDialog<TrackFormat>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -932,47 +951,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
     if (format == null || !mounted) return;
 
-    final days = splitIntoDays(points);
-    DayExportPlan plan;
-    if (days.length >= 2) {
-      final chosen = await showDayExportDialog(context: context, days: days);
-      if (chosen == null || !mounted) return;
-      plan = chosen;
-    } else {
-      plan = const DayExportPlan(
-        scope: DayExportScope.fullRoute,
-        destination: DayExportDestination.share,
-        selectedDays: [],
-      );
-    }
-
-    // Defaults to the route's own saved name (share subject / metadata).
-    // On-disk file names always use the track calendar day(s)
-    // (RideAtlas_yyyy-MM-dd), not this dialog text.
-    final nameController = TextEditingController(text: route.name);
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.exportNameQuestion),
-        content: TextField(controller: nameController, autofocus: true),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(context, nameController.text.trim()),
-            child: Text(l10n.save),
-          ),
-        ],
-      ),
-    );
-    if (name == null || name.isEmpty || !mounted) return;
-
     final files = preparePlanExportFiles(
       plan: plan,
-      routeName: name,
+      routeName: route.name,
       points: points,
       waypoints: _waypoints ?? const [],
       format: format,
@@ -983,7 +964,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     final result = await deliverExportFiles(
       files: files,
       destination: plan.destination,
-      subject: name,
+      subject: route.name,
       // Same Drive/SAF folder as Günlük yedek — all days in one shot,
       // no second folder picker when backup is already configured.
       existingFolderUri: backup.isConfigured ? backup.folderUri : null,

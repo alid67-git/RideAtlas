@@ -1589,6 +1589,10 @@ class _RecordScreenState extends State<RecordScreen>
     ];
     final routeName = _defaultRecordingName(l10n);
 
+    // Days + destination first (destination stays pinned in the dialog).
+    final plan = await showDayExportDialog(context: context, days: days);
+    if (plan == null || !mounted) return;
+
     final format = await showDialog<TrackFormat>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -1603,9 +1607,6 @@ class _RecordScreenState extends State<RecordScreen>
       ),
     );
     if (format == null || !mounted) return;
-
-    final plan = await showDayExportDialog(context: context, days: days);
-    if (plan == null || !mounted) return;
 
     final files = preparePlanExportFiles(
       plan: plan,
