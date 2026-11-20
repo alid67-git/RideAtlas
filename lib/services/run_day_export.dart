@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
-import '../repositories/daily_drive_backup_controller.dart';
 import 'backup_folder_bridge.dart';
 import 'day_export.dart';
 import 'track_export_actions.dart';
@@ -80,13 +78,12 @@ Future<bool> runPreparedDayExport({
   );
   if (files.isEmpty || !context.mounted) return false;
 
-  final backup = context.read<DailyDriveBackupController>();
+  // Always open the system folder picker for “Klasöre kaydet” — never
+  // silently reuse the daily-backup URI (riders expect to choose).
   final result = await deliverExportFiles(
     files: files,
     destination: plan.destination,
     subject: routeName,
-    existingFolderUri: backup.isConfigured ? backup.folderUri : null,
-    existingFolderName: backup.isConfigured ? backup.folderName : null,
   );
   if (!context.mounted) return false;
   if (result == null) {

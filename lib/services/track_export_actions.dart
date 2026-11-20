@@ -98,15 +98,12 @@ Future<String?> writeExportFilesToPickedFolder(
 /// Delivers [files] according to [destination].
 /// Returns `share`, the folder display name, or null if cancelled/failed.
 ///
-/// When [destination] is [DayExportDestination.folder] and
-/// [existingFolderUri] is set (e.g. Ayarlar → Günlük Drive yedeği), writes
-/// there without opening another picker so all days land in one shot.
+/// Folder destination always opens the system SAF picker — never silently
+/// reuses the günlük yedek folder (riders expect to choose where to save).
 Future<String?> deliverExportFiles({
   required List<PreparedExportFile> files,
   required DayExportDestination destination,
   String? subject,
-  String? existingFolderUri,
-  String? existingFolderName,
 }) async {
   if (files.isEmpty) return null;
   switch (destination) {
@@ -114,14 +111,6 @@ Future<String?> deliverExportFiles({
       await shareExportFiles(files, subject: subject);
       return 'share';
     case DayExportDestination.folder:
-      final uri = existingFolderUri;
-      if (uri != null && uri.isNotEmpty) {
-        return writeExportFilesToFolder(
-          files: files,
-          folderUri: uri,
-          folderName: existingFolderName,
-        );
-      }
       return writeExportFilesToPickedFolder(files);
   }
 }

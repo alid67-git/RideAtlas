@@ -964,15 +964,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     );
     if (files.isEmpty || !mounted) return;
 
-    final backup = context.read<DailyDriveBackupController>();
+    // Always pick the folder — do not silently reuse günlük yedek URI.
     final result = await deliverExportFiles(
       files: files,
       destination: plan.destination,
       subject: route.name,
-      // Same Drive/SAF folder as Günlük yedek — all days in one shot,
-      // no second folder picker when backup is already configured.
-      existingFolderUri: backup.isConfigured ? backup.folderUri : null,
-      existingFolderName: backup.isConfigured ? backup.folderName : null,
     );
     if (!mounted) return;
     if (result == null) {
