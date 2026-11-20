@@ -10,6 +10,7 @@ import '../repositories/stat_icon_settings_controller.dart';
 import '../services/daily_analysis.dart';
 import '../services/gpx_parser.dart';
 import '../services/route_geography.dart';
+import '../services/run_day_export.dart' show exportSingleCalendarDay;
 import '../services/weather_service.dart';
 import '../widgets/day_detail_sheet.dart';
 
@@ -245,6 +246,7 @@ class _AnalysisSheetState extends State<AnalysisSheet>
                       },
                     ),
                     _DailyTab(
+                      routeName: widget.route.name,
                       points: widget.points,
                       geography: _geography,
                       geoLoading: _geoLoading,
@@ -888,11 +890,13 @@ String weatherLabelFor(AppLocalizations l10n, int code) {
 
 class _DailyTab extends StatelessWidget {
   const _DailyTab({
+    required this.routeName,
     required this.points,
     required this.geography,
     required this.geoLoading,
   });
 
+  final String routeName;
   final List<TrackPoint> points;
   final RouteGeography? geography;
   final bool geoLoading;
@@ -916,6 +920,8 @@ class _DailyTab extends StatelessWidget {
         const SizedBox(height: 12),
         for (final day in days) ...[
           _DayCard(
+            routeName: routeName,
+            points: points,
             day: day,
             days: days,
             geoLoading: geoLoading,
@@ -930,12 +936,16 @@ class _DailyTab extends StatelessWidget {
 
 class _DayCard extends StatelessWidget {
   const _DayCard({
+    required this.routeName,
+    required this.points,
     required this.day,
     required this.days,
     required this.geoLoading,
     required this.hasGeography,
   });
 
+  final String routeName;
+  final List<TrackPoint> points;
   final DayStats day;
   final List<DayStats> days;
   final bool geoLoading;
@@ -960,6 +970,13 @@ class _DayCard extends StatelessWidget {
           day: day,
           days: days,
           startAtFirstDay: false,
+          onExportDay: (d) => exportSingleCalendarDay(
+            context: context,
+            routeName: routeName,
+            points: points,
+            waypoints: const [],
+            day: d.date,
+          ),
         ),
         child: Padding(
       padding: const EdgeInsets.all(12),

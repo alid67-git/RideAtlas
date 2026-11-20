@@ -103,7 +103,9 @@ Future<bool> runPreparedDayExport({
   return true;
 }
 
-/// One calendar day → format + destination + deliver (Analiz > Günlük).
+/// One calendar day → destination + format + deliver (same order as the
+/// multi-day export dialog: “Nereye?” then GPX/KML/KMZ). File name is
+/// `RideAtlas_yyyy-MM-dd` — no second rename prompt.
 Future<bool> exportSingleCalendarDay({
   required BuildContext context,
   required String routeName,
@@ -111,10 +113,10 @@ Future<bool> exportSingleCalendarDay({
   required List<Waypoint> waypoints,
   required DateTime day,
 }) async {
-  final format = await pickExportFormat(context);
-  if (format == null || !context.mounted) return false;
   final destination = await pickExportDestination(context);
   if (destination == null || !context.mounted) return false;
+  final format = await pickExportFormat(context);
+  if (format == null || !context.mounted) return false;
   return runPreparedDayExport(
     context: context,
     plan: DayExportPlan(
