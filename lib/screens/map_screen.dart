@@ -1219,12 +1219,44 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                   children: [
                     if (days.length > 1) ...[
                       FloatingActionButton.small(
-                        heroTag: 'dayFilter',
-                        tooltip: AppLocalizations.of(context)!.dayFilterTooltip,
-                        onPressed: () => _showDayFilterPicker(days),
-                        child: const Icon(Icons.filter_alt),
+                        heroTag: 'dayBreakdown',
+                        tooltip: _dayBreakdownMode
+                            ? AppLocalizations.of(context)!
+                                .dayBreakdownHideTooltip
+                            : AppLocalizations.of(context)!
+                                .dayBreakdownShowTooltip,
+                        backgroundColor: _dayBreakdownMode
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                        foregroundColor: _dayBreakdownMode
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : null,
+                        onPressed: () {
+                          setState(() {
+                            _dayBreakdownMode = !_dayBreakdownMode;
+                            if (!_dayBreakdownMode) {
+                              _visibleDayNumbers = null;
+                            }
+                            _rebuildPolylines();
+                          });
+                        },
+                        child: Icon(
+                          _dayBreakdownMode
+                              ? Icons.calendar_view_day
+                              : Icons.calendar_view_day_outlined,
+                        ),
                       ),
                       const SizedBox(height: 8),
+                      if (_dayBreakdownMode) ...[
+                        FloatingActionButton.small(
+                          heroTag: 'dayFilter',
+                          tooltip:
+                              AppLocalizations.of(context)!.dayFilterTooltip,
+                          onPressed: () => _showDayFilterPicker(days),
+                          child: const Icon(Icons.filter_alt),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                     ],
                     if (stops.isNotEmpty) ...[
                       FloatingActionButton.small(

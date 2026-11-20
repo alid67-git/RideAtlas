@@ -2148,9 +2148,42 @@ class _RecordScreenState extends State<RecordScreen>
             child: SafeArea(
               top: false,
               child: Consumer<GpsRecorder>(
-                builder: (context, recorder, _) => Column(
+                builder: (context, recorder, _) {
+                  _syncLiveDays(recorder.points);
+                  final multiDayLive =
+                      !recorder.isIdle && _liveDays.length >= 2;
+                  return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (multiDayLive) ...[
+                    FloatingActionButton.small(
+                      heroTag: 'liveDayBreakdown',
+                      tooltip: _liveDayBreakdownMode
+                          ? l10n.dayBreakdownHideTooltip
+                          : l10n.dayBreakdownShowTooltip,
+                      backgroundColor: _liveDayBreakdownMode
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                      foregroundColor: _liveDayBreakdownMode
+                          ? Theme.of(context).colorScheme.onPrimary
+                          : null,
+                      onPressed: () {
+                        setState(() {
+                          _liveDayBreakdownMode = !_liveDayBreakdownMode;
+                          _showLiveDayChips = _liveDayBreakdownMode;
+                          if (!_liveDayBreakdownMode) {
+                            _liveVisibleDayNumbers = null;
+                          }
+                        });
+                      },
+                      child: Icon(
+                        _liveDayBreakdownMode
+                            ? Icons.calendar_view_day
+                            : Icons.calendar_view_day_outlined,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   FloatingActionButton.small(
                     heroTag: 'recordMapStyle',
                     tooltip: AppLocalizations.of(context)!.mapStyleTitle,
@@ -2195,7 +2228,8 @@ class _RecordScreenState extends State<RecordScreen>
                     ),
                   ),
                 ],
-              ),
+              );
+                },
               ),
             ),
           ),
