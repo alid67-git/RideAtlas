@@ -12,3 +12,5 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+# Exception: stable sideload key so in-app updates keep the same signing key.
+!app/gopro-remote-debug.keystore
