@@ -146,9 +146,12 @@ class _RecordScreenState extends State<RecordScreen>
   final _headingListenable = ValueNotifier<double?>(null);
   List<LatLng> _liveLineCache = [];
   int _liveLineCacheCount = 0;
-  /// Calendar-day split of the live track (recomputed when point count changes).
+  /// Calendar-day split of the live track (incremental while points append).
   List<DayStats> _liveDays = const [];
   int _liveDaysPointCount = -1;
+  /// Last time driven-km stats were recomputed for the current live day.
+  DateTime? _lastLiveDayStatsAt;
+  static const _liveDayStatsInterval = Duration(seconds: 12);
   /// null = all days; otherwise only these day numbers (same as RouteMapScreen).
   Set<int>? _liveVisibleDayNumbers;
   /// Day chip strip under mini stats — toggled by the Ruta (route) button.
@@ -2900,15 +2903,120 @@ class _RecordScreenState extends State<RecordScreen>
     _liveLineCacheCount = points.length;
   }
 
-  void _syncLiveDays(List<TrackPoint> points) {
-    if (points.length == _liveDaysPointCount) return;
-    _liveDaysPointCount = points.length;
-    _liveDays = splitIntoDays(points);
+  void _pruneLiveVisibleDayFilter() {
     final filter = _liveVisibleDayNumbers;
-    if (filter != null) {
-      final valid = {for (final d in _liveDays) d.dayNumber};
-      final next = {for (final n in filter) if (valid.contains(n)) n};
-      _liveVisibleDayNumbers = next.isEmpty ? null : next;
+    if (filter == null) return;
+    final valid = {for (final d in _liveDays) d.dayNumber};
+    final next = {for (final n in filter) if (valid.contains(n)) n};
+    _liveVisibleDayNumbers = next.isEmpty ? null : next;
+  }
+
+  void _rebuildLiveDaysFull(List<TrackPoint> points) {
+    _liveDays = splitIntoDays(points);
+    _liveDaysPointCount = points.length;
+    _lastLiveDayStatsAt = DateTime.now();
+    _pruneLiveVisibleDayFilter();
+  }
+
+  /// Keeps [_liveDays] in sync without re-running [splitIntoDays] over the
+  /// whole multi-day track on every GPS fix. Append-only updates touch only
+  /// the current calendar day; driven-km stats for that day refresh at most
+  /// every [_liveDayStatsInterval] (forced on day detail / full rebuild).
+  void _syncLiveDays(List<TrackPoint> points, {bool forceStats = false}) {
+    if (points.length == _liveDaysPointCount && !forceStats) return;
+
+    if (_liveDaysPointCount < 0 ||
+        points.length < _liveDaysPointCount ||
+        _liveDays.isEmpty) {
+      _rebuildLiveDaysFull(points);
+      return;
+    }
+
+    final from = _liveDaysPointCount;
+    _liveDaysPointCount = points.length;
+
+    DateTime? batchDay;
+    final appended = <TrackPoint>[];
+    for (var i = from; i < points.length; i++) {
+      final p = points[i];
+      final t = p.time;
+      if (t == null) continue;
+      final day = calendarDayLocal(t);
+      if (batchDay != null && day != batchDay) {
+        _rebuildLiveDaysFull(points);
+        return;
+      }
+      batchDay = day;
+      appended.add(p);
+    }
+    if (batchDay == null || appended.isEmpty) {
+      if (forceStats && _liveDays.isNotEmpty) {
+        final last = _liveDays.last;
+        _liveDays = [
+          ..._liveDays.sublist(0, _liveDays.length - 1),
+          buildDayStats(
+            dayNumber: last.dayNumber,
+            date: last.date,
+            dayPoints: last.points,
+          ),
+        ];
+        _lastLiveDayStatsAt = DateTime.now();
+      }
+      return;
+    }
+
+    final last = _liveDays.last;
+    if (batchDay.isBefore(last.date)) {
+      _rebuildLiveDaysFull(points);
+      return;
+    }
+
+    if (batchDay.isAfter(last.date)) {
+      _liveDays = [
+        ..._liveDays,
+        buildDayStats(
+          dayNumber: last.dayNumber + 1,
+          date: batchDay,
+          dayPoints: List<TrackPoint>.from(appended),
+        ),
+      ];
+      _lastLiveDayStatsAt = DateTime.now();
+      return;
+    }
+
+    final dayPoints = List<TrackPoint>.of(last.points)..addAll(appended);
+    final now = DateTime.now();
+    final statsDue = forceStats ||
+        _lastLiveDayStatsAt == null ||
+        now.difference(_lastLiveDayStatsAt!) >= _liveDayStatsInterval;
+    if (statsDue) {
+      _liveDays = [
+        ..._liveDays.sublist(0, _liveDays.length - 1),
+        buildDayStats(
+          dayNumber: last.dayNumber,
+          date: last.date,
+          dayPoints: dayPoints,
+        ),
+      ];
+      _lastLiveDayStatsAt = now;
+    } else {
+      _liveDays = [
+        ..._liveDays.sublist(0, _liveDays.length - 1),
+        DayStats(
+          dayNumber: last.dayNumber,
+          date: last.date,
+          points: dayPoints,
+          color: last.color,
+          distanceKm: last.distanceKm,
+          elevationGainM: last.elevationGainM,
+          elevationLossM: last.elevationLossM,
+          maxElevation: last.maxElevation,
+          minElevation: last.minElevation,
+          ridingDuration: last.ridingDuration,
+          restDuration: last.restDuration,
+          countries: last.countries,
+        ),
+      ];
     }
   }
 
@@ -2953,7 +3061,7 @@ class _RecordScreenState extends State<RecordScreen>
   }
 
   void _openLiveDayDetail(DayStats day, {LatLng? noteAt}) {
-    _syncLiveDays(_recorder.points);
+    _syncLiveDays(_recorder.points, forceStats: true);
     final previousFilter = _liveVisibleDayNumbers;
     var keepFocus = false;
     showDayDetailSheet(

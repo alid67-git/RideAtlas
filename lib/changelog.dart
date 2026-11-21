@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.160 beta',
+    date: '2026-11-21',
+    noteTr:
+        'Çok günlük canlı kayıt uzadıkça yavaşlama: gün km/süre istatistikleri '
+        'artık her GPS noktasında tüm geçmişi yeniden taramaz; yalnızca o gün '
+        'artımlı güncellenir (ağır hesap ~12 sn’de bir).',
+    noteEn:
+        'Long multi-day live recording slowdown: day km/time stats no longer '
+        'rescan the whole track on every GPS fix — only the current day is '
+        'updated incrementally (heavy math ~every 12s).',
+  ),
+  ChangelogEntry(
     version: 'v1.4.159 beta',
     date: '2026-11-21',
     noteTr:

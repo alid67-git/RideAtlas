@@ -82,6 +82,103 @@ DateTime calendarDayLocal(DateTime t) {
 /// splitting needs GPS time data. [geography] is optional; when supplied
 /// (once the route's country/stop analysis has finished), rest time and
 /// countries are filled in per day instead of being left at defaults.
+/// Builds stats for one calendar day's points (Day Atlas driven km).
+DayStats buildDayStats({
+  required int dayNumber,
+  required DateTime date,
+  required List<TrackPoint> dayPoints,
+  RouteGeography? geography,
+}) {
+  // Day Atlas–style driven km (not raw polyline length).
+  final distanceKm = drivenDistanceMeters(dayPoints) / 1000.0;
+  final activeRiding = drivenActiveDuration(dayPoints);
+  var gain = 0.0;
+  var loss = 0.0;
+  double? minEle;
+  double? maxEle;
+
+  for (var j = 0; j < dayPoints.length; j++) {
+    final p = dayPoints[j];
+    if (p.elevation != null) {
+      minEle = minEle == null
+          ? p.elevation
+          : (p.elevation! < minEle ? p.elevation : minEle);
+      maxEle = maxEle == null
+          ? p.elevation
+          : (p.elevation! > maxEle ? p.elevation : maxEle);
+    }
+    if (j > 0) {
+      final prev = dayPoints[j - 1];
+      if (prev.elevation != null && p.elevation != null) {
+        final diff = p.elevation! - prev.elevation!;
+        if (diff > 0) {
+          gain += diff;
+        } else {
+          loss += -diff;
+        }
+      }
+    }
+  }
+
+  Duration? span;
+  final first = dayPoints.first.time;
+  final last = dayPoints.last.time;
+  if (first != null && last != null && last.isAfter(first)) {
+    span = last.difference(first);
+  }
+
+  var restDuration = Duration.zero;
+  final countries = <String>[];
+  if (geography != null) {
+    for (final stop in geography.stops) {
+      final s = stop.start;
+      if (s == null) continue;
+      if (calendarDayLocal(s) == date) {
+        restDuration += stop.duration;
+      }
+    }
+
+    final dayEnd = date.add(const Duration(days: 1));
+    for (final leg in geography.legs) {
+      final legStart = leg.start;
+      final legEnd = leg.end;
+      if (legStart == null || legEnd == null) continue;
+      final overlaps = legStart.isBefore(dayEnd) && legEnd.isAfter(date);
+      if (overlaps && !countries.contains(leg.country)) {
+        countries.add(leg.country);
+      }
+    }
+  }
+
+  // Prefer driven active time; fall back to span − geography rests.
+  Duration? riding;
+  if (activeRiding > Duration.zero) {
+    riding = activeRiding;
+    if (span != null) {
+      final idle = span - activeRiding;
+      if (idle > restDuration) restDuration = idle;
+    }
+  } else if (span != null) {
+    final r = span - restDuration;
+    riding = r.isNegative ? Duration.zero : r;
+  }
+
+  return DayStats(
+    dayNumber: dayNumber,
+    date: date,
+    points: dayPoints,
+    color: colorForDay(dayNumber - 1),
+    distanceKm: distanceKm,
+    elevationGainM: gain,
+    elevationLossM: loss,
+    maxElevation: maxEle,
+    minElevation: minEle,
+    ridingDuration: riding,
+    restDuration: restDuration,
+    countries: countries,
+  );
+}
+
 List<DayStats> splitIntoDays(
   List<TrackPoint> points, {
   RouteGeography? geography,
@@ -96,103 +193,13 @@ List<DayStats> splitIntoDays(
   if (groups.isEmpty) return const [];
 
   final days = groups.keys.toList()..sort();
-  final result = <DayStats>[];
-
-  for (var i = 0; i < days.length; i++) {
-    final day = days[i];
-    final dayPoints = groups[day]!;
-
-    // Day Atlas–style driven km (not raw polyline length).
-    final distanceKm = drivenDistanceMeters(dayPoints) / 1000.0;
-    final activeRiding = drivenActiveDuration(dayPoints);
-    var gain = 0.0;
-    var loss = 0.0;
-    double? minEle;
-    double? maxEle;
-
-    for (var j = 0; j < dayPoints.length; j++) {
-      final p = dayPoints[j];
-      if (p.elevation != null) {
-        minEle = minEle == null
-            ? p.elevation
-            : (p.elevation! < minEle ? p.elevation : minEle);
-        maxEle = maxEle == null
-            ? p.elevation
-            : (p.elevation! > maxEle ? p.elevation : maxEle);
-      }
-      if (j > 0) {
-        final prev = dayPoints[j - 1];
-        if (prev.elevation != null && p.elevation != null) {
-          final diff = p.elevation! - prev.elevation!;
-          if (diff > 0) {
-            gain += diff;
-          } else {
-            loss += -diff;
-          }
-        }
-      }
-    }
-
-    Duration? span;
-    final first = dayPoints.first.time;
-    final last = dayPoints.last.time;
-    if (first != null && last != null && last.isAfter(first)) {
-      span = last.difference(first);
-    }
-
-    var restDuration = Duration.zero;
-    final countries = <String>[];
-    if (geography != null) {
-      for (final stop in geography.stops) {
-        final s = stop.start;
-        if (s == null) continue;
-        if (calendarDayLocal(s) == day) {
-          restDuration += stop.duration;
-        }
-      }
-
-      final dayEnd = day.add(const Duration(days: 1));
-      for (final leg in geography.legs) {
-        final legStart = leg.start;
-        final legEnd = leg.end;
-        if (legStart == null || legEnd == null) continue;
-        final overlaps = legStart.isBefore(dayEnd) && legEnd.isAfter(day);
-        if (overlaps && !countries.contains(leg.country)) {
-          countries.add(leg.country);
-        }
-      }
-    }
-
-    // Prefer driven active time; fall back to span − geography rests.
-    Duration? riding;
-    if (activeRiding > Duration.zero) {
-      riding = activeRiding;
-      if (span != null) {
-        final idle = span - activeRiding;
-        if (idle > restDuration) restDuration = idle;
-      }
-    } else if (span != null) {
-      final r = span - restDuration;
-      riding = r.isNegative ? Duration.zero : r;
-    }
-
-    result.add(
-      DayStats(
+  return [
+    for (var i = 0; i < days.length; i++)
+      buildDayStats(
         dayNumber: i + 1,
-        date: day,
-        points: dayPoints,
-        color: colorForDay(i),
-        distanceKm: distanceKm,
-        elevationGainM: gain,
-        elevationLossM: loss,
-        maxElevation: maxEle,
-        minElevation: minEle,
-        ridingDuration: riding,
-        restDuration: restDuration,
-        countries: countries,
+        date: days[i],
+        dayPoints: groups[days[i]]!,
+        geography: geography,
       ),
-    );
-  }
-
-  return result;
+  ];
 }
