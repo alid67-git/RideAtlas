@@ -4,10 +4,10 @@ const String kAppBuildLabel = 'v1.4.162 beta';
 
 /// Shown once, in a dialog, the first time this build label is seen.
 const String kAppBuildNoteTr =
-    'Kayıt kaydedildi onayında kayıt adı, uygulama ve dışarı (klasör/paylaş) net görünür.';
+    'Kayıt onayında isim + nereye; Ayarlar yedeği yalnızca gerçek yazmada “çalışıyor” gösterir.';
 
 const String kAppBuildNoteEn =
-    'Recording-saved confirm shows the name, in-app location, and any folder/share export.';
+    'Save confirm shows name + where; Settings backup says “working” only during a real write.';
 
 /// Turkish when [languageCode] is `tr`, otherwise English (including `de`).
 String localizedBuildNote(String languageCode) =>

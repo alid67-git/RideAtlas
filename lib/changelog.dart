@@ -31,11 +31,13 @@ const kChangelog = <ChangelogEntry>[
     noteTr:
         '“Kayıt kaydedildi” onayında artık kayıt adı, uygulamada nereye '
         'eklendiği (Sürüşler) ve dışarıya klasör/paylaş sonucu ayrı satırlarda '
-        'görünür.',
+        'görünür. Ayarlar’daki günlük yedek metni “sürekli yazılıyor” gibi '
+        'durmaz; yalnızca gerçek yazma sırasında “Şu an yazılıyor…” der.',
     noteEn:
         'The “Recording saved” confirm now lists the recording name, that it '
         'was added to Rides, and any folder/share export result on separate '
-        'lines.',
+        'lines. Settings daily-backup copy no longer sounds always-writing; '
+        '“Writing now…” only appears during a real write.',
   ),
   ChangelogEntry(
     version: 'v1.4.161 beta',
