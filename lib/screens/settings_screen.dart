@@ -5,11 +5,10 @@ import 'package:provider/provider.dart';
 
 import '../build_info.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../repositories/advanced_mode_controller.dart';
 import '../repositories/daily_drive_backup_controller.dart';
 import '../repositories/locale_controller.dart';
 import '../repositories/satellite_visibility_controller.dart';
-import '../repositories/stat_icon_settings_controller.dart';
-import '../repositories/vehicle_icon_controller.dart';
 import '../services/app_update_controller.dart';
 import '../services/backup_folder_bridge.dart';
 import '../services/battery_optimization.dart';
@@ -17,14 +16,11 @@ import '../services/gps_recorder.dart';
 import '../services/update_checker.dart';
 import '../services/web_update_check.dart';
 import '../widgets/app_update_ui.dart';
-import '../widgets/vehicle_marker.dart';
 import 'about_screen.dart';
 import 'help_screen.dart';
+import 'interface_settings_screen.dart';
 import 'language_picker.dart';
-import 'live_stats_layout_screen.dart';
 import 'route_list_screen.dart';
-import 'stat_icon_settings_screen.dart';
-import 'vehicle_icon_picker_screen.dart';
 
 /// App-bar-style icon that opens [SettingsScreen]. Replaces the old
 /// language-only icon: language is now one entry inside settings, alongside
@@ -57,8 +53,8 @@ class SettingsScreen extends StatelessWidget {
       'de' => l10n.languageGerman,
       _ => l10n.languageTurkish,
     };
-    final vehicleIcon = context.watch<VehicleIconController>().option;
     final satelliteController = context.watch<SatelliteVisibilityController>();
+    final advanced = context.watch<AdvancedModeController>();
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle)),
@@ -109,56 +105,24 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              l10n.settingsInterfaceSection,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.w600,
+          ListTile(
+            leading: const Icon(Icons.palette_outlined),
+            title: Text(l10n.settingsInterfaceSection),
+            subtitle: Text(l10n.settingsInterfaceSubtitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const InterfaceSettingsScreen(),
               ),
             ),
           ),
-          ListTile(
-            leading: SizedBox(
-              width: 40,
-              height: 40,
-              child: Center(
-                child: SizedBox(
-                  width: vehicleMarkerSize(vehicleIcon),
-                  height: vehicleMarkerSize(vehicleIcon),
-                  child: buildVehicleMarker(vehicleIcon),
-                ),
-              ),
-            ),
-            title: Text(l10n.vehicleIconTitle),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const VehicleIconPickerScreen()),
-            ),
-          ),
           const Divider(height: 1),
-          ListTile(
-            leading: Icon(
-              Icons.route,
-              color: context.watch<StatIconSettingsController>().color,
-            ),
-            title: Text(l10n.statIconSettingsTitle),
-            subtitle: Text(l10n.statIconSettingsSubtitle),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const StatIconSettingsScreen()),
-            ),
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.dashboard_customize_outlined),
-            title: Text(l10n.liveStatsLayoutTitle),
-            subtitle: Text(l10n.liveStatsLayoutSubtitle),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LiveStatsLayoutScreen()),
-            ),
+          SwitchListTile(
+            secondary: const Icon(Icons.tune),
+            title: Text(l10n.advancedModeTitle),
+            subtitle: Text(l10n.advancedModeSubtitle),
+            value: advanced.enabled,
+            onChanged: advanced.setEnabled,
           ),
           const Divider(height: 1),
           ListTile(

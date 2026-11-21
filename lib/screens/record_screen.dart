@@ -22,6 +22,7 @@ import '../models/gpx_route.dart';
 import '../models/route_photo.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
+import '../repositories/advanced_mode_controller.dart';
 import '../repositories/daily_drive_backup_controller.dart';
 import '../repositories/live_stats_layout_controller.dart';
 import '../repositories/photo_repository.dart';
@@ -1710,8 +1711,10 @@ class _RecordScreenState extends State<RecordScreen>
     final format = await pickExportFormat(context);
     if (format == null || !mounted) return;
 
+    // Day-scope picker is Advanced-only; otherwise write the full track.
     late final DayExportPlan plan;
-    if (days.length >= 2) {
+    final advanced = context.read<AdvancedModeController>().enabled;
+    if (advanced && days.length >= 2) {
       final chosen = await showDayExportDialog(
         context: context,
         days: days,
@@ -1948,7 +1951,8 @@ class _RecordScreenState extends State<RecordScreen>
                 value: _OverlayMenuAction.importFile,
                 child: Text(l10n.recordOverlayImportMenuItem),
               ),
-              if (!_recorder.isIdle)
+              if (!_recorder.isIdle &&
+                  context.read<AdvancedModeController>().enabled)
                 PopupMenuItem(
                   value: _OverlayMenuAction.importIntoRecording,
                   child: Text(l10n.recordImportIntoRecordingMenuItem),
@@ -2085,7 +2089,8 @@ class _RecordScreenState extends State<RecordScreen>
                           padding: EdgeInsets.only(top: 4),
                           child: SatelliteCountBadge(),
                         ),
-                        if (!recorder.isIdle) ...[
+                        if (!recorder.isIdle &&
+                            context.watch<AdvancedModeController>().enabled) ...[
                           const SizedBox(width: 8),
                           _RoundIconButton(
                             icon: Icons.ios_share,
@@ -2534,7 +2539,8 @@ class _RecordScreenState extends State<RecordScreen>
                       _buildOverlayMenuButton(l10n),
                       const Spacer(),
                       const SatelliteCountBadge(),
-                      if (!recorder.isIdle) ...[
+                      if (!recorder.isIdle &&
+                          context.watch<AdvancedModeController>().enabled) ...[
                         const SizedBox(width: 8),
                         _RoundIconButton(
                           icon: Icons.ios_share,
@@ -2956,13 +2962,14 @@ class _RecordScreenState extends State<RecordScreen>
     _syncLiveDays(_recorder.points);
     final previousFilter = _liveVisibleDayNumbers;
     var keepFocus = false;
+    final advanced = context.read<AdvancedModeController>().enabled;
     showDayDetailSheet(
       context: context,
       day: day,
       days: _liveDays,
       startAtFirstDay: false,
-      onExportDay: _exportLiveDay,
-      onReviseDay: _reviseLiveDay,
+      onExportDay: advanced ? _exportLiveDay : null,
+      onReviseDay: advanced ? _reviseLiveDay : null,
       onAddNote: noteAt == null
           ? null
           : () => unawaited(_addAnnotationAt(noteAt)),

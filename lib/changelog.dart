@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.165 beta',
+    date: '2026-11-21',
+    noteTr:
+        'Ayarlar’da Arayüz alt menüsü (araç ikonu, istatistik ikonları, kayıt '
+        'kartları). Gelişmiş anahtarı: kapalıyken gün bazlı içe/dışa aktarma ve '
+        'revize gizlenir; gün detayı görüntüleme kalır.',
+    noteEn:
+        'Settings Interface submenu (vehicle icon, stat icons, recording '
+        'cards). Advanced switch: when off, day-based import/export/revise are '
+        'hidden; day viewing remains.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.164 beta',
     date: '2026-11-21',
     noteTr:
