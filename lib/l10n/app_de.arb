@@ -141,6 +141,42 @@
   "dayDetailReviseConfirm": "Revidieren",
   "dayDetailReviseNoPoints": "Die Datei hat keine zeitgestempelten Punkte für diesen Tag.",
   "dayDetailReviseSuccess": "Tag revidiert.",
+  "dayDetailReviseSuccessDetailed": "{dayLabel} aktualisiert ({points} Punkte).",
+  "@dayDetailReviseSuccessDetailed": {
+    "placeholders": {
+      "dayLabel": {"type": "String"},
+      "points": {"type": "int"}
+    }
+  },
+  "busyReadingFile": "Datei wird gelesen…",
+  "busyReadingFileNamed": "Lesen: {fileName}",
+  "@busyReadingFileNamed": {"placeholders": {"fileName": {"type": "String"}}},
+  "busyReadingFilesProgress": "Datei wird gelesen ({current}/{total})…",
+  "@busyReadingFilesProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "busyWritingDay": "Tag wird in die Aufzeichnung geschrieben…",
+  "busySavingRoute": "Route wird gespeichert…",
+  "busyMergingRecording": "Wird in die Aufzeichnung übernommen…",
+  "busyPreparingExport": "Export wird vorbereitet…",
+  "busyWritingExport": "Dateien werden geschrieben…",
+  "busyWritingExportProgress": "Datei wird geschrieben ({current}/{total})…",
+  "@busyWritingExportProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "busyBackupDaysProgress": "Backup wird geschrieben ({current}/{total})…",
+  "@busyBackupDaysProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
   "dayDetailPreviousDay": "Vorheriger Tag",
   "dayDetailNextDay": "Nächster Tag",
   "dayDetailTapMapFullscreen": "Große Karte",
