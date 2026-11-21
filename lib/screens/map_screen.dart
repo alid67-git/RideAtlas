@@ -18,6 +18,7 @@ import '../models/parsed_track.dart';
 import '../models/route_photo.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
+import '../repositories/advanced_mode_controller.dart';
 import '../repositories/daily_drive_backup_controller.dart';
 import '../repositories/photo_repository.dart';
 import '../repositories/route_repository.dart';
@@ -395,13 +396,14 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     }
     final previousFilter = _visibleDayNumbers;
     var keepFocus = false;
+    final advanced = context.read<AdvancedModeController>().enabled;
     showDayDetailSheet(
       context: context,
       day: day,
       days: _days,
       startAtFirstDay: false,
-      onExportDay: _exportSavedRouteDay,
-      onReviseDay: _reviseSavedRouteDay,
+      onExportDay: advanced ? _exportSavedRouteDay : null,
+      onReviseDay: advanced ? _reviseSavedRouteDay : null,
       onDayChanged: (d) {
         setState(() {
           _visibleDayNumbers = {d.dayNumber};
@@ -949,9 +951,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
 
     // What / where first — file names are RideAtlas_yyyy-MM-dd; no second
     // “rename” dialog (that used to feel redundant after day selection).
+    // Day-scope picker is Advanced-only.
     final days = splitIntoDays(points);
+    final advanced = context.read<AdvancedModeController>().enabled;
     late final DayExportPlan plan;
-    if (days.length >= 2) {
+    if (advanced && days.length >= 2) {
       final chosen = await showDayExportDialog(context: context, days: days);
       if (chosen == null || !mounted) return;
       plan = chosen;
