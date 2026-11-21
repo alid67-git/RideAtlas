@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.161 beta',
+    date: '2026-11-21',
+    noteTr:
+        'Kayıt adlandırılıp uygulamaya yazılınca hemen “Nereye kaydedilsin?” '
+        'gelir (klasör / paylaşım / sadece uygulama); galeri taraması artık '
+        'bunu gizlemez. Klasör seçilince sistem klasör seçici açılır.',
+    noteEn:
+        'Right after naming and saving into the app, “Where should it be '
+        'saved?” appears (folder / share / app only); gallery scan no longer '
+        'hides it. Folder still opens the system picker.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.159 beta',
     date: '2026-11-21',
     noteTr:

@@ -1509,19 +1509,21 @@ class _RecordScreenState extends State<RecordScreen>
     }
     if (!mounted) return;
     setState(() => _saving = false);
-    if (recordingStart != null) {
-      await _offerGalleryMedia(route, recordingStart, points);
-      if (!mounted) return;
-    }
 
-    // Always ask where to also write the GPX outside the app (folder /
-    // share / skip) — riders expect a destination when they tap Save.
+    // Ask where/how to also write outside the app immediately after naming
+    // — before gallery scan, which can take a long time on multi-day rides
+    // and made riders think Save was already finished.
     if (mounted) {
       await _offerExternalSaveAfterRecording(
         routeName: name,
         points: points,
         waypoints: waypoints,
       );
+      if (!mounted) return;
+    }
+
+    if (recordingStart != null) {
+      await _offerGalleryMedia(route, recordingStart, points);
       if (!mounted) return;
     }
 
@@ -1639,40 +1641,72 @@ class _RecordScreenState extends State<RecordScreen>
   }) async {
     final l10n = AppLocalizations.of(context)!;
     final days = splitIntoDays(points);
+    final folderOk = BackupFolderBridge.isSupported;
 
     final destination = await showDialog<DayExportDestination?>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.recordingExternalSaveTitle),
-        content: Text(
-          days.length >= 2
-              ? l10n.recordingExternalSaveMultiDayMessage(days.length)
-              : l10n.recordingExternalSaveMessage,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, null),
-            child: Text(l10n.recordingExternalSaveAppOnly),
+      barrierDismissible: false,
+      builder: (context) {
+        var selected = folderOk
+            ? DayExportDestination.folder
+            : DayExportDestination.share;
+        return StatefulBuilder(
+          builder: (context, setLocal) => AlertDialog(
+            title: Text(l10n.recordingExternalSaveTitle),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    days.length >= 2
+                        ? l10n.recordingExternalSaveMultiDayMessage(days.length)
+                        : l10n.recordingExternalSaveMessage,
+                  ),
+                  const SizedBox(height: 12),
+                  RadioGroup<DayExportDestination>(
+                    groupValue: selected,
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setLocal(() => selected = v);
+                    },
+                    child: Column(
+                      children: [
+                        if (folderOk)
+                          RadioListTile<DayExportDestination>(
+                            value: DayExportDestination.folder,
+                            title: Text(l10n.dayExportDestinationFolder),
+                            subtitle:
+                                Text(l10n.dayExportDestinationFolderHint),
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                        RadioListTile<DayExportDestination>(
+                          value: DayExportDestination.share,
+                          title: Text(l10n.dayExportDestinationShare),
+                          subtitle: Text(l10n.dayExportDestinationShareHint),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, null),
+                child: Text(l10n.recordingExternalSaveAppOnly),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, selected),
+                child: Text(l10n.dayExportContinue),
+              ),
+            ],
           ),
-          if (BackupFolderBridge.isSupported) ...[
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(context, DayExportDestination.share),
-              child: Text(l10n.dayExportDestinationShare),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, DayExportDestination.folder),
-              child: Text(l10n.dayExportDestinationFolder),
-            ),
-          ] else
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, DayExportDestination.share),
-              child: Text(l10n.dayExportDestinationShare),
-            ),
-        ],
-      ),
+        );
+      },
     );
     // null = "app only" or dismissed
     if (destination == null || !mounted) return;
