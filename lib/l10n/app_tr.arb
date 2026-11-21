@@ -156,6 +156,9 @@
   "dayDetailReviseConfirm": "Revize et",
   "dayDetailReviseNoPoints": "Dosyada bu güne yerleştirilecek zaman damgalı nokta yok.",
   "dayDetailReviseSuccess": "Gün revize edildi.",
+  "dayDetailStatsLayoutTitle": "Gün detay kartları",
+  "dayDetailStatsLayoutHint": "Uzun basıp sürükleyerek sırala. Anahtarla göster/gizle.",
+  "dayDetailStatsReorderHint": "Kartı uzun basıp başka kartın üzerine bırakarak yer değiştir.",
   "dayDetailReviseSuccessDetailed": "{dayLabel} güncellendi ({points} nokta).",
   "@dayDetailReviseSuccessDetailed": {
     "placeholders": {
