@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.162 beta',
+    date: '2026-11-21',
+    noteTr:
+        '“Kayıt kaydedildi” onayında artık kayıt adı, uygulamada nereye '
+        'eklendiği (Sürüşler) ve dışarıya klasör/paylaş sonucu ayrı satırlarda '
+        'görünür.',
+    noteEn:
+        'The “Recording saved” confirm now lists the recording name, that it '
+        'was added to Rides, and any folder/share export result on separate '
+        'lines.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.161 beta',
     date: '2026-11-21',
     noteTr:
