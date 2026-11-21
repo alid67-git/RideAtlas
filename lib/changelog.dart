@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.159 beta',
+    date: '2026-11-21',
+    noteTr:
+        'Çok günlük kaydı bitirirken varsayılan isim yalnızca ilk gün değil; '
+        'ilk–son gün aralığıdır (ör. Kayıt 4-21 Kas 2026). Tek gün hâlâ '
+        'saatli kalır.',
+    noteEn:
+        'Finishing a multi-day recording suggests a first–last date span '
+        '(e.g. Recording 4-21 Nov 2026), not only the start day. Single-day '
+        'names still include the start time.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.158 beta',
     date: '2026-11-21',
     noteTr:

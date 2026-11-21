@@ -43,6 +43,7 @@ import '../services/map_camera_fit.dart';
 import '../services/track_heading.dart';
 import '../services/track_display_loader.dart';
 import '../services/track_display_simplify.dart';
+import '../services/recording_name.dart';
 import '../services/run_day_export.dart' show exportSingleCalendarDay;
 import '../services/track_export_actions.dart';
 import '../services/track_io.dart';
@@ -1411,22 +1412,15 @@ class _RecordScreenState extends State<RecordScreen>
   /// resume recording (the ride continues cumulatively) or reset to zero
   /// (silently - the data was just saved, nothing is lost). Dismissing the
   /// dialog stays paused.
-  /// First GPS timestamp (or recorder start) — never wall-clock "now", so a
-  /// late save still names the ride after the day that was actually ridden.
-  DateTime _recordingNameInstant() {
-    for (final p in _recorder.points) {
-      final t = p.time;
-      if (t != null) return t.toLocal();
-    }
-    return _recorder.startedAt?.toLocal() ?? DateTime.now();
-  }
-
+  /// Default library name: single day keeps start time; multi-day uses
+  /// first–last calendar span (e.g. `Kayıt 4-21 Kas 2026`).
   String _defaultRecordingName(AppLocalizations l10n) {
     return l10n.recordingDefaultName(
-      DateFormat(
-        'd MMM yyyy HH:mm',
-        Localizations.localeOf(context).languageCode,
-      ).format(_recordingNameInstant()),
+      formatRecordingDateSpan(
+        points: _recorder.points,
+        locale: Localizations.localeOf(context).languageCode,
+        fallbackStart: _recorder.startedAt,
+      ),
     );
   }
 
