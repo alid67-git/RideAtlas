@@ -151,9 +151,8 @@ Future<void> _showDayDetailStatsLayoutSheet(BuildContext context) {
                     child: ReorderableListView.builder(
                       shrinkWrap: true,
                       itemCount: layout.order.length,
-                      onReorder: (oldIndex, newIndex) {
+                      onReorderItem: (oldIndex, newIndex) {
                         final next = List.of(layout.order);
-                        if (newIndex > oldIndex) newIndex -= 1;
                         final item = next.removeAt(oldIndex);
                         next.insert(newIndex, item);
                         unawaited(layout.setOrder(next));
@@ -162,7 +161,10 @@ Future<void> _showDayDetailStatsLayoutSheet(BuildContext context) {
                         final key = layout.order[index];
                         return SwitchListTile(
                           key: ValueKey(key.name),
-                          secondary: Icon(dayDetailStatIcon(key)),
+                          secondary: ReorderableDragStartListener(
+                            index: index,
+                            child: Icon(dayDetailStatIcon(key)),
+                          ),
                           title: Text(dayDetailStatLabel(key, l10n)),
                           value: layout.isVisible(key),
                           onChanged: (v) =>
