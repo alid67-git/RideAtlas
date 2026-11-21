@@ -141,6 +141,9 @@
   "dayDetailReviseConfirm": "Revise",
   "dayDetailReviseNoPoints": "That file has no timed points that can replace this day.",
   "dayDetailReviseSuccess": "Day revised.",
+  "dayDetailStatsLayoutTitle": "Day detail cards",
+  "dayDetailStatsLayoutHint": "Long-press and drag to reorder. Use the switch to show/hide.",
+  "dayDetailStatsReorderHint": "Long-press a card and drop it on another to swap.",
   "dayDetailReviseSuccessDetailed": "{dayLabel} updated ({points} points).",
   "@dayDetailReviseSuccessDetailed": {
     "placeholders": {

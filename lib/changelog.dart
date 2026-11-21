@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.164 beta',
+    date: '2026-11-21',
+    noteTr:
+        'Çok günlük gün detayında ortalama ve maksimum hız kartları eklendi. '
+        'Kartlar inceldi; uzun basıp sürükleyerek yer değiştirilebilir. '
+        'Ayar (dişli) menüsünden tırmanış/iniş vb. göster/gizle.',
+    noteEn:
+        'Multi-day day detail adds average and max speed cards. Tiles are '
+        'thinner and long-press drag-reorderable. A tune menu shows/hides '
+        'climb/descent and other cards.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.163 beta',
     date: '2026-11-21',
     noteTr:

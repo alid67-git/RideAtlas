@@ -141,6 +141,9 @@
   "dayDetailReviseConfirm": "Revidieren",
   "dayDetailReviseNoPoints": "Die Datei hat keine zeitgestempelten Punkte für diesen Tag.",
   "dayDetailReviseSuccess": "Tag revidiert.",
+  "dayDetailStatsLayoutTitle": "Tagesdetail-Karten",
+  "dayDetailStatsLayoutHint": "Zum Sortieren lange drücken und ziehen. Schalter zum Ein-/Ausblenden.",
+  "dayDetailStatsReorderHint": "Karte lange drücken und auf eine andere legen zum Tauschen.",
   "dayDetailReviseSuccessDetailed": "{dayLabel} aktualisiert ({points} Punkte).",
   "@dayDetailReviseSuccessDetailed": {
     "placeholders": {

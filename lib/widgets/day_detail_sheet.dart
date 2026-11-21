@@ -5,10 +5,13 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../models/base_map_style.dart';
+import '../repositories/day_detail_stats_layout_controller.dart';
 import '../services/daily_analysis.dart';
+import '../services/gpx_parser.dart';
 import '../services/map_camera_fit.dart';
 import '../services/track_display_simplify.dart';
 
@@ -83,50 +86,155 @@ String _formatDuration(AppLocalizations l10n, Duration d) {
   return l10n.durationSeconds(s);
 }
 
-List<({IconData icon, String label, String value})> _dayStatRows(
+Map<DayDetailStatKey, String> _dayStatValues(
   AppLocalizations l10n,
   DayStats day,
 ) {
-  return [
-    (
-      icon: Icons.schedule,
-      label: l10n.ridingDuration,
-      value: day.ridingDuration == null
-          ? '—'
-          : _formatDuration(l10n, day.ridingDuration!),
-    ),
-    (
-      icon: Icons.hotel,
-      label: l10n.rest,
-      value: day.restDuration == Duration.zero
-          ? '—'
-          : _formatDuration(l10n, day.restDuration),
-    ),
-    (
-      icon: Icons.trending_up,
-      label: l10n.climb,
-      value: '${day.elevationGainM.round()} m',
-    ),
-    (
-      icon: Icons.trending_down,
-      label: l10n.descent,
-      value: '${day.elevationLossM.round()} m',
-    ),
-    (
-      icon: Icons.arrow_upward,
-      label: l10n.maxAltitude,
-      value: day.maxElevation == null
-          ? '—'
-          : '${day.maxElevation!.round()} m',
-    ),
-    (
-      icon: Icons.arrow_downward,
-      label: l10n.minAltitude,
-      value: day.minElevation == null
-          ? '—'
-          : '${day.minElevation!.round()} m',
-    ),
-  ];
+  final speed = buildSpeedStats(day.points);
+  return {
+    DayDetailStatKey.ridingDuration: day.ridingDuration == null
+        ? '—'
+        : _formatDuration(l10n, day.ridingDuration!),
+    DayDetailStatKey.rest: day.restDuration == Duration.zero
+        ? '—'
+        : _formatDuration(l10n, day.restDuration),
+    DayDetailStatKey.averageSpeed: speed.averageMovingKmh == null
+        ? '—'
+        : '${speed.averageMovingKmh!.toStringAsFixed(1)} km/h',
+    DayDetailStatKey.maxSpeed: speed.maxKmh == null
+        ? '—'
+        : '${speed.maxKmh!.toStringAsFixed(1)} km/h',
+    DayDetailStatKey.climb: '${day.elevationGainM.round()} m',
+    DayDetailStatKey.descent: '${day.elevationLossM.round()} m',
+    DayDetailStatKey.maxAltitude: day.maxElevation == null
+        ? '—'
+        : '${day.maxElevation!.round()} m',
+    DayDetailStatKey.minAltitude: day.minElevation == null
+        ? '—'
+        : '${day.minElevation!.round()} m',
+  };
+}
+
+Future<void> _showDayDetailStatsLayoutSheet(BuildContext context) {
+  final l10n = AppLocalizations.of(context)!;
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) {
+      return Consumer<DayDetailStatsLayoutController>(
+        builder: (context, layout, _) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    l10n.dayDetailStatsLayoutTitle,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.dayDetailStatsLayoutHint,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(context).height * 0.5,
+                    ),
+                    child: ReorderableListView.builder(
+                      shrinkWrap: true,
+                      itemCount: layout.order.length,
+                      onReorder: (oldIndex, newIndex) {
+                        final next = List.of(layout.order);
+                        if (newIndex > oldIndex) newIndex -= 1;
+                        final item = next.removeAt(oldIndex);
+                        next.insert(newIndex, item);
+                        unawaited(layout.setOrder(next));
+                      },
+                      itemBuilder: (context, index) {
+                        final key = layout.order[index];
+                        return SwitchListTile(
+                          key: ValueKey(key.name),
+                          secondary: Icon(dayDetailStatIcon(key)),
+                          title: Text(dayDetailStatLabel(key, l10n)),
+                          value: layout.isVisible(key),
+                          onChanged: (v) =>
+                              unawaited(layout.setVisible(key, v)),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+Widget _dayStatGrid({
+  required BuildContext context,
+  required DayStats day,
+  required DayDetailStatsLayoutController layout,
+  bool compact = false,
+}) {
+  final l10n = AppLocalizations.of(context)!;
+  final theme = Theme.of(context);
+  final values = _dayStatValues(l10n, day);
+  final keys = layout.visibleOrder;
+  if (keys.isEmpty) return const SizedBox.shrink();
+
+  return Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (var i = 0; i < keys.length; i += 2)
+        Padding(
+          padding: EdgeInsets.only(bottom: i + 2 < keys.length ? 6 : 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: _DraggableDayStatTile(
+                  statKey: keys[i],
+                  value: values[keys[i]] ?? '—',
+                  layout: layout,
+                  accent: day.color,
+                  compact: compact,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: i + 1 < keys.length
+                    ? _DraggableDayStatTile(
+                        statKey: keys[i + 1],
+                        value: values[keys[i + 1]] ?? '—',
+                        layout: layout,
+                        accent: day.color,
+                        compact: compact,
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+      const SizedBox(height: 4),
+      Text(
+        l10n.dayDetailStatsReorderHint,
+        textAlign: TextAlign.center,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    ],
+  );
 }
 
 Future<BaseMapStyle> _loadMapStyle() async {
@@ -495,9 +603,9 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
     final dateFmt = DateFormat('d MMMM yyyy, EEEE', locale);
     final bottom = MediaQuery.paddingOf(context).bottom;
     final day = _day;
-    final stats = _dayStatRows(l10n, day);
     final showNote = widget.onAddNote != null && _index == _openedWithNoteIndex;
     final multi = widget.days.length > 1;
+    final layout = context.watch<DayDetailStatsLayoutController>();
 
     return SafeArea(
       top: false,
@@ -518,6 +626,11 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
                     icon: const Icon(Icons.close),
                   ),
                   const Spacer(),
+                  IconButton(
+                    tooltip: l10n.dayDetailStatsLayoutTitle,
+                    onPressed: () => _showDayDetailStatsLayoutSheet(context),
+                    icon: const Icon(Icons.tune),
+                  ),
                   if (widget.onExportDay != null)
                     IconButton(
                       tooltip: l10n.dayExportThisDayTooltip,
@@ -601,21 +714,7 @@ class _DayDetailSheetState extends State<DayDetailSheet> {
                 ),
               ),
               const SizedBox(height: 12),
-              for (var i = 0; i < stats.length; i += 2)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      Expanded(child: _StatTile(stat: stats[i])),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: i + 1 < stats.length
-                            ? _StatTile(stat: stats[i + 1])
-                            : const SizedBox.shrink(),
-                      ),
-                    ],
-                  ),
-                ),
+              _dayStatGrid(context: context, day: day, layout: layout),
               if (day.countries.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(l10n.tabRoute, style: theme.textTheme.titleSmall),
@@ -761,8 +860,8 @@ class _DayTrackMapPageState extends State<DayTrackMapPage> {
     final raw = [for (final p in day.points) p.latLng];
     final line = latLngsForMapDisplay(raw);
     final center = dayLabelAnchor(day);
-    final stats = _dayStatRows(l10n, day);
     final multi = widget.days.length > 1;
+    final layout = context.watch<DayDetailStatsLayoutController>();
 
     return Scaffold(
       body: Stack(
@@ -898,27 +997,26 @@ class _DayTrackMapPageState extends State<DayTrackMapPage> {
               borderRadius: BorderRadius.circular(16),
               color: theme.colorScheme.surface.withValues(alpha: 0.94),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    for (var i = 0; i < stats.length; i += 2)
-                      Padding(
-                        padding: EdgeInsets.only(
-                          bottom: i + 2 < stats.length ? 8 : 0,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(child: _StatTile(stat: stats[i])),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: i + 1 < stats.length
-                                  ? _StatTile(stat: stats[i + 1])
-                                  : const SizedBox.shrink(),
-                            ),
-                          ],
-                        ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        tooltip: l10n.dayDetailStatsLayoutTitle,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () =>
+                            _showDayDetailStatsLayoutSheet(context),
+                        icon: const Icon(Icons.tune, size: 20),
                       ),
+                    ),
+                    _dayStatGrid(
+                      context: context,
+                      day: day,
+                      layout: layout,
+                      compact: true,
+                    ),
                   ],
                 ),
               ),
@@ -930,39 +1028,112 @@ class _DayTrackMapPageState extends State<DayTrackMapPage> {
   }
 }
 
-class _StatTile extends StatelessWidget {
-  const _StatTile({required this.stat});
+class _DraggableDayStatTile extends StatelessWidget {
+  const _DraggableDayStatTile({
+    required this.statKey,
+    required this.value,
+    required this.layout,
+    required this.accent,
+    this.compact = false,
+  });
 
-  final ({IconData icon, String label, String value}) stat;
+  final DayDetailStatKey statKey;
+  final String value;
+  final DayDetailStatsLayoutController layout;
+  final Color accent;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final tile = _DayStatTile(
+      icon: dayDetailStatIcon(statKey),
+      label: dayDetailStatLabel(statKey, l10n),
+      value: value,
+      compact: compact,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return LongPressDraggable<DayDetailStatKey>(
+          data: statKey,
+          delay: const Duration(milliseconds: 350),
+          feedback: SizedBox(
+            width: constraints.maxWidth,
+            height: constraints.maxHeight,
+            child: Material(
+              color: Colors.transparent,
+              child: Opacity(opacity: 0.92, child: tile),
+            ),
+          ),
+          childWhenDragging: Opacity(opacity: 0.25, child: tile),
+          child: DragTarget<DayDetailStatKey>(
+            onWillAcceptWithDetails: (details) => details.data != statKey,
+            onAcceptWithDetails: (details) =>
+                unawaited(layout.swap(details.data, statKey)),
+            builder: (context, candidateData, rejectedData) {
+              if (candidateData.isEmpty) return tile;
+              return DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: accent, width: 2),
+                ),
+                child: tile,
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DayStatTile extends StatelessWidget {
+  const _DayStatTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.compact = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 12,
+        vertical: compact ? 6 : 8,
+      ),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          Icon(stat.icon, size: 20, color: theme.colorScheme.primary),
+          Icon(icon, size: compact ? 18 : 20, color: theme.colorScheme.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  stat.label,
-                  style: theme.textTheme.bodySmall,
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  stat.value,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  value,
+                  style: (compact
+                          ? theme.textTheme.titleSmall
+                          : theme.textTheme.titleSmall)
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ],
             ),
