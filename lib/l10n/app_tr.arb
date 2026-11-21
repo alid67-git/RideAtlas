@@ -156,6 +156,42 @@
   "dayDetailReviseConfirm": "Revize et",
   "dayDetailReviseNoPoints": "Dosyada bu güne yerleştirilecek zaman damgalı nokta yok.",
   "dayDetailReviseSuccess": "Gün revize edildi.",
+  "dayDetailReviseSuccessDetailed": "{dayLabel} güncellendi ({points} nokta).",
+  "@dayDetailReviseSuccessDetailed": {
+    "placeholders": {
+      "dayLabel": {"type": "String"},
+      "points": {"type": "int"}
+    }
+  },
+  "busyReadingFile": "Dosya okunuyor…",
+  "busyReadingFileNamed": "Okunuyor: {fileName}",
+  "@busyReadingFileNamed": {"placeholders": {"fileName": {"type": "String"}}},
+  "busyReadingFilesProgress": "Dosya okunuyor ({current}/{total})…",
+  "@busyReadingFilesProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "busyWritingDay": "Gün kayda yazılıyor…",
+  "busySavingRoute": "Rota kaydediliyor…",
+  "busyMergingRecording": "Kayıta birleştiriliyor…",
+  "busyPreparingExport": "Dışa aktarma hazırlanıyor…",
+  "busyWritingExport": "Dosyalar yazılıyor…",
+  "busyWritingExportProgress": "Dosya yazılıyor ({current}/{total})…",
+  "@busyWritingExportProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "busyBackupDaysProgress": "Yedek yazılıyor ({current}/{total})…",
+  "@busyBackupDaysProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
   "dayDetailPreviousDay": "Önceki gün",
   "dayDetailNextDay": "Sonraki gün",
   "dayDetailTapMapFullscreen": "Büyük harita",

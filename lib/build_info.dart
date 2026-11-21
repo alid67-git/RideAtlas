@@ -1,13 +1,13 @@
 /// Bumped by hand on every push so the running build can be eyeballed on
 /// screen (Chrome tabs / dev servers can otherwise silently serve stale JS).
-const String kAppBuildLabel = 'v1.4.161 beta';
+const String kAppBuildLabel = 'v1.4.163 beta';
 
 /// Shown once, in a dialog, the first time this build label is seen.
 const String kAppBuildNoteTr =
-    'Kayıt kaydedilince hemen “Nereye?” sorulur (klasör / paylaş); galeri taramasından önce.';
+    'Gün revize / kayda ekle / dışa aktarmada “okunuyor / yazılıyor” ilerleme mesajı görünür.';
 
 const String kAppBuildNoteEn =
-    'After saving a recording, “Where?” is asked right away (folder / share), before gallery scan.';
+    'Day revise / import-into-recording / export show “reading / writing” progress.';
 
 /// Turkish when [languageCode] is `tr`, otherwise English (including `de`).
 String localizedBuildNote(String languageCode) =>

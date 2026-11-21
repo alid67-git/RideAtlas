@@ -141,6 +141,42 @@
   "dayDetailReviseConfirm": "Revise",
   "dayDetailReviseNoPoints": "That file has no timed points that can replace this day.",
   "dayDetailReviseSuccess": "Day revised.",
+  "dayDetailReviseSuccessDetailed": "{dayLabel} updated ({points} points).",
+  "@dayDetailReviseSuccessDetailed": {
+    "placeholders": {
+      "dayLabel": {"type": "String"},
+      "points": {"type": "int"}
+    }
+  },
+  "busyReadingFile": "Reading file…",
+  "busyReadingFileNamed": "Reading: {fileName}",
+  "@busyReadingFileNamed": {"placeholders": {"fileName": {"type": "String"}}},
+  "busyReadingFilesProgress": "Reading file ({current}/{total})…",
+  "@busyReadingFilesProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "busyWritingDay": "Writing day into the recording…",
+  "busySavingRoute": "Saving route…",
+  "busyMergingRecording": "Merging into the recording…",
+  "busyPreparingExport": "Preparing export…",
+  "busyWritingExport": "Writing files…",
+  "busyWritingExportProgress": "Writing file ({current}/{total})…",
+  "@busyWritingExportProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "busyBackupDaysProgress": "Backing up ({current}/{total})…",
+  "@busyBackupDaysProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
   "dayDetailPreviousDay": "Previous day",
   "dayDetailNextDay": "Next day",
   "dayDetailTapMapFullscreen": "Full map",

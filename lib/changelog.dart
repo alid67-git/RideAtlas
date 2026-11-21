@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.163 beta',
+    date: '2026-11-21',
+    noteTr:
+        'Gün revize, kayda GPX ekleme ve dışa aktarmada ilerleme diyaloğu: '
+        'dosya okunuyor (N/M), gün yazılıyor, birleştiriliyor, dosya yazılıyor. '
+        'Bittiğinde gün adı + nokta sayısı snackbar’da görünür.',
+    noteEn:
+        'Day revise, import-into-recording, and export show a progress dialog: '
+        'reading file (N/M), writing day, merging, writing files. Success '
+        'snackbar includes day label and point count.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.161 beta',
     date: '2026-11-21',
     noteTr:

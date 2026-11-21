@@ -29,10 +29,14 @@ import '../services/live_recording_merge.dart';
 import '../services/map_camera_fit.dart';
 import '../services/route_geography.dart';
 import '../services/run_day_export.dart'
-    show exportSingleCalendarDay, pickExportDestination;
+    show
+        exportSingleCalendarDay,
+        pickExportDestination,
+        pickExportFormat,
+        runPreparedDayExport;
 import '../services/track_display_simplify.dart';
-import '../services/track_export_actions.dart';
 import '../services/track_io.dart';
+import '../widgets/busy_progress_dialog.dart';
 import '../widgets/day_detail_sheet.dart';
 import '../widgets/day_export_dialog.dart';
 import '../widgets/recording_indicator.dart';
@@ -463,33 +467,45 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       );
       return false;
     }
-    final bytes = await readPickedTrackBytes(file);
-    if (bytes == null) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.fileNotReadable)),
-      );
-      return false;
-    }
 
     late final List<TrackPoint> incoming;
+    final readBusy = await showBusyProgress(
+      context,
+      message: l10n.busyReadingFileNamed(file.name),
+    );
     try {
-      final xml = decodeTrackBytes(bytes, fileName: file.name);
-      incoming = parseTrackXml(xml).points;
-    } on FormatException catch (e) {
-      if (mounted) {
+      final bytes = await readPickedTrackBytes(file);
+      if (bytes == null) {
+        await readBusy.close();
+        if (!mounted) return false;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(importFormatErrorMessage(l10n, e))),
+          SnackBar(content: Text(l10n.fileNotReadable)),
         );
+        return false;
       }
-      return false;
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
-        );
+      try {
+        final xml = decodeTrackBytes(bytes, fileName: file.name);
+        await Future<void>.delayed(Duration.zero);
+        incoming = parseTrackXml(xml).points;
+      } on FormatException catch (e) {
+        await readBusy.close();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(importFormatErrorMessage(l10n, e))),
+          );
+        }
+        return false;
+      } catch (e) {
+        await readBusy.close();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
+          );
+        }
+        return false;
       }
-      return false;
+    } finally {
+      await readBusy.close();
     }
     if (!mounted) return false;
 
@@ -515,39 +531,49 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     if (!ok || !mounted) return false;
 
     try {
-      final repo = context.read<RouteRepository>();
-      final oldXml = await repo.readTrackContent(route);
-      final oldParsed = parseTrackXml(oldXml);
-      final xml = exportTrack(
-        name: route.name,
-        points: preview.points,
-        waypoints: oldParsed.waypoints,
-        format: TrackFormat.gpx,
+      await runBusyProgress(
+        context: context,
+        message: l10n.busySavingRoute,
+        action: (_) async {
+          final repo = context.read<RouteRepository>();
+          final oldXml = await repo.readTrackContent(route);
+          final oldParsed = parseTrackXml(oldXml);
+          final xml = exportTrack(
+            name: route.name,
+            points: preview.points,
+            waypoints: oldParsed.waypoints,
+            format: TrackFormat.gpx,
+          );
+          final metadata = buildRouteMetadata(
+            id: route.id,
+            name: route.name,
+            importedAt: route.importedAt,
+            parsed: ParsedTrack(
+              points: preview.points,
+              waypoints: oldParsed.waypoints,
+              suggestedName: null,
+            ),
+            batteryStartPercent: route.batteryStartPercent,
+            batteryEndPercent: route.batteryEndPercent,
+          );
+          await repo.updateContent(
+            id: route.id,
+            xml: xml,
+            metadata: metadata,
+          );
+          if (!mounted) return;
+          await context
+              .read<DailyDriveBackupController>()
+              .forgetBackedUpDays(preview.replacedDays);
+        },
       );
-      final metadata = buildRouteMetadata(
-        id: route.id,
-        name: route.name,
-        importedAt: route.importedAt,
-        parsed: ParsedTrack(
-          points: preview.points,
-          waypoints: oldParsed.waypoints,
-          suggestedName: null,
-        ),
-        batteryStartPercent: route.batteryStartPercent,
-        batteryEndPercent: route.batteryEndPercent,
-      );
-      await repo.updateContent(
-        id: route.id,
-        xml: xml,
-        metadata: metadata,
-      );
-      if (!mounted) return true;
-      await context
-          .read<DailyDriveBackupController>()
-          .forgetBackedUpDays(preview.replacedDays);
       if (!mounted) return true;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.dayDetailReviseSuccess)),
+        SnackBar(
+          content: Text(
+            l10n.dayDetailReviseSuccessDetailed(dayLabel, incoming.length),
+          ),
+        ),
       );
       // Repo listener reloads the map; force a load if snapshot is stale.
       unawaited(_load());
@@ -920,7 +946,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   Future<void> _share(GpxRoute route) async {
     final points = _points;
     if (points == null) return;
-    final l10n = AppLocalizations.of(context)!;
 
     // What / where first — file names are RideAtlas_yyyy-MM-dd; no second
     // “rename” dialog (that used to feel redundant after day selection).
@@ -940,46 +965,17 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       );
     }
 
-    final format = await showDialog<TrackFormat>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: Text(l10n.exportFormatQuestion),
-        children: [
-          for (final f in TrackFormat.values)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, f),
-              child: Text(f.label),
-            ),
-        ],
-      ),
-    );
+    final format = await pickExportFormat(context);
     if (format == null || !mounted) return;
 
-    final files = preparePlanExportFiles(
+    await runPreparedDayExport(
+      context: context,
       plan: plan,
       routeName: route.name,
       points: points,
       waypoints: _waypoints ?? const [],
       format: format,
     );
-    if (files.isEmpty || !mounted) return;
-
-    // Always pick the folder — do not silently reuse günlük yedek URI.
-    final result = await deliverExportFiles(
-      files: files,
-      destination: plan.destination,
-      subject: route.name,
-    );
-    if (!mounted) return;
-    if (result == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.dayExportFailed)),
-      );
-    } else if (plan.destination == DayExportDestination.folder) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.dayExportSavedToFolder(result))),
-      );
-    }
   }
 
   /// A single entry point for adding either photos or videos: picking from
