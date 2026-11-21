@@ -1513,8 +1513,9 @@ class _RecordScreenState extends State<RecordScreen>
     // Ask where/how to also write outside the app immediately after naming
     // — before gallery scan, which can take a long time on multi-day rides
     // and made riders think Save was already finished.
+    var externalSummary = l10n.recordingSavedExternalAppOnly;
     if (mounted) {
-      await _offerExternalSaveAfterRecording(
+      externalSummary = await _offerExternalSaveAfterRecording(
         routeName: name,
         points: points,
         waypoints: waypoints,
@@ -1529,22 +1530,49 @@ class _RecordScreenState extends State<RecordScreen>
 
     final resume = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.recordingSavedTitle),
-        content: Text(l10n.recordingSavedMessage),
-        actions: [
-          TextButton(
-            // Just saved, so this resets without asking (see
-            // _resetRecording - it only confirms for unsaved data).
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.resetRecordingButton),
+      builder: (context) {
+        final theme = Theme.of(context);
+        final labelStyle = theme.textTheme.labelMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        );
+        final valueStyle = theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+        );
+        return AlertDialog(
+          title: Text(l10n.recordingSavedTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(l10n.recordingSavedNameLabel, style: labelStyle),
+              const SizedBox(height: 2),
+              Text(name, style: valueStyle),
+              const SizedBox(height: 12),
+              Text(l10n.recordingSavedInAppLabel, style: labelStyle),
+              const SizedBox(height: 2),
+              Text(l10n.recordingSavedInAppValue, style: valueStyle),
+              const SizedBox(height: 12),
+              Text(l10n.recordingSavedExternalLabel, style: labelStyle),
+              const SizedBox(height: 2),
+              Text(externalSummary, style: valueStyle),
+              const SizedBox(height: 12),
+              Text(l10n.recordingSavedContinueHint),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.resumeRecordingButton),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              // Just saved, so this resets without asking (see
+              // _resetRecording - it only confirms for unsaved data).
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.resetRecordingButton),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l10n.resumeRecordingButton),
+            ),
+          ],
+        );
+      },
     );
     if (!mounted) return;
     if (resume == true) {
@@ -1634,7 +1662,9 @@ class _RecordScreenState extends State<RecordScreen>
   /// After the ride is in the app library: ask where to write the GPX
   /// file(s) externally. Folder choice always opens the system picker —
   /// never silently reuse the daily-backup URI (riders expect to pick).
-  Future<void> _offerExternalSaveAfterRecording({
+  ///
+  /// Returns a short localized summary for the final “saved” dialog.
+  Future<String> _offerExternalSaveAfterRecording({
     required String routeName,
     required List<TrackPoint> points,
     required List<Waypoint> waypoints,
@@ -1708,8 +1738,10 @@ class _RecordScreenState extends State<RecordScreen>
         );
       },
     );
-    // null = "app only" or dismissed
-    if (destination == null || !mounted) return;
+    // null = "app only"
+    if (destination == null || !mounted) {
+      return l10n.recordingSavedExternalAppOnly;
+    }
 
     final format = await showDialog<TrackFormat>(
       context: context,
@@ -1724,7 +1756,9 @@ class _RecordScreenState extends State<RecordScreen>
         ],
       ),
     );
-    if (format == null || !mounted) return;
+    if (format == null || !mounted) {
+      return l10n.recordingSavedExternalAppOnly;
+    }
 
     late final DayExportPlan plan;
     if (days.length >= 2) {
@@ -1734,7 +1768,9 @@ class _RecordScreenState extends State<RecordScreen>
         // Destination already chosen above — dialog only picks scope/days.
         fixedDestination: destination,
       );
-      if (chosen == null || !mounted) return;
+      if (chosen == null || !mounted) {
+        return l10n.recordingSavedExternalAppOnly;
+      }
       plan = chosen;
     } else {
       plan = DayExportPlan(
@@ -1751,7 +1787,9 @@ class _RecordScreenState extends State<RecordScreen>
       waypoints: waypoints,
       format: format,
     );
-    if (files.isEmpty || !mounted) return;
+    if (files.isEmpty || !mounted) {
+      return l10n.recordingSavedExternalFailed;
+    }
 
     // Always pick the folder when saving from a recording — do not reuse
     // the silent daily-backup URI.
@@ -1760,16 +1798,14 @@ class _RecordScreenState extends State<RecordScreen>
       destination: plan.destination,
       subject: routeName,
     );
-    if (!mounted) return;
+    if (!mounted) return l10n.recordingSavedExternalFailed;
     if (result == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.dayExportFailed)),
-      );
-    } else if (plan.destination == DayExportDestination.folder) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.dayExportSavedToFolder(result))),
-      );
+      return l10n.recordingSavedExternalFailed;
     }
+    if (plan.destination == DayExportDestination.folder) {
+      return l10n.recordingSavedExternalFolder(result);
+    }
+    return l10n.recordingSavedExternalShare;
   }
 
   /// Looks for photos/videos the gallery gained during this ride and, if

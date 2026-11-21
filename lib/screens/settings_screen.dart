@@ -359,8 +359,12 @@ class _DailyDriveBackupSettings extends StatelessWidget {
     final backup = context.watch<DailyDriveBackupController>();
     final folderLabel = backup.folderName;
     final errorKey = backup.lastError;
+    // Busy = a real write is in flight (open multi-day catch-up). The
+    // normal folder subtitle must not sound like it is always writing.
     final subtitle = !backup.enabled
         ? l10n.dailyDriveBackupOffSubtitle
+        : backup.isBusy
+        ? l10n.dailyDriveBackupBusySubtitle
         : errorKey != null
         ? l10n.dailyDriveBackupErrorSubtitle(errorKey)
         : folderLabel == null || folderLabel.isEmpty
