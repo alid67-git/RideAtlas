@@ -3,12 +3,13 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 
 import '../l10n/resolved_language.dart';
+import '../models/track_point.dart';
 import '../repositories/route_repository.dart';
 import 'battery_info.dart';
 import 'gps_recorder.dart';
+import 'recording_name.dart';
 import 'track_io.dart';
 
 const _channel = MethodChannel('com.rideatlas.app/car');
@@ -92,7 +93,7 @@ class CarBridge {
     final points = await _recorder.stop();
     if (points.isEmpty) return;
 
-    final name = _recordingName(DateTime.now());
+    final name = _recordingName(points);
     final gpx = exportTrack(
       name: name,
       points: points,
@@ -109,16 +110,18 @@ class CarBridge {
     );
   }
 
-  String _recordingName(DateTime now) {
+  String _recordingName(List<TrackPoint> points) {
     final code = resolvedLanguageCode();
-    final date = DateFormat(
-      'd MMM yyyy HH:mm',
-      code == 'de'
-          ? 'de'
-          : code == 'en'
-          ? 'en'
-          : 'tr',
-    ).format(now);
+    final locale = code == 'de'
+        ? 'de'
+        : code == 'en'
+        ? 'en'
+        : 'tr';
+    final date = formatRecordingDateSpan(
+      points: points,
+      locale: locale,
+      fallbackStart: DateTime.now(),
+    );
     switch (code) {
       case 'en':
         return 'Recording $date';
