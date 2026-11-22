@@ -26,6 +26,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.167 beta',
+    date: '2026-11-22',
+    noteTr:
+        'Gelişmiş açıkken çok günlük canlı çizgiye dokununca dokunulan noktada '
+        'gün rozeti (Gün N) çıkar; rozete basınca harita yalnız o güne süzülür.',
+    noteEn:
+        'With Advanced on, tapping the multi-day live track parks a day badge '
+        '(Day N) at the hit; tapping the badge filters the map to that day.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.166 beta',
     date: '2026-11-22',
     noteTr:

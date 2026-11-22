@@ -161,6 +161,9 @@ class _RecordScreenState extends State<RecordScreen>
   /// Multi-day live track starts as one red line; tap the red line (or open
   /// chips via Ruta) to expand into day-colored segments + labels.
   bool _liveDayBreakdownMode = false;
+  /// Advanced: day badge parked at the last track tap (tap badge → filter).
+  DayStats? _trackTapDay;
+  LatLng? _trackTapDayPoint;
   bool _starting = false;
   bool _saving = false;
 
@@ -1430,6 +1433,8 @@ class _RecordScreenState extends State<RecordScreen>
     _liveVisibleDayNumbers = null;
     _showLiveDayChips = false;
     _liveDayBreakdownMode = false;
+    _trackTapDay = null;
+    _trackTapDayPoint = null;
     _sessionAnnotations.clear();
     await _recorder.discard();
   }
@@ -2176,6 +2181,8 @@ class _RecordScreenState extends State<RecordScreen>
                           _showLiveDayChips = _liveDayBreakdownMode;
                           if (!_liveDayBreakdownMode) {
                             _liveVisibleDayNumbers = null;
+                            _trackTapDay = null;
+                            _trackTapDayPoint = null;
                           }
                         });
                       },
@@ -3257,6 +3264,46 @@ class _RecordScreenState extends State<RecordScreen>
     });
   }
 
+  /// Nearest multi-day live segment under [tap], if any.
+  ({DayStats day, LatLng point})? _hitLiveDayTrack(
+    LatLng tap, {
+    required List<DayStats> days,
+  }) {
+    final hit = findNearestTrackHit(
+      tap: tap,
+      zoom: _mapController.camera.zoom,
+      tracks: [
+        for (final d in days)
+          if (d.points.length >= 2)
+            (
+              id: 'live-day-${d.dayNumber}',
+              name: '${d.dayNumber}',
+              points: [for (final p in d.points) p.latLng],
+            ),
+      ],
+    );
+    if (hit == null) return null;
+    const prefix = 'live-day-';
+    if (!hit.id.startsWith(prefix)) return null;
+    final num = int.tryParse(hit.id.substring(prefix.length));
+    if (num == null) return null;
+    for (final d in days) {
+      if (d.dayNumber == num) return (day: d, point: hit.point);
+    }
+    return null;
+  }
+
+  void _applyTrackTapDayFilter() {
+    final day = _trackTapDay;
+    if (day == null) return;
+    setState(() {
+      _liveVisibleDayNumbers = {day.dayNumber};
+      _liveDayBreakdownMode = true;
+      _showLiveDayChips = true;
+    });
+    _fitToLiveDay(day);
+  }
+
   /// Permanently deletes the tapped overlay route (not the live line) and
   /// drops it from the recording map overlays - same confirm path as the
   /// routes list.
@@ -3300,14 +3347,39 @@ class _RecordScreenState extends State<RecordScreen>
 
   /// Rough geographic hit-test: nearest polyline within ~35 m * 2^(15-zoom).
   /// Multi-day live: red line tap → expand day colors; day segment → detail.
+  /// Advanced: track tap parks a day badge at the hit; badge tap filters.
   /// Single-day: live line opens note/photo add.
   void _onMapTap(TapPosition tapPosition, LatLng latlng) {
     final l10n = AppLocalizations.of(context)!;
     _syncLiveDays(_recorder.points);
     final multiDayLive =
         !_recorder.isIdle && _liveDays.length >= 2 && _recorder.points.length >= 2;
+    final advanced = context.read<AdvancedModeController>().enabled;
 
-    if (multiDayLive && !_liveDayBreakdownMode) {
+    if (multiDayLive && advanced) {
+      final dayHit = _hitLiveDayTrack(latlng, days: _liveDays);
+      if (dayHit != null) {
+        setState(() {
+          _liveDayBreakdownMode = true;
+          _trackTapDay = dayHit.day;
+          _trackTapDayPoint = dayHit.point;
+        });
+        return;
+      }
+      if (_trackTapDay != null ||
+          _liveDayBreakdownMode ||
+          _liveVisibleDayNumbers != null) {
+        setState(() {
+          _trackTapDay = null;
+          _trackTapDayPoint = null;
+          _liveDayBreakdownMode = false;
+          _showLiveDayChips = false;
+          _liveVisibleDayNumbers = null;
+        });
+        return;
+      }
+      // Miss with nothing day-related open — fall through to overlay labels.
+    } else if (multiDayLive && !_liveDayBreakdownMode) {
       _syncLiveLineCache(_recorder.points);
       final hitRed = findNearestTrackHit(
         tap: latlng,
@@ -3325,38 +3397,11 @@ class _RecordScreenState extends State<RecordScreen>
         setState(() => _liveDayBreakdownMode = true);
         return;
       }
-    }
-
-    if (multiDayLive && _liveDayBreakdownMode) {
-      final visible = _liveVisibleDays;
-      final dayHit = findNearestTrackHit(
-        tap: latlng,
-        zoom: _mapController.camera.zoom,
-        tracks: [
-          for (final d in visible)
-            (
-              id: 'live-day-${d.dayNumber}',
-              name: '${d.dayNumber}',
-              points: [for (final p in d.points) p.latLng],
-            ),
-        ],
-      );
+    } else if (multiDayLive && _liveDayBreakdownMode) {
+      final dayHit = _hitLiveDayTrack(latlng, days: _liveVisibleDays);
       if (dayHit != null) {
-        final prefix = 'live-day-';
-        if (dayHit.id.startsWith(prefix)) {
-          final num = int.tryParse(dayHit.id.substring(prefix.length));
-          DayStats? day;
-          for (final d in visible) {
-            if (d.dayNumber == num) {
-              day = d;
-              break;
-            }
-          }
-          if (day != null) {
-            _openLiveDayDetail(day, noteAt: dayHit.point);
-            return;
-          }
-        }
+        _openLiveDayDetail(dayHit.day, noteAt: dayHit.point);
+        return;
       }
       // Empty map tap collapses back to the single red line.
       setState(() {
@@ -3868,6 +3913,54 @@ class _RecordScreenState extends State<RecordScreen>
                       ),
                     ],
                   ],
+                ),
+              ),
+            ],
+          ),
+        if (_trackTapDay != null && _trackTapDayPoint != null)
+          MarkerLayer(
+            markers: [
+              Marker(
+                point: _trackTapDayPoint!,
+                width: 120,
+                height: 44,
+                alignment: Alignment.bottomCenter,
+                child: GestureDetector(
+                  onTap: _applyTrackTapDayFilter,
+                  child: Material(
+                    elevation: 4,
+                    borderRadius: BorderRadius.circular(16),
+                    color: _trackTapDay!.color,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.calendar_today,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              l10n.dayLabel(_trackTapDay!.dayNumber),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],

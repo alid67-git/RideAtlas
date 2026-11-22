@@ -315,7 +315,7 @@
   "settingsInterfaceSection": "Interface",
   "settingsInterfaceSubtitle": "Vehicle icon, stat icons, recording cards",
   "advancedModeTitle": "Advanced",
-  "advancedModeSubtitle": "Show day-based import, export, and revise tools",
+  "advancedModeSubtitle": "Day import/export/revise, and tap-track day badge",
   "vehicleIconTitle": "Vehicle icon",
   "vehicleIconClassic": "Classic dot",
   "vehicleIconMotorcycleCategory": "Motorcycle",
