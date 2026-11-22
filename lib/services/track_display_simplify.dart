@@ -182,3 +182,42 @@ TrackHit? findNearestTrackHit({
   if (bestId == null || bestName == null || bestPoint == null) return null;
   return TrackHit(id: bestId, name: bestName, point: bestPoint);
 }
+
+/// Like [findNearestTrackHit] for a single polyline, but returns the sampled
+/// vertex index so callers can look up parallel metadata (e.g. day number).
+int? findNearestTrackPointIndex({
+  required LatLng tap,
+  required double zoom,
+  required List<LatLng> points,
+}) {
+  if (points.length < 2) return null;
+  final thresholdM = 35.0 * (1 << math.max(0, (15 - zoom).round()));
+  final padDeg = (thresholdM / 111000.0) * 1.5;
+  var bestM = thresholdM;
+  int? bestIndex;
+
+  final stride = math.max(1, points.length ~/ 200);
+  for (var i = 0; i < points.length; i += stride) {
+    final p = points[i];
+    if ((p.latitude - tap.latitude).abs() > padDeg ||
+        (p.longitude - tap.longitude).abs() > padDeg) {
+      continue;
+    }
+    final m = _distance(tap, p);
+    if (m < bestM) {
+      bestM = m;
+      bestIndex = i;
+    }
+  }
+  final tipIndex = points.length - 1;
+  final tip = points[tipIndex];
+  if ((tip.latitude - tap.latitude).abs() <= padDeg &&
+      (tip.longitude - tap.longitude).abs() <= padDeg) {
+    final m = _distance(tap, tip);
+    if (m < bestM) {
+      bestM = m;
+      bestIndex = tipIndex;
+    }
+  }
+  return bestIndex;
+}
