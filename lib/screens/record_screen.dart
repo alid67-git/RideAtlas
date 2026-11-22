@@ -147,7 +147,17 @@ class _RecordScreenState extends State<RecordScreen>
   final _overlayPolylines = ValueNotifier<List<Polyline>>(const []);
   final _headingListenable = ValueNotifier<double?>(null);
   List<LatLng> _liveLineCache = [];
+  /// Parallel to [_liveLineCache]: calendar day number for each vertex.
+  List<int> _liveLineDayNumbers = [];
   int _liveLineCacheCount = 0;
+  /// Display-simplified red line (capped); rebuilt on a throttle while recording.
+  List<LatLng> _liveDisplayLine = [];
+  int _liveDisplayLineSourceCount = -1;
+  DateTime? _lastLiveDisplaySimplifyAt;
+  /// Cached day-colored polylines (breakdown / single-day filter).
+  List<Polyline> _liveBreakdownPolys = const [];
+  int _liveBreakdownPolysStamp = -1;
+  DateTime? _lastLiveBreakdownBuildAt;
   /// Calendar-day split of the live track (incremental while points append).
   List<DayStats> _liveDays = const [];
   int _liveDaysPointCount = -1;
@@ -1427,7 +1437,12 @@ class _RecordScreenState extends State<RecordScreen>
     }
     _savedPointCount = -1;
     _liveLineCache = [];
+    _liveLineDayNumbers = [];
     _liveLineCacheCount = 0;
+    _liveDisplayLine = [];
+    _liveDisplayLineSourceCount = -1;
+    _liveBreakdownPolys = const [];
+    _liveBreakdownPolysStamp = -1;
     _liveDays = const [];
     _liveDaysPointCount = -1;
     _liveVisibleDayNumbers = null;
@@ -2904,16 +2919,80 @@ class _RecordScreenState extends State<RecordScreen>
     );
   }
 
+  int _dayNumberForLivePoint(TrackPoint p) {
+    final t = p.time;
+    if (t == null) {
+      return _liveLineDayNumbers.isEmpty ? 1 : _liveLineDayNumbers.last;
+    }
+    final day = calendarDayLocal(t);
+    for (final d in _liveDays) {
+      if (d.date == day) return d.dayNumber;
+    }
+    return _liveDays.isEmpty ? 1 : _liveDays.last.dayNumber;
+  }
+
+  void _invalidateLiveDisplayLine() {
+    _liveDisplayLineSourceCount = -1;
+    _liveBreakdownPolysStamp = -1;
+  }
+
   void _syncLiveLineCache(List<TrackPoint> points) {
     if (points.length < _liveLineCacheCount) {
-      _liveLineCache = [for (final p in points) p.latLng];
+      _liveLineCache = <LatLng>[];
+      _liveLineDayNumbers = <int>[];
+      for (final p in points) {
+        _liveLineCache.add(p.latLng);
+        _liveLineDayNumbers.add(_dayNumberForLivePoint(p));
+      }
       _liveLineCacheCount = points.length;
+      _invalidateLiveDisplayLine();
       return;
     }
     for (var i = _liveLineCacheCount; i < points.length; i++) {
-      _liveLineCache.add(points[i].latLng);
+      final p = points[i];
+      _liveLineCache.add(p.latLng);
+      _liveLineDayNumbers.add(_dayNumberForLivePoint(p));
     }
-    _liveLineCacheCount = points.length;
+    if (points.length != _liveLineCacheCount) {
+      _liveLineCacheCount = points.length;
+      // Tip moved — allow display simplify to refresh on throttle.
+    } else {
+      _liveLineCacheCount = points.length;
+    }
+  }
+
+  List<LatLng> _ensureLiveDisplayLine({bool force = false}) {
+    _syncLiveLineCache(_recorder.points);
+    if (_liveLineCache.length < 2) {
+      _liveDisplayLine = const [];
+      _liveDisplayLineSourceCount = _liveLineCacheCount;
+      return _liveDisplayLine;
+    }
+    final now = DateTime.now();
+    final grew = _liveLineCacheCount - _liveDisplayLineSourceCount;
+    final freshEnough = !force &&
+        _liveDisplayLine.length >= 2 &&
+        _lastLiveDisplaySimplifyAt != null &&
+        now.difference(_lastLiveDisplaySimplifyAt!) <
+            const Duration(seconds: 5) &&
+        grew >= 0 &&
+        grew < 80;
+    if (freshEnough) {
+      final tip = _liveLineCache.last;
+      if (_liveDisplayLine.isEmpty || _liveDisplayLine.last != tip) {
+        _liveDisplayLine = List<LatLng>.of(_liveDisplayLine)..add(tip);
+      }
+      return _liveDisplayLine;
+    }
+    if (!force &&
+        _liveDisplayLineSourceCount == _liveLineCacheCount &&
+        _liveDisplayLine.length >= 2) {
+      return _liveDisplayLine;
+    }
+    _liveDisplayLine = latLngsForMapDisplay(_liveLineCache);
+    _liveDisplayLineSourceCount = _liveLineCacheCount;
+    _lastLiveDisplaySimplifyAt = now;
+    return _liveDisplayLine;
   }
 
   void _pruneLiveVisibleDayFilter() {
@@ -2929,6 +3008,13 @@ class _RecordScreenState extends State<RecordScreen>
     _liveDaysPointCount = points.length;
     _lastLiveDayStatsAt = DateTime.now();
     _pruneLiveVisibleDayFilter();
+    _invalidateLiveDisplayLine();
+    // Refresh day numbers against the new split (boundaries may move).
+    if (_liveLineDayNumbers.length == points.length) {
+      for (var i = 0; i < points.length; i++) {
+        _liveLineDayNumbers[i] = _dayNumberForLivePoint(points[i]);
+      }
+    }
   }
 
   /// Keeps [_liveDays] in sync without re-running [splitIntoDays] over the
@@ -3043,25 +3129,53 @@ class _RecordScreenState extends State<RecordScreen>
     _syncLiveDays(points);
     // Single-day, or multi-day still in “one red line” mode.
     if (_liveDays.length < 2 || !_liveDayBreakdownMode) {
-      _syncLiveLineCache(points);
-      if (_liveLineCache.length < 2) return const [];
+      final display = _ensureLiveDisplayLine();
+      if (display.length < 2) return const [];
       return [
         Polyline(
-          points: _liveLineCache,
+          points: display,
           strokeWidth: 4,
           color: const Color(0xFFE53935),
         ),
       ];
     }
-    return buildTrackPolylines(
+
+    // Rebuild day-colored polylines only when the visible set / sizes change,
+    // and at most every few seconds while the current day is still growing.
+    var stamp = Object.hash(
+      _liveVisibleDayNumbers?.length ?? -1,
+      _liveDays.length,
+    );
+    for (final d in _liveVisibleDays) {
+      stamp = Object.hash(stamp, d.dayNumber, d.points.length);
+    }
+    final now = DateTime.now();
+    final canReuse = _liveBreakdownPolys.isNotEmpty &&
+        _liveBreakdownPolysStamp == stamp;
+    final recentlyBuilt = _lastLiveBreakdownBuildAt != null &&
+        now.difference(_lastLiveBreakdownBuildAt!) <
+            const Duration(seconds: 4);
+    if (canReuse) return _liveBreakdownPolys;
+    if (recentlyBuilt &&
+        _liveBreakdownPolys.isNotEmpty &&
+        _liveVisibleDayNumbers != null) {
+      // Same filter, day still appending — keep last geometry briefly.
+      return _liveBreakdownPolys;
+    }
+    _liveBreakdownPolys = buildTrackPolylines(
       points: points,
       days: _liveDays,
       visibleDayNumbers: _liveVisibleDayNumbers,
     );
+    _liveBreakdownPolysStamp = stamp;
+    _lastLiveBreakdownBuildAt = now;
+    return _liveBreakdownPolys;
   }
 
   void _fitToLiveDay(DayStats day) {
-    final pts = [for (final p in day.points) p.latLng];
+    final raw = [for (final p in day.points) p.latLng];
+    if (raw.isEmpty) return;
+    final pts = latLngsForMapDisplay(raw);
     if (pts.isEmpty) return;
     if (pts.length < 2) {
       _mapController.move(pts.first, 14);
@@ -3265,30 +3379,30 @@ class _RecordScreenState extends State<RecordScreen>
   }
 
   /// Nearest multi-day live segment under [tap], if any.
+  ///
+  /// Uses the shared live-line cache + parallel day numbers — never copies
+  /// every day's TrackPoint list on tap (that froze long multi-day rides).
   ({DayStats day, LatLng point})? _hitLiveDayTrack(
     LatLng tap, {
     required List<DayStats> days,
   }) {
-    final hit = findNearestTrackHit(
+    if (days.isEmpty) return null;
+    _syncLiveLineCache(_recorder.points);
+    if (_liveLineCache.length < 2 ||
+        _liveLineDayNumbers.length != _liveLineCache.length) {
+      return null;
+    }
+    final index = findNearestTrackPointIndex(
       tap: tap,
       zoom: _mapController.camera.zoom,
-      tracks: [
-        for (final d in days)
-          if (d.points.length >= 2)
-            (
-              id: 'live-day-${d.dayNumber}',
-              name: '${d.dayNumber}',
-              points: [for (final p in d.points) p.latLng],
-            ),
-      ],
+      points: _liveLineCache,
     );
-    if (hit == null) return null;
-    const prefix = 'live-day-';
-    if (!hit.id.startsWith(prefix)) return null;
-    final num = int.tryParse(hit.id.substring(prefix.length));
-    if (num == null) return null;
+    if (index == null) return null;
+    final dayNumber = _liveLineDayNumbers[index];
     for (final d in days) {
-      if (d.dayNumber == num) return (day: d, point: hit.point);
+      if (d.dayNumber == dayNumber) {
+        return (day: d, point: _liveLineCache[index]);
+      }
     }
     return null;
   }
@@ -3300,8 +3414,17 @@ class _RecordScreenState extends State<RecordScreen>
       _liveVisibleDayNumbers = {day.dayNumber};
       _liveDayBreakdownMode = true;
       _showLiveDayChips = true;
+      _liveBreakdownPolysStamp = -1;
     });
     _fitToLiveDay(day);
+  }
+
+  bool _tapNearTrackDayBadge(LatLng tap) {
+    final badge = _trackTapDayPoint;
+    if (badge == null || _trackTapDay == null) return false;
+    final zoom = _mapController.camera.zoom;
+    final thresholdM = 48.0 * (1 << max(0, (15 - zoom).round()));
+    return const Distance()(tap, badge) <= thresholdM;
   }
 
   /// Permanently deletes the tapped overlay route (not the live line) and
@@ -3357,10 +3480,17 @@ class _RecordScreenState extends State<RecordScreen>
     final advanced = context.read<AdvancedModeController>().enabled;
 
     if (multiDayLive && advanced) {
+      // Badge is drawn above the line; map onTap often wins the gesture, so
+      // treat a tap near the badge as “filter to that day”.
+      if (_tapNearTrackDayBadge(latlng)) {
+        _applyTrackTapDayFilter();
+        return;
+      }
       final dayHit = _hitLiveDayTrack(latlng, days: _liveDays);
       if (dayHit != null) {
         setState(() {
-          _liveDayBreakdownMode = true;
+          // Park badge only — do not expand full day-colored breakdown
+          // (that rebuild was freezing 1000+ km rides on every GPS tick).
           _trackTapDay = dayHit.day;
           _trackTapDayPoint = dayHit.point;
         });
@@ -3375,6 +3505,7 @@ class _RecordScreenState extends State<RecordScreen>
           _liveDayBreakdownMode = false;
           _showLiveDayChips = false;
           _liveVisibleDayNumbers = null;
+          _liveBreakdownPolysStamp = -1;
         });
         return;
       }
@@ -3926,15 +4057,16 @@ class _RecordScreenState extends State<RecordScreen>
                 height: 44,
                 alignment: Alignment.bottomCenter,
                 child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: _applyTrackTapDayFilter,
                   child: Material(
-                    elevation: 4,
+                    elevation: 6,
                     borderRadius: BorderRadius.circular(16),
                     color: _trackTapDay!.color,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
+                        horizontal: 12,
+                        vertical: 8,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -3952,7 +4084,7 @@ class _RecordScreenState extends State<RecordScreen>
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 12,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),

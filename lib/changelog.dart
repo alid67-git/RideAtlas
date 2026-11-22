@@ -26,6 +26,18 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.168 beta',
+    date: '2026-11-22',
+    noteTr:
+        'Gelişmiş gün rozeti: uzun kayıtlarda dokunuşun donması giderildi '
+        '(hit-test artık tüm günleri kopyalamıyor). Rozete basmak filtreler; '
+        'kırmızı çizgi sadeleştirilerek harita daha akıcı.',
+    noteEn:
+        'Advanced day badge: tap no longer freezes on long rides (hit-test '
+        'doesn’t copy every day). Badge tap filters; the red line is '
+        'display-simplified so the map stays smoother.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.167 beta',
     date: '2026-11-22',
     noteTr:
