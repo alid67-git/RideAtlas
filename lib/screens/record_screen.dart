@@ -22,6 +22,7 @@ import '../models/gpx_route.dart';
 import '../models/route_photo.dart';
 import '../models/track_point.dart';
 import '../models/waypoint.dart';
+import '../repositories/advanced_mode_controller.dart';
 import '../repositories/daily_drive_backup_controller.dart';
 import '../repositories/live_stats_layout_controller.dart';
 import '../repositories/photo_repository.dart';
@@ -44,10 +45,11 @@ import '../services/track_heading.dart';
 import '../services/track_display_loader.dart';
 import '../services/track_display_simplify.dart';
 import '../services/recording_name.dart';
-import '../services/run_day_export.dart' show exportSingleCalendarDay;
-import '../services/track_export_actions.dart';
+import '../services/run_day_export.dart'
+    show exportSingleCalendarDay, pickExportFormat, runPreparedDayExport;
 import '../services/track_io.dart';
 import '../widgets/app_update_ui.dart';
+import '../widgets/busy_progress_dialog.dart';
 import '../widgets/day_detail_sheet.dart';
 import '../widgets/day_export_dialog.dart';
 import '../widgets/heading_cone.dart';
@@ -686,41 +688,57 @@ class _RecordScreenState extends State<RecordScreen>
     final result = await pickTrackFiles(allowMultiple: true);
     if (result == null || result.files.isEmpty || !mounted) return;
 
+    final files = result.files;
     final incoming = <TrackPoint>[];
-    for (final file in result.files) {
-      if (!isSupportedTrackFileName(file.name)) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.unsupportedTrackFileType)),
-        );
-        return;
-      }
-      final bytes = await readPickedTrackBytes(file);
-      if (bytes == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.fileNotReadable)),
-        );
-        return;
-      }
-      try {
-        final xml = decodeTrackBytes(bytes, fileName: file.name);
-        final parsed = parseTrackXml(xml);
-        incoming.addAll(parsed.points);
-      } on FormatException catch (e) {
-        if (mounted) {
+    final busy = await showBusyProgress(
+      context,
+      message: l10n.busyReadingFilesProgress(1, files.length),
+    );
+    try {
+      for (var i = 0; i < files.length; i++) {
+        final file = files[i];
+        busy.update(l10n.busyReadingFilesProgress(i + 1, files.length));
+        if (!isSupportedTrackFileName(file.name)) {
+          await busy.close();
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(importFormatErrorMessage(l10n, e))),
+            SnackBar(content: Text(l10n.unsupportedTrackFileType)),
           );
+          return;
         }
-        return;
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
-        );
-        return;
+        final bytes = await readPickedTrackBytes(file);
+        if (bytes == null) {
+          await busy.close();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.fileNotReadable)),
+          );
+          return;
+        }
+        try {
+          final xml = decodeTrackBytes(bytes, fileName: file.name);
+          await Future<void>.delayed(Duration.zero);
+          final parsed = parseTrackXml(xml);
+          incoming.addAll(parsed.points);
+        } on FormatException catch (e) {
+          await busy.close();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(importFormatErrorMessage(l10n, e))),
+            );
+          }
+          return;
+        } catch (e) {
+          await busy.close();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
+          );
+          return;
+        }
       }
+    } finally {
+      await busy.close();
     }
     if (!mounted) return;
 
@@ -765,18 +783,25 @@ class _RecordScreenState extends State<RecordScreen>
     if (ok != true || !mounted) return;
 
     try {
-      final merged = await recorder.mergeExternalPoints(incoming);
-      if (!mounted) return;
-      _liveDaysPointCount = -1;
-      _syncLiveDays(recorder.points);
-      await context
-          .read<DailyDriveBackupController>()
-          .forgetBackedUpDays(merged.replacedDays);
+      await runBusyProgress(
+        context: context,
+        message: l10n.busyMergingRecording,
+        action: (_) async {
+          final merged = await recorder.mergeExternalPoints(incoming);
+          if (!mounted) return merged;
+          _liveDaysPointCount = -1;
+          _syncLiveDays(recorder.points);
+          await context
+              .read<DailyDriveBackupController>()
+              .forgetBackedUpDays(merged.replacedDays);
+          return merged;
+        },
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            l10n.recordImportIntoRecordingSuccess(merged.replacedDays.length),
+            l10n.recordImportIntoRecordingSuccess(preview.replacedDays.length),
           ),
         ),
       );
@@ -1512,19 +1537,21 @@ class _RecordScreenState extends State<RecordScreen>
     }
     if (!mounted) return;
     setState(() => _saving = false);
-    if (recordingStart != null) {
-      await _offerGalleryMedia(route, recordingStart, points);
-      if (!mounted) return;
-    }
 
-    // Always ask where to also write the GPX outside the app (folder /
-    // share / skip) — riders expect a destination when they tap Save.
+    // Ask where/how to also write outside the app immediately after naming
+    // — before gallery scan, which can take a long time on multi-day rides
+    // and made riders think Save was already finished.
     if (mounted) {
       await _offerExternalSaveAfterRecording(
         routeName: name,
         points: points,
         waypoints: waypoints,
       );
+      if (!mounted) return;
+    }
+
+    if (recordingStart != null) {
+      await _offerGalleryMedia(route, recordingStart, points);
       if (!mounted) return;
     }
 
@@ -1591,45 +1618,17 @@ class _RecordScreenState extends State<RecordScreen>
     final plan = await showDayExportDialog(context: context, days: days);
     if (plan == null || !mounted) return;
 
-    final format = await showDialog<TrackFormat>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: Text(l10n.exportFormatQuestion),
-        children: [
-          for (final f in TrackFormat.values)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, f),
-              child: Text(f.label),
-            ),
-        ],
-      ),
-    );
+    final format = await pickExportFormat(context);
     if (format == null || !mounted) return;
 
-    final files = preparePlanExportFiles(
+    await runPreparedDayExport(
+      context: context,
       plan: plan,
       routeName: routeName,
       points: points,
       waypoints: waypoints,
       format: format,
     );
-    if (files.isEmpty || !mounted) return;
-
-    final result = await deliverExportFiles(
-      files: files,
-      destination: plan.destination,
-      subject: routeName,
-    );
-    if (!mounted) return;
-    if (result == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.dayExportFailed)),
-      );
-    } else if (plan.destination == DayExportDestination.folder) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.dayExportSavedToFolder(result))),
-      );
-    }
   }
 
   /// After the ride is in the app library: ask where to write the GPX
@@ -1642,61 +1641,83 @@ class _RecordScreenState extends State<RecordScreen>
   }) async {
     final l10n = AppLocalizations.of(context)!;
     final days = splitIntoDays(points);
+    final folderOk = BackupFolderBridge.isSupported;
 
     final destination = await showDialog<DayExportDestination?>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.recordingExternalSaveTitle),
-        content: Text(
-          days.length >= 2
-              ? l10n.recordingExternalSaveMultiDayMessage(days.length)
-              : l10n.recordingExternalSaveMessage,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, null),
-            child: Text(l10n.recordingExternalSaveAppOnly),
+      barrierDismissible: false,
+      builder: (context) {
+        var selected = folderOk
+            ? DayExportDestination.folder
+            : DayExportDestination.share;
+        return StatefulBuilder(
+          builder: (context, setLocal) => AlertDialog(
+            title: Text(l10n.recordingExternalSaveTitle),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    days.length >= 2
+                        ? l10n.recordingExternalSaveMultiDayMessage(days.length)
+                        : l10n.recordingExternalSaveMessage,
+                  ),
+                  const SizedBox(height: 12),
+                  RadioGroup<DayExportDestination>(
+                    groupValue: selected,
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setLocal(() => selected = v);
+                    },
+                    child: Column(
+                      children: [
+                        if (folderOk)
+                          RadioListTile<DayExportDestination>(
+                            value: DayExportDestination.folder,
+                            title: Text(l10n.dayExportDestinationFolder),
+                            subtitle:
+                                Text(l10n.dayExportDestinationFolderHint),
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                        RadioListTile<DayExportDestination>(
+                          value: DayExportDestination.share,
+                          title: Text(l10n.dayExportDestinationShare),
+                          subtitle: Text(l10n.dayExportDestinationShareHint),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, null),
+                child: Text(l10n.recordingExternalSaveAppOnly),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, selected),
+                child: Text(l10n.dayExportContinue),
+              ),
+            ],
           ),
-          if (BackupFolderBridge.isSupported) ...[
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(context, DayExportDestination.share),
-              child: Text(l10n.dayExportDestinationShare),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, DayExportDestination.folder),
-              child: Text(l10n.dayExportDestinationFolder),
-            ),
-          ] else
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, DayExportDestination.share),
-              child: Text(l10n.dayExportDestinationShare),
-            ),
-        ],
-      ),
+        );
+      },
     );
     // null = "app only" or dismissed
     if (destination == null || !mounted) return;
 
-    final format = await showDialog<TrackFormat>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: Text(l10n.exportFormatQuestion),
-        children: [
-          for (final f in TrackFormat.values)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, f),
-              child: Text(f.label),
-            ),
-        ],
-      ),
-    );
+    final format = await pickExportFormat(context);
     if (format == null || !mounted) return;
 
+    // Day-scope picker is Advanced-only; otherwise write the full track.
     late final DayExportPlan plan;
-    if (days.length >= 2) {
+    final advanced = context.read<AdvancedModeController>().enabled;
+    if (advanced && days.length >= 2) {
       final chosen = await showDayExportDialog(
         context: context,
         days: days,
@@ -1713,32 +1734,14 @@ class _RecordScreenState extends State<RecordScreen>
       );
     }
 
-    final files = preparePlanExportFiles(
+    await runPreparedDayExport(
+      context: context,
       plan: plan,
       routeName: routeName,
       points: points,
       waypoints: waypoints,
       format: format,
     );
-    if (files.isEmpty || !mounted) return;
-
-    // Always pick the folder when saving from a recording — do not reuse
-    // the silent daily-backup URI.
-    final result = await deliverExportFiles(
-      files: files,
-      destination: plan.destination,
-      subject: routeName,
-    );
-    if (!mounted) return;
-    if (result == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.dayExportFailed)),
-      );
-    } else if (plan.destination == DayExportDestination.folder) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.dayExportSavedToFolder(result))),
-      );
-    }
   }
 
   /// Looks for photos/videos the gallery gained during this ride and, if
@@ -1951,7 +1954,8 @@ class _RecordScreenState extends State<RecordScreen>
                 value: _OverlayMenuAction.importFile,
                 child: Text(l10n.recordOverlayImportMenuItem),
               ),
-              if (!_recorder.isIdle)
+              if (!_recorder.isIdle &&
+                  context.read<AdvancedModeController>().enabled)
                 PopupMenuItem(
                   value: _OverlayMenuAction.importIntoRecording,
                   child: Text(l10n.recordImportIntoRecordingMenuItem),
@@ -2088,7 +2092,8 @@ class _RecordScreenState extends State<RecordScreen>
                           padding: EdgeInsets.only(top: 4),
                           child: SatelliteCountBadge(),
                         ),
-                        if (!recorder.isIdle) ...[
+                        if (!recorder.isIdle &&
+                            context.watch<AdvancedModeController>().enabled) ...[
                           const SizedBox(width: 8),
                           _RoundIconButton(
                             icon: Icons.ios_share,
@@ -2537,7 +2542,8 @@ class _RecordScreenState extends State<RecordScreen>
                       _buildOverlayMenuButton(l10n),
                       const Spacer(),
                       const SatelliteCountBadge(),
-                      if (!recorder.isIdle) ...[
+                      if (!recorder.isIdle &&
+                          context.watch<AdvancedModeController>().enabled) ...[
                         const SizedBox(width: 8),
                         _RoundIconButton(
                           icon: Icons.ios_share,
@@ -3064,13 +3070,14 @@ class _RecordScreenState extends State<RecordScreen>
     _syncLiveDays(_recorder.points, forceStats: true);
     final previousFilter = _liveVisibleDayNumbers;
     var keepFocus = false;
+    final advanced = context.read<AdvancedModeController>().enabled;
     showDayDetailSheet(
       context: context,
       day: day,
       days: _liveDays,
       startAtFirstDay: false,
-      onExportDay: _exportLiveDay,
-      onReviseDay: _reviseLiveDay,
+      onExportDay: advanced ? _exportLiveDay : null,
+      onReviseDay: advanced ? _reviseLiveDay : null,
       onAddNote: noteAt == null
           ? null
           : () => unawaited(_addAnnotationAt(noteAt)),
@@ -3137,32 +3144,44 @@ class _RecordScreenState extends State<RecordScreen>
       );
       return false;
     }
-    final bytes = await readPickedTrackBytes(file);
-    if (bytes == null) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.fileNotReadable)),
-      );
-      return false;
-    }
 
     late final List<TrackPoint> incoming;
+    final readBusy = await showBusyProgress(
+      context,
+      message: l10n.busyReadingFileNamed(file.name),
+    );
     try {
-      final xml = decodeTrackBytes(bytes, fileName: file.name);
-      incoming = parseTrackXml(xml).points;
-    } on FormatException catch (e) {
-      if (mounted) {
+      final bytes = await readPickedTrackBytes(file);
+      if (bytes == null) {
+        await readBusy.close();
+        if (!mounted) return false;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(importFormatErrorMessage(l10n, e))),
+          SnackBar(content: Text(l10n.fileNotReadable)),
         );
+        return false;
       }
-      return false;
-    } catch (e) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
-      );
-      return false;
+      try {
+        final xml = decodeTrackBytes(bytes, fileName: file.name);
+        await Future<void>.delayed(Duration.zero);
+        incoming = parseTrackXml(xml).points;
+      } on FormatException catch (e) {
+        await readBusy.close();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(importFormatErrorMessage(l10n, e))),
+          );
+        }
+        return false;
+      } catch (e) {
+        await readBusy.close();
+        if (!mounted) return false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.importFailedGeneric('$e'))),
+        );
+        return false;
+      }
+    } finally {
+      await readBusy.close();
     }
     if (!mounted) return false;
 
@@ -3188,16 +3207,26 @@ class _RecordScreenState extends State<RecordScreen>
     if (!ok || !mounted) return false;
 
     try {
-      await recorder.installMergedPoints(preview.points);
-      if (!mounted) return true;
-      _liveDaysPointCount = -1;
-      _syncLiveDays(recorder.points);
-      await context
-          .read<DailyDriveBackupController>()
-          .forgetBackedUpDays(preview.replacedDays);
+      await runBusyProgress(
+        context: context,
+        message: l10n.busyWritingDay,
+        action: (_) async {
+          await recorder.installMergedPoints(preview.points);
+          if (!mounted) return;
+          _liveDaysPointCount = -1;
+          _syncLiveDays(recorder.points);
+          await context
+              .read<DailyDriveBackupController>()
+              .forgetBackedUpDays(preview.replacedDays);
+        },
+      );
       if (!mounted) return true;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.dayDetailReviseSuccess)),
+        SnackBar(
+          content: Text(
+            l10n.dayDetailReviseSuccessDetailed(dayLabel, incoming.length),
+          ),
+        ),
       );
       return true;
     } catch (e) {

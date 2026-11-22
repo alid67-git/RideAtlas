@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../models/gpx_route.dart';
 import '../models/track_point.dart';
+import '../repositories/advanced_mode_controller.dart';
 import '../repositories/stat_icon_settings_controller.dart';
 import '../services/daily_analysis.dart';
 import '../services/gpx_parser.dart';
@@ -965,19 +966,24 @@ class _DayCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => showDayDetailSheet(
-          context: context,
-          day: day,
-          days: days,
-          startAtFirstDay: false,
-          onExportDay: (d) => exportSingleCalendarDay(
+        onTap: () {
+          final advanced = context.read<AdvancedModeController>().enabled;
+          showDayDetailSheet(
             context: context,
-            routeName: routeName,
-            points: points,
-            waypoints: const [],
-            day: d.date,
-          ),
-        ),
+            day: day,
+            days: days,
+            startAtFirstDay: false,
+            onExportDay: advanced
+                ? (d) => exportSingleCalendarDay(
+                      context: context,
+                      routeName: routeName,
+                      points: points,
+                      waypoints: const [],
+                      day: d.date,
+                    )
+                : null,
+          );
+        },
         child: Padding(
       padding: const EdgeInsets.all(12),
       child: Column(

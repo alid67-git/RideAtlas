@@ -26,8 +26,8 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
-    version: 'v1.4.160 beta',
-    date: '2026-11-21',
+    version: 'v1.4.166 beta',
+    date: '2026-11-22',
     noteTr:
         'Çok günlük canlı kayıt uzadıkça yavaşlama: gün km/süre istatistikleri '
         'artık her GPS noktasında tüm geçmişi yeniden taramaz; yalnızca o gün '
@@ -36,6 +36,54 @@ const kChangelog = <ChangelogEntry>[
         'Long multi-day live recording slowdown: day km/time stats no longer '
         'rescan the whole track on every GPS fix — only the current day is '
         'updated incrementally (heavy math ~every 12s).',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.165 beta',
+    date: '2026-11-21',
+    noteTr:
+        'Ayarlar’da Arayüz alt menüsü (araç ikonu, istatistik ikonları, kayıt '
+        'kartları). Gelişmiş anahtarı: kapalıyken gün bazlı içe/dışa aktarma ve '
+        'revize gizlenir; gün detayı görüntüleme kalır.',
+    noteEn:
+        'Settings Interface submenu (vehicle icon, stat icons, recording '
+        'cards). Advanced switch: when off, day-based import/export/revise are '
+        'hidden; day viewing remains.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.164 beta',
+    date: '2026-11-21',
+    noteTr:
+        'Çok günlük gün detayında ortalama ve maksimum hız kartları eklendi. '
+        'Kartlar inceldi; uzun basıp sürükleyerek yer değiştirilebilir. '
+        'Ayar (dişli) menüsünden tırmanış/iniş vb. göster/gizle.',
+    noteEn:
+        'Multi-day day detail adds average and max speed cards. Tiles are '
+        'thinner and long-press drag-reorderable. A tune menu shows/hides '
+        'climb/descent and other cards.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.163 beta',
+    date: '2026-11-21',
+    noteTr:
+        'Gün revize, kayda GPX ekleme ve dışa aktarmada ilerleme diyaloğu: '
+        'dosya okunuyor (N/M), gün yazılıyor, birleştiriliyor, dosya yazılıyor. '
+        'Bittiğinde gün adı + nokta sayısı snackbar’da görünür.',
+    noteEn:
+        'Day revise, import-into-recording, and export show a progress dialog: '
+        'reading file (N/M), writing day, merging, writing files. Success '
+        'snackbar includes day label and point count.',
+  ),
+  ChangelogEntry(
+    version: 'v1.4.161 beta',
+    date: '2026-11-21',
+    noteTr:
+        'Kayıt adlandırılıp uygulamaya yazılınca hemen “Nereye kaydedilsin?” '
+        'gelir (klasör / paylaşım / sadece uygulama); galeri taraması artık '
+        'bunu gizlemez. Klasör seçilince sistem klasör seçici açılır.',
+    noteEn:
+        'Right after naming and saving into the app, “Where should it be '
+        'saved?” appears (folder / share / app only); gallery scan no longer '
+        'hides it. Folder still opens the system picker.',
   ),
   ChangelogEntry(
     version: 'v1.4.159 beta',

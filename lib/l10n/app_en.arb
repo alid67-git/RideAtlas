@@ -141,6 +141,45 @@
   "dayDetailReviseConfirm": "Revise",
   "dayDetailReviseNoPoints": "That file has no timed points that can replace this day.",
   "dayDetailReviseSuccess": "Day revised.",
+  "dayDetailStatsLayoutTitle": "Day detail cards",
+  "dayDetailStatsLayoutHint": "Long-press and drag to reorder. Use the switch to show/hide.",
+  "dayDetailStatsReorderHint": "Long-press a card and drop it on another to swap.",
+  "dayDetailReviseSuccessDetailed": "{dayLabel} updated ({points} points).",
+  "@dayDetailReviseSuccessDetailed": {
+    "placeholders": {
+      "dayLabel": {"type": "String"},
+      "points": {"type": "int"}
+    }
+  },
+  "busyReadingFile": "Reading file…",
+  "busyReadingFileNamed": "Reading: {fileName}",
+  "@busyReadingFileNamed": {"placeholders": {"fileName": {"type": "String"}}},
+  "busyReadingFilesProgress": "Reading file ({current}/{total})…",
+  "@busyReadingFilesProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "busyWritingDay": "Writing day into the recording…",
+  "busySavingRoute": "Saving route…",
+  "busyMergingRecording": "Merging into the recording…",
+  "busyPreparingExport": "Preparing export…",
+  "busyWritingExport": "Writing files…",
+  "busyWritingExportProgress": "Writing file ({current}/{total})…",
+  "@busyWritingExportProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "busyBackupDaysProgress": "Backing up ({current}/{total})…",
+  "@busyBackupDaysProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
   "dayDetailPreviousDay": "Previous day",
   "dayDetailNextDay": "Next day",
   "dayDetailTapMapFullscreen": "Full map",
@@ -274,6 +313,9 @@
   "satelliteCountTitle": "Show satellite count",
   "satelliteCountSubtitle": "Show the number of connected satellites near the record button and on the record screen",
   "settingsInterfaceSection": "Interface",
+  "settingsInterfaceSubtitle": "Vehicle icon, stat icons, recording cards",
+  "advancedModeTitle": "Advanced",
+  "advancedModeSubtitle": "Show day-based import, export, and revise tools",
   "vehicleIconTitle": "Vehicle icon",
   "vehicleIconClassic": "Classic dot",
   "vehicleIconMotorcycleCategory": "Motorcycle",
@@ -355,8 +397,8 @@
   "dayExportSavedToFolder": "Files saved to: {folder}",
   "@dayExportSavedToFolder": {"placeholders": {"folder": {"type": "String"}}},
   "recordingExternalSaveTitle": "Where should it be saved?",
-  "recordingExternalSaveMessage": "The route is saved in the app. Also write the GPX to a folder or share it?",
-  "recordingExternalSaveMultiDayMessage": "The route is saved in the app ({count} days). Write the files to a folder or share them? Choosing a folder also lets you split by day.",
+  "recordingExternalSaveMessage": "The route is saved in the app. Also write it to a folder, or send it via the share sheet?",
+  "recordingExternalSaveMultiDayMessage": "The route is saved in the app ({count} days). Also write to a folder or share? Choosing a folder also lets you pick which days become files.",
   "@recordingExternalSaveMultiDayMessage": {"placeholders": {"count": {"type": "int"}}},
   "recordingExternalSaveAppOnly": "Keep in the app only",
   "recordingExportDaysTooltip": "Export days",

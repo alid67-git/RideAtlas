@@ -141,6 +141,45 @@
   "dayDetailReviseConfirm": "Revidieren",
   "dayDetailReviseNoPoints": "Die Datei hat keine zeitgestempelten Punkte für diesen Tag.",
   "dayDetailReviseSuccess": "Tag revidiert.",
+  "dayDetailStatsLayoutTitle": "Tagesdetail-Karten",
+  "dayDetailStatsLayoutHint": "Zum Sortieren lange drücken und ziehen. Schalter zum Ein-/Ausblenden.",
+  "dayDetailStatsReorderHint": "Karte lange drücken und auf eine andere legen zum Tauschen.",
+  "dayDetailReviseSuccessDetailed": "{dayLabel} aktualisiert ({points} Punkte).",
+  "@dayDetailReviseSuccessDetailed": {
+    "placeholders": {
+      "dayLabel": {"type": "String"},
+      "points": {"type": "int"}
+    }
+  },
+  "busyReadingFile": "Datei wird gelesen…",
+  "busyReadingFileNamed": "Lesen: {fileName}",
+  "@busyReadingFileNamed": {"placeholders": {"fileName": {"type": "String"}}},
+  "busyReadingFilesProgress": "Datei wird gelesen ({current}/{total})…",
+  "@busyReadingFilesProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "busyWritingDay": "Tag wird in die Aufzeichnung geschrieben…",
+  "busySavingRoute": "Route wird gespeichert…",
+  "busyMergingRecording": "Wird in die Aufzeichnung übernommen…",
+  "busyPreparingExport": "Export wird vorbereitet…",
+  "busyWritingExport": "Dateien werden geschrieben…",
+  "busyWritingExportProgress": "Datei wird geschrieben ({current}/{total})…",
+  "@busyWritingExportProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "busyBackupDaysProgress": "Backup wird geschrieben ({current}/{total})…",
+  "@busyBackupDaysProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
   "dayDetailPreviousDay": "Vorheriger Tag",
   "dayDetailNextDay": "Nächster Tag",
   "dayDetailTapMapFullscreen": "Große Karte",
@@ -274,6 +313,9 @@
   "satelliteCountTitle": "Satellitenanzahl anzeigen",
   "satelliteCountSubtitle": "Anzahl der verbundenen Satelliten neben der Aufnahmetaste und auf dem Aufnahmebildschirm anzeigen",
   "settingsInterfaceSection": "Oberfläche",
+  "settingsInterfaceSubtitle": "Fahrzeugsymbol, Statistiksymbole, Aufnahmekarten",
+  "advancedModeTitle": "Erweitert",
+  "advancedModeSubtitle": "Tagesbasierten Import, Export und Revise-Werkzeuge anzeigen",
   "vehicleIconTitle": "Fahrzeugsymbol",
   "vehicleIconClassic": "Klassischer Punkt",
   "vehicleIconMotorcycleCategory": "Motorrad",
@@ -355,8 +397,8 @@
   "dayExportSavedToFolder": "Dateien gespeichert in: {folder}",
   "@dayExportSavedToFolder": {"placeholders": {"folder": {"type": "String"}}},
   "recordingExternalSaveTitle": "Wohin speichern?",
-  "recordingExternalSaveMessage": "Die Route ist in der App gespeichert. GPX zusätzlich in einen Ordner schreiben oder teilen?",
-  "recordingExternalSaveMultiDayMessage": "Die Route ist in der App gespeichert ({count} Tage). Dateien in einen Ordner schreiben oder teilen? Bei Ordner können Sie auch nach Tag trennen.",
+  "recordingExternalSaveMessage": "Die Route ist in der App gespeichert. Zusätzlich in einen Ordner schreiben oder über das Teilen-Menü senden?",
+  "recordingExternalSaveMultiDayMessage": "Die Route ist in der App gespeichert ({count} Tage). Zusätzlich Ordner oder Teilen? Bei Ordner können Sie auch wählen, welche Tage eigene Dateien werden.",
   "@recordingExternalSaveMultiDayMessage": {"placeholders": {"count": {"type": "int"}}},
   "recordingExternalSaveAppOnly": "Nur in der App behalten",
   "recordingExportDaysTooltip": "Tage exportieren",

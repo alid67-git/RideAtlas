@@ -6,7 +6,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 
 import 'l10n/gen/app_localizations.dart';
+import 'repositories/advanced_mode_controller.dart';
 import 'repositories/daily_drive_backup_controller.dart';
+import 'repositories/day_detail_stats_layout_controller.dart';
 import 'repositories/live_stats_layout_controller.dart';
 import 'repositories/locale_controller.dart';
 import 'repositories/photo_repository.dart';
@@ -48,6 +50,12 @@ class RideAtlasApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => LiveStatsLayoutController()..load(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => DayDetailStatsLayoutController()..load(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AdvancedModeController()..load(),
         ),
         // Lives above the Navigator so an active recording survives
         // navigating away from RecordScreen - only an explicit "discard"

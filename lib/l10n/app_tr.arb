@@ -156,6 +156,45 @@
   "dayDetailReviseConfirm": "Revize et",
   "dayDetailReviseNoPoints": "Dosyada bu güne yerleştirilecek zaman damgalı nokta yok.",
   "dayDetailReviseSuccess": "Gün revize edildi.",
+  "dayDetailStatsLayoutTitle": "Gün detay kartları",
+  "dayDetailStatsLayoutHint": "Uzun basıp sürükleyerek sırala. Anahtarla göster/gizle.",
+  "dayDetailStatsReorderHint": "Kartı uzun basıp başka kartın üzerine bırakarak yer değiştir.",
+  "dayDetailReviseSuccessDetailed": "{dayLabel} güncellendi ({points} nokta).",
+  "@dayDetailReviseSuccessDetailed": {
+    "placeholders": {
+      "dayLabel": {"type": "String"},
+      "points": {"type": "int"}
+    }
+  },
+  "busyReadingFile": "Dosya okunuyor…",
+  "busyReadingFileNamed": "Okunuyor: {fileName}",
+  "@busyReadingFileNamed": {"placeholders": {"fileName": {"type": "String"}}},
+  "busyReadingFilesProgress": "Dosya okunuyor ({current}/{total})…",
+  "@busyReadingFilesProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "busyWritingDay": "Gün kayda yazılıyor…",
+  "busySavingRoute": "Rota kaydediliyor…",
+  "busyMergingRecording": "Kayıta birleştiriliyor…",
+  "busyPreparingExport": "Dışa aktarma hazırlanıyor…",
+  "busyWritingExport": "Dosyalar yazılıyor…",
+  "busyWritingExportProgress": "Dosya yazılıyor ({current}/{total})…",
+  "@busyWritingExportProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "busyBackupDaysProgress": "Yedek yazılıyor ({current}/{total})…",
+  "@busyBackupDaysProgress": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
   "dayDetailPreviousDay": "Önceki gün",
   "dayDetailNextDay": "Sonraki gün",
   "dayDetailTapMapFullscreen": "Büyük harita",
@@ -297,6 +336,9 @@
   "satelliteCountTitle": "Uydu sayısını göster",
   "satelliteCountSubtitle": "Kayıt tuşunun ve kayıt ekranının yanında bağlı uydu sayısını göster",
   "settingsInterfaceSection": "Arayüz",
+  "settingsInterfaceSubtitle": "Araç ikonu, istatistik ikonları, kayıt kartları",
+  "advancedModeTitle": "Gelişmiş",
+  "advancedModeSubtitle": "Gün bazlı içe/dışa aktarma ve revize araçlarını göster",
   "vehicleIconTitle": "Araç ikonu",
   "vehicleIconClassic": "Klasik nokta",
   "vehicleIconMotorcycleCategory": "Motosiklet",
@@ -380,8 +422,8 @@
   "dayExportSavedToFolder": "Dosyalar kaydedildi: {folder}",
   "@dayExportSavedToFolder": {"placeholders": {"folder": {"type": "String"}}},
   "recordingExternalSaveTitle": "Nereye kaydedilsin?",
-  "recordingExternalSaveMessage": "Rota uygulamaya kaydedildi. GPX dosyasını ayrıca bir klasöre yazmak veya paylaşmak ister misiniz?",
-  "recordingExternalSaveMultiDayMessage": "Rota uygulamaya kaydedildi ({count} gün). Dosyaları bir klasöre yazmak veya paylaşmak ister misiniz? Klasör seçince günleri de ayırabilirsiniz.",
+  "recordingExternalSaveMessage": "Rota uygulamaya kaydedildi. Ayrıca klasöre yazmak veya paylaşım menüsünden göndermek ister misiniz?",
+  "recordingExternalSaveMultiDayMessage": "Rota uygulamaya kaydedildi ({count} gün). Ayrıca klasöre yazmak veya paylaşmak ister misiniz? Klasör seçince hangi günlerin dosya olacağını da seçebilirsiniz.",
   "@recordingExternalSaveMultiDayMessage": {"placeholders": {"count": {"type": "int"}}},
   "recordingExternalSaveAppOnly": "Sadece uygulamada kalsın",
   "recordingExportDaysTooltip": "Günleri dışa aktar",
