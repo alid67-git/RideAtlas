@@ -4,10 +4,10 @@ import 'package:hive/hive.dart';
 const _metaBoxName = 'rideatlas_meta';
 const _advancedModeKey = 'advanced_mode_enabled';
 
-/// Settings > "Gelişmiş": when off, day-based import/revise and day-based
-/// export stay hidden. Day viewing (detail sheet, chips, map labels) always
-/// works. Defaults to off so the core record / open / full-export path stays
-/// simple.
+/// Settings > "Gelişmiş": when off, day-based import/revise, day-based
+/// export, and live track-tap day badges stay hidden. Day viewing (detail
+/// sheet, chips, map labels) always works. Defaults to off so the core
+/// record / open / full-export path stays simple.
 ///
 /// Stored as '1'/'0' in the shared `Box<String>` `rideatlas_meta` (same
 /// constraint as [SatelliteVisibilityController]).
