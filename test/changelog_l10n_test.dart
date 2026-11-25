@@ -34,10 +34,14 @@ void main() {
   });
 
   test('map attribution is English when the UI language is English', () {
-    final street = findBaseMapStyle('voyager');
-    expect(street.localizedAttribution('tr'), contains('katkıda'));
-    expect(street.localizedAttribution('en'), 'OpenStreetMap contributors');
-    expect(street.localizedAttribution('de'), 'OpenStreetMap-Mitwirkende');
+    final local = findBaseMapStyle('osm_local');
+    expect(local.localizedAttribution('tr'), contains('katkıda'));
+    expect(local.localizedAttribution('en'), 'OpenStreetMap contributors');
+    expect(local.localizedAttribution('de'), 'OpenStreetMap-Mitwirkende');
+    expect(
+      findBaseMapStyle('voyager').localizedAttribution('en'),
+      contains('Esri'),
+    );
     expect(
       findBaseMapStyle('topo').localizedAttribution('en'),
       contains('OpenStreetMap contributors'),

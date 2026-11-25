@@ -78,23 +78,22 @@ class BaseMapStyle {
       _ => 'OpenStreetMap contributors',
     };
     return switch (id) {
-      // Default street map: Esri World Street Map (Latin/English labels).
-      'positron' => 'Esri, $osm',
-      'voyager' => osm,
+      // Default "Sokak" / voyager: Esri World Street Map (Latin/English).
+      'voyager' => 'Esri, $osm',
+      'osm_local' => osm,
       'satellite' => 'Esri, Maxar, Earthstar Geographics',
       'topo' => '$osm, SRTM | OpenTopoMap (CC-BY-SA)',
-      'dark' => 'Esri, $osm',
-      'light' => 'Esri, $osm',
+      'dark' || 'positron' => 'Esri, $osm',
       _ => attribution,
     };
   }
 }
 
 const kBaseMapStyles = <BaseMapStyle>[
-  // Default: English / Latin street labels (travelers in TH/JP/etc.).
-  // Id stays `positron` so riders who already picked this style keep it.
+  // Id `voyager` kept so existing installs (saved default) pick up English
+  // labels without the rider re-choosing the map type.
   BaseMapStyle(
-    id: 'positron',
+    id: 'voyager',
     label: 'Sokak (English)',
     icon: Icons.map,
     urlTemplate:
@@ -102,7 +101,7 @@ const kBaseMapStyles = <BaseMapStyle>[
     attribution: 'Esri, OpenStreetMap katkıda bulunanlar',
   ),
   BaseMapStyle(
-    id: 'voyager',
+    id: 'osm_local',
     label: 'Sokak (yerel)',
     icon: Icons.translate,
     // OSM Standard prefers local `name` (Thai in Thailand, etc.).
@@ -140,8 +139,9 @@ const kBaseMapStyles = <BaseMapStyle>[
         'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Esri, OpenStreetMap katkıda bulunanlar',
   ),
+  // Former duplicate of World_Street_Map; now the clean gray political base.
   BaseMapStyle(
-    id: 'light',
+    id: 'positron',
     label: 'Sade / Siyasi',
     icon: Icons.public,
     urlTemplate:

@@ -29,11 +29,11 @@ const kChangelog = <ChangelogEntry>[
     version: 'v1.4.169 beta',
     date: '2026-11-26',
     noteTr:
-        'Varsayılan harita türü English etiketli sokak haritası. OSM yerel '
-        'adlar (ör. Tayca) ayrı seçenek; sade/siyasi gri katman da eklendi.',
+        'Sokak haritası artık English etiketli (Phuket vb. okunur). Yerel '
+        'adlar (Tayca vb.) ayrı tür; sade/siyasi gri katman korundu.',
     noteEn:
-        'Default map type is now the English-labeled street map. OSM local '
-        'names (e.g. Thai) are a separate option; a clean gray base was added.',
+        'Street map now uses English labels (readable in places like Phuket). '
+        'Local names (e.g. Thai) are a separate type; clean gray base kept.',
   ),
   ChangelogEntry(
     version: 'v1.4.168 beta',

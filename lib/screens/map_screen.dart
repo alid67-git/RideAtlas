@@ -65,9 +65,9 @@ bool _looksLikeVideo(XFile file) {
 
 String _mapStyleLabel(AppLocalizations l10n, BaseMapStyle style) {
   return switch (style.id) {
-    'positron' => l10n.mapStylePositron,
     'voyager' => l10n.mapStyleVoyager,
-    'light' => l10n.mapStyleLight,
+    'osm_local' => l10n.mapStyleOsmLocal,
+    'positron' => l10n.mapStylePositron,
     'dark' => l10n.mapStyleDark,
     'satellite' => l10n.mapStyleSatellite,
     'topo' => l10n.mapStyleTopo,
