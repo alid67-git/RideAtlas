@@ -78,22 +78,34 @@ class BaseMapStyle {
       _ => 'OpenStreetMap contributors',
     };
     return switch (id) {
+      // Default street map: Esri World Street Map (Latin/English labels).
+      'positron' => 'Esri, $osm',
       'voyager' => osm,
       'satellite' => 'Esri, Maxar, Earthstar Geographics',
       'topo' => '$osm, SRTM | OpenTopoMap (CC-BY-SA)',
-      'dark' || 'positron' => 'Esri, $osm',
+      'dark' => 'Esri, $osm',
+      'light' => 'Esri, $osm',
       _ => attribution,
     };
   }
 }
 
 const kBaseMapStyles = <BaseMapStyle>[
+  // Default: English / Latin street labels (travelers in TH/JP/etc.).
+  // Id stays `positron` so riders who already picked this style keep it.
+  BaseMapStyle(
+    id: 'positron',
+    label: 'Sokak (English)',
+    icon: Icons.map,
+    urlTemplate:
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Esri, OpenStreetMap katkıda bulunanlar',
+  ),
   BaseMapStyle(
     id: 'voyager',
-    label: 'Sokak',
-    icon: Icons.map,
-    // CARTO raster basemaps now watermark without an API key — use OSM
-    // directly (same data, no carto.com/basemaps/apikey tile).
+    label: 'Sokak (yerel)',
+    icon: Icons.translate,
+    // OSM Standard prefers local `name` (Thai in Thailand, etc.).
     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: 'OpenStreetMap katkıda bulunanlar',
   ),
@@ -129,12 +141,11 @@ const kBaseMapStyles = <BaseMapStyle>[
     attribution: 'Esri, OpenStreetMap katkıda bulunanlar',
   ),
   BaseMapStyle(
-    id: 'positron',
+    id: 'light',
     label: 'Sade / Siyasi',
     icon: Icons.public,
-    // Light political-style base without CARTO API key.
     urlTemplate:
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Esri, OpenStreetMap katkıda bulunanlar',
   ),
 ];
