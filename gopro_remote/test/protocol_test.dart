@@ -15,7 +15,7 @@ void main() {
     );
   });
 
-  test('wifi AP and third-party init bytes', () {
+  test('wifi AP, sleep, power-down and third-party init bytes', () {
     expect(
       GoProProtocol.setWifiAp(on: true),
       Uint8List.fromList([0x03, 0x17, 0x01, 0x01]),
@@ -24,6 +24,8 @@ void main() {
       GoProProtocol.setThirdPartyClientInfo(),
       Uint8List.fromList([0x01, 0x50]),
     );
+    expect(GoProProtocol.sleep(), Uint8List.fromList([0x01, 0x05]));
+    expect(GoProProtocol.powerDown(), Uint8List.fromList([0x01, 0x04]));
     expect(
       GoProProtocol.registerAllStatuses(),
       Uint8List.fromList([0x01, 0x53]),

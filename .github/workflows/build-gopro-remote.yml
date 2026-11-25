@@ -1,0 +1,62 @@
+name: Build GoPro Remote APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'gopro_remote/**'
+      - '.github/workflows/build-gopro-remote.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gopro_remote
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/GoProRemote.apk
+
+      - name: Extract version
+        id: version
+        working-directory: .
+        run: |
+          VERSION=$(grep -oP "(?<=kAppBuildLabel = ')[^']+" gopro_remote/lib/build_info.dart)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Publish latest APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: gopro-remote-latest
+          name: "GoPro Remote (latest) - ${{ steps.version.outputs.version }}"
+          body: |
+            GoPro Remote Android APK (HERO10–13, Open GoPro BLE).
+            Uygulama içinden otomatik güncelleme bu release’i kullanır.
+            İlk kurulumda eski debug-imzalı sürümü kaldırıp bunu kur.
+          files: gopro_remote/build/app/outputs/flutter-apk/GoProRemote.apk
+          make_latest: false

@@ -8,6 +8,58 @@ enum GoProConnectionState {
   error,
 }
 
+/// Thrown when the user aborts a long BLE operation (scan / connect / wake).
+class GoProCancelledException implements Exception {
+  const GoProCancelledException();
+
+  @override
+  String toString() => 'İptal edildi';
+}
+
+/// User-facing failure — [toString] is the message itself (no "Bad state:" prefix).
+class GoProUserException implements Exception {
+  const GoProUserException(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// Persisted camera the user can select / forget from the devices menu.
+class SavedGoProDevice {
+  const SavedGoProDevice({
+    required this.remoteId,
+    required this.name,
+    required this.addedAtMs,
+  });
+
+  final String remoteId;
+  final String name;
+  final int addedAtMs;
+
+  SavedGoProDevice copyWith({String? name}) {
+    return SavedGoProDevice(
+      remoteId: remoteId,
+      name: name ?? this.name,
+      addedAtMs: addedAtMs,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'remoteId': remoteId,
+        'name': name,
+        'addedAtMs': addedAtMs,
+      };
+
+  factory SavedGoProDevice.fromJson(Map<String, dynamic> json) {
+    return SavedGoProDevice(
+      remoteId: json['remoteId'] as String? ?? '',
+      name: json['name'] as String? ?? 'GoPro',
+      addedAtMs: (json['addedAtMs'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 class GoProDeviceInfo {
   const GoProDeviceInfo({
     required this.device,
