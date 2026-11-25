@@ -75,6 +75,7 @@ void main() {
       ];
 
       expect(findExcursionPointIndices(points), isEmpty);
+      expect(findBridgeSpikeIndices(points), isEmpty);
       expect(findImplausiblePointIndices(points), isEmpty);
       expect(filterImplausiblePoints(points), hasLength(points.length));
     });
@@ -150,6 +151,48 @@ void main() {
 
       expect(findImplausiblePointIndices(points), isEmpty);
       expect(filterImplausiblePoints(points), hasLength(3));
+    });
+
+    test('flags a short coastal bridge spike toward the sea', () {
+      final start = DateTime(2026, 8, 13, 9, 0, 0);
+      // Riding south along a coast, then a 120 m multipath jut east
+      // (toward open water) and back — classic false pier.
+      final points = <TrackPoint>[
+        _pt(7.00, 99.50, start),
+        _pt(6.999, 99.50, start.add(const Duration(seconds: 3))),
+        _pt(6.998, 99.50, start.add(const Duration(seconds: 6))),
+        // Spur tip ~120 m east.
+        _pt(6.9975, 99.5011, start.add(const Duration(seconds: 9))),
+        _pt(6.997, 99.50, start.add(const Duration(seconds: 12))),
+        _pt(6.996, 99.50, start.add(const Duration(seconds: 15))),
+      ];
+
+      final flagged = findBridgeSpikeIndices(points);
+      expect(flagged, isNotEmpty);
+      expect(flagged, contains(3));
+      final cleaned = filterImplausiblePoints(points);
+      expect(
+        cleaned.any((p) => (p.latLng.longitude - 99.5011).abs() < 0.00005),
+        isFalse,
+      );
+    });
+
+    test('does not flag a real hairpin longer than an out-and-back spur', () {
+      final start = DateTime(2026, 8, 13, 9, 0, 0);
+      // Semicircle radius ~100 m then continue — path ≈ πr ≫ 2× stick.
+      final points = <TrackPoint>[
+        _pt(7.002, 99.50, start),
+        _pt(7.001, 99.50, start.add(const Duration(seconds: 3))),
+        _pt(7.000, 99.50, start.add(const Duration(seconds: 6))),
+        _pt(6.9995, 99.5006, start.add(const Duration(seconds: 9))),
+        _pt(6.9990, 99.5009, start.add(const Duration(seconds: 12))),
+        _pt(6.9985, 99.5006, start.add(const Duration(seconds: 15))),
+        _pt(6.9980, 99.50, start.add(const Duration(seconds: 18))),
+        _pt(6.9970, 99.50, start.add(const Duration(seconds: 21))),
+        _pt(6.9960, 99.50, start.add(const Duration(seconds: 24))),
+      ];
+
+      expect(findBridgeSpikeIndices(points), isEmpty);
     });
   });
 }

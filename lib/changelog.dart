@@ -26,6 +26,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.172 beta',
+    date: '2026-11-26',
+    noteTr:
+        'Gerçekte gidilmeyen kıyı GPS sıçramaları (denize doğru kısa çentik) '
+        'canlı kayıtta ve GPX açılışında budanır; uzun feribot hatları korunur.',
+    noteEn:
+        'Fake coastal GPS spurs (short juts toward the sea) are pruned live '
+        'and when opening a GPX; long ferry legs stay.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.171 beta',
     date: '2026-11-26',
     noteTr:

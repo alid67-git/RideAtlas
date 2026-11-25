@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
 import 'package:gpx/gpx.dart' as gpxlib;
@@ -294,6 +295,14 @@ const _excursionReturnRadiusMeters = 60.0;
 /// seconds to a couple of minutes, not further out.
 const _excursionMaxLookaheadPoints = 150;
 
+/// Coastal multipath often sticks 40–400 m off the real corridor for a
+/// handful of fixes, then the track continues near where it left — a
+/// "bridge spike". Neighbours of the cluster stay close; the tip does not.
+const _bridgeSpikeMinStickMeters = 45.0;
+const _bridgeSpikeMaxBridgeMeters = 120.0;
+const _bridgeSpikeMaxClusterPoints = 10;
+const _bridgeSpikeMaxPathMeters = 900.0;
+
 /// Indices of points in [points] that imply a physically-impossible or
 /// isolated GPS speed jump from the last plausible point before them.
 ///
@@ -324,6 +333,7 @@ List<int> findImplausiblePointIndices(
       isolatedSpikeKmh: isolatedSpikeKmh,
     ),
     ...findExcursionPointIndices(points),
+    ...findBridgeSpikeIndices(points),
   }.toList()
     ..sort();
   return flagged;
@@ -487,6 +497,71 @@ List<int> findExcursionPointIndices(
     i = returnIndex + 1;
   }
   return flagged;
+}
+
+/// Cross-track distance of [p] from the great-circle-ish segment [a]→[b]
+/// (planar meters via [Distance] chords — fine at spur scales).
+double _crossTrackMeters(LatLng a, LatLng b, LatLng p) {
+  final ab = _distance(a, b);
+  if (ab < 1) return _distance(a, p);
+  final ap = _distance(a, p);
+  final bp = _distance(b, p);
+  // Heron area → height from p to AB.
+  final s = (ab + ap + bp) / 2;
+  final areaSq = s * (s - ab) * (s - ap) * (s - bp);
+  if (areaSq <= 0) return 0;
+  return (2 * math.sqrt(areaSq)) / ab;
+}
+
+/// Short off-corridor spikes whose endpoints nearly bridge: coastal GPS
+/// multipath (false pier / sea jut) without a full ferry-scale path.
+///
+/// Distinguishes real hairpins: those have path ≫ 2× stick-out; a spur
+/// out-and-back has path ≈ 2× stick-out.
+List<int> findBridgeSpikeIndices(List<TrackPoint> points) {
+  if (points.length < 3) return const [];
+  final flagged = <int>{};
+  var i = 1;
+  while (i < points.length - 1) {
+    if (flagged.contains(i)) {
+      i++;
+      continue;
+    }
+    var matched = false;
+    final maxEnd = math.min(
+      i + _bridgeSpikeMaxClusterPoints - 1,
+      points.length - 2,
+    );
+    for (var end = i; end <= maxEnd; end++) {
+      final a = points[i - 1].latLng;
+      final b = points[end + 1].latLng;
+      final bridge = _distance(a, b);
+      if (bridge > _bridgeSpikeMaxBridgeMeters) continue;
+
+      var pathMeters = _distance(a, points[i].latLng);
+      var maxStick = _crossTrackMeters(a, b, points[i].latLng);
+      for (var k = i; k < end; k++) {
+        pathMeters += _distance(points[k].latLng, points[k + 1].latLng);
+        final stick = _crossTrackMeters(a, b, points[k + 1].latLng);
+        if (stick > maxStick) maxStick = stick;
+      }
+      pathMeters += _distance(points[end].latLng, b);
+      if (maxStick < _bridgeSpikeMinStickMeters) continue;
+      if (pathMeters > _bridgeSpikeMaxPathMeters) continue;
+      // Spur out-and-back ≈ 2× stick; hairpin curves are longer.
+      if (pathMeters > maxStick * 2.4 + 50) continue;
+
+      for (var k = i; k <= end; k++) {
+        flagged.add(k);
+      }
+      i = end + 1;
+      matched = true;
+      break;
+    }
+    if (!matched) i++;
+  }
+  final out = flagged.toList()..sort();
+  return out;
 }
 
 /// [points] with every [findImplausiblePointIndices] index removed - used to

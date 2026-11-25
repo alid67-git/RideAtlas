@@ -817,8 +817,17 @@ class GpsRecorder extends ChangeNotifier {
       _stationarySince = null;
     }
 
+    // Coastal multipath often reports a large accuracy circle while the
+    // fix jumps tens of metres toward open water. Keep the HUD update
+    // above, but do not append those hops to the red line.
+    final accuracyTooPoorForHop = _points.isNotEmpty &&
+        pos.accuracy.isFinite &&
+        pos.accuracy > 40 &&
+        hopFromLast > 35;
+
     if (_isPlausiblePoint(here, pos.timestamp) &&
-        (_points.isEmpty || !hopIsNoise)) {
+        (_points.isEmpty || !hopIsNoise) &&
+        !accuracyTooPoorForHop) {
       _points.add(
         TrackPoint(
           latLng: here,
