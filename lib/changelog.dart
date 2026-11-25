@@ -26,6 +26,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.171 beta',
+    date: '2026-11-26',
+    noteTr:
+        'Zaman damgası olmayan GPX’te feribot gidiş-dönüş (Pak Bara ↔ Koh Lipe) '
+        'artık “gidip geri dönen GPS hatası” sanılıp silinmez.',
+    noteEn:
+        'Untimed GPX ferry round-trips (Pak Bara ↔ Koh Lipe) are no longer '
+        'mistaken for spike-and-return GPS glitches and removed.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.170 beta',
     date: '2026-11-26',
     noteTr:
