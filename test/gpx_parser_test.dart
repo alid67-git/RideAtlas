@@ -3,7 +3,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:rideatlas/models/track_point.dart';
 import 'package:rideatlas/services/gpx_parser.dart';
 
-TrackPoint _pt(double lat, double lon, DateTime time) =>
+TrackPoint _pt(double lat, double lon, [DateTime? time]) =>
     TrackPoint(latLng: LatLng(lat, lon), time: time);
 
 void main() {
@@ -53,6 +53,30 @@ void main() {
       ];
 
       expect(findExcursionPointIndices(points), isEmpty);
+    });
+
+    test('keeps untimed Pak Bara ↔ Koh Lipe ferry round trip', () {
+      // Mirrors the uploaded South Thailand GPX: no timestamps, boat out
+      // and back. Old logic treated the return to the pier as a glitch and
+      // wiped Lipe + both sea legs.
+      final points = <TrackPoint>[
+        _pt(6.8417, 99.7485), // Pak Bara
+        _pt(6.80, 99.70),
+        _pt(6.75, 99.62),
+        _pt(6.66, 99.50),
+        _pt(6.53, 99.36),
+        _pt(6.4870, 99.3040), // Koh Lipe
+        _pt(6.4871, 99.3041),
+        _pt(6.53, 99.36),
+        _pt(6.66, 99.50),
+        _pt(6.75, 99.62),
+        _pt(6.80, 99.70),
+        _pt(6.8417, 99.7485), // back to Pak Bara
+      ];
+
+      expect(findExcursionPointIndices(points), isEmpty);
+      expect(findImplausiblePointIndices(points), isEmpty);
+      expect(filterImplausiblePoints(points), hasLength(points.length));
     });
   });
 

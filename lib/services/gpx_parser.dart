@@ -441,7 +441,9 @@ List<int> findExcursionPointIndices(
         final dtSeconds = t1.difference(t0).inMilliseconds / 1000.0;
         isCandidate = dtSeconds <= 0 || (meters / dtSeconds) * 3.6 >= triggerKmh;
       } else {
-        isCandidate = true;
+        // Untimed multi-km hops are real travel (ferry / sparse exports),
+        // not multipath blips. Only short untimed jumps stay candidates.
+        isCandidate = meters < longTravelMinMeters;
       }
     }
     if (!isCandidate) {
@@ -462,6 +464,18 @@ List<int> findExcursionPointIndices(
     if (returnIndex == -1) {
       // Never comes back nearby within the window - treat as real movement
       // (sustained fast riding, or a genuine GPS gap), not a glitch.
+      stableIndex = i;
+      i++;
+      continue;
+    }
+    // Out-and-back ferry (Pak Bara → Koh Lipe → Pak Bara) also "returns"
+    // nearby, but the path length is tens of km — keep those points.
+    var pathMeters = 0.0;
+    for (var k = i - 1; k < returnIndex; k++) {
+      if (k < 0) continue;
+      pathMeters += _distance(points[k].latLng, points[k + 1].latLng);
+    }
+    if (pathMeters >= longTravelMinMeters * 2) {
       stableIndex = i;
       i++;
       continue;
