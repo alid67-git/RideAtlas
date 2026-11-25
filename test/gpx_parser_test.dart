@@ -113,5 +113,19 @@ void main() {
 
       expect(findImplausiblePointIndices(points), isEmpty);
     });
+
+    test('keeps a long ferry-like hop even if implied speed is >120', () {
+      final start = DateTime(2026, 8, 13, 9, 0, 0);
+      // Pak Bara-ish → Koh Lipe-ish (~60+ km) in 25 minutes ≈ 150 km/h.
+      // Sparse boat GPS used to be dropped as an "isolated spike".
+      final points = <TrackPoint>[
+        _pt(6.8417, 99.7485, start),
+        _pt(6.4870, 99.3040, start.add(const Duration(minutes: 25))),
+        _pt(6.4871, 99.3041, start.add(const Duration(minutes: 26))),
+      ];
+
+      expect(findImplausiblePointIndices(points), isEmpty);
+      expect(filterImplausiblePoints(points), hasLength(3));
+    });
   });
 }
