@@ -26,6 +26,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.170 beta',
+    date: '2026-11-26',
+    noteTr:
+        'İçe aktarılan GPX’te feribot/tekne gibi uzun deniz geçişleri artık '
+        '“GPS sıçraması” sanılıp silinmez; kara + deniz hattı birlikte çizilir.',
+    noteEn:
+        'Imported GPX ferry/boat legs are no longer dropped as GPS spikes; '
+        'land and sea segments draw together.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.169 beta',
     date: '2026-11-26',
     noteTr:

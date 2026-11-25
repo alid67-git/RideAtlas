@@ -56,6 +56,8 @@ ParsedTrack parseGpxXml(String xml) {
     }
   }
 
+  // `<rte>` is a fallback when there is no track. When both exist we keep
+  // track points only — planned routes often duplicate the recorded line.
   if (points.isEmpty) {
     for (final rte in gpx.rtes) {
       for (final pt in rte.rtepts) {
@@ -262,6 +264,13 @@ const maxPlausibleTrackSpeedKmh = 300.0;
 /// that is real riding above 120 km/h, not a glitch.
 const maxIsolatedSpikeKmh = 120.0;
 
+/// Hops covering at least this distance are treated as real travel (ferry /
+/// boat / long GPS gap after moving), not as an "isolated spike", as long as
+/// they stay under [maxPlausibleTrackSpeedKmh]. A ~60 km Pak Bara→Koh Lipe
+/// boat leg with sparse timestamps often implied 120–200 km/h and used to
+/// vanish from the map while the island waypoint still showed.
+const longTravelMinMeters = 2000.0;
+
 /// A single-hop jump has to imply at least this speed *and* cover at least
 /// [_excursionMinJumpMeters] before [findExcursionPointIndices] even
 /// considers it a candidate - low, deliberately, so it catches jumps a real
@@ -373,6 +382,13 @@ List<int> _findInstantSpikeIndices(
       continue;
     }
     if (impliedKmh > isolatedSpikeKmh) {
+      final meters = _distance(last.latLng, p.latLng);
+      // Long hop under the absolute ceiling = ferry / real displacement,
+      // not a multipath blip a few hundred meters away.
+      if (meters >= longTravelMinMeters) {
+        lastPlausible = p;
+        continue;
+      }
       // Lone >120 hop without a following high-speed hop = outlier.
       // At end of track there is no next hop to confirm — keep under the
       // absolute ceiling (a highway finish must not drop the last fix).
