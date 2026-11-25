@@ -1,13 +1,13 @@
 /// Bumped by hand on every push so the running build can be eyeballed on
 /// screen (Chrome tabs / dev servers can otherwise silently serve stale JS).
-const String kAppBuildLabel = 'v1.4.168 beta';
+const String kAppBuildLabel = 'v1.4.169 beta';
 
 /// Shown once, in a dialog, the first time this build label is seen.
 const String kAppBuildNoteTr =
-    'Gelişmiş gün rozeti düzeltildi: dokunuş yanıt veriyor; uzun kayıtlarda harita daha akıcı.';
+    'Varsayılan harita artık English sokak etiketli; yerel adlar ayrı bir tür olarak duruyor.';
 
 const String kAppBuildNoteEn =
-    'Advanced day-badge tap fixed; long multi-day live maps stay smoother.';
+    'Default map now uses English street labels; local-name OSM remains as a separate type.';
 
 /// Turkish when [languageCode] is `tr`, otherwise English (including `de`).
 String localizedBuildNote(String languageCode) =>

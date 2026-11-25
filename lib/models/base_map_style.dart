@@ -78,7 +78,9 @@ class BaseMapStyle {
       _ => 'OpenStreetMap contributors',
     };
     return switch (id) {
-      'voyager' => osm,
+      // Default "Sokak" / voyager: Esri World Street Map (Latin/English).
+      'voyager' => 'Esri, $osm',
+      'osm_local' => osm,
       'satellite' => 'Esri, Maxar, Earthstar Geographics',
       'topo' => '$osm, SRTM | OpenTopoMap (CC-BY-SA)',
       'dark' || 'positron' => 'Esri, $osm',
@@ -88,12 +90,21 @@ class BaseMapStyle {
 }
 
 const kBaseMapStyles = <BaseMapStyle>[
+  // Id `voyager` kept so existing installs (saved default) pick up English
+  // labels without the rider re-choosing the map type.
   BaseMapStyle(
     id: 'voyager',
-    label: 'Sokak',
+    label: 'Sokak (English)',
     icon: Icons.map,
-    // CARTO raster basemaps now watermark without an API key — use OSM
-    // directly (same data, no carto.com/basemaps/apikey tile).
+    urlTemplate:
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Esri, OpenStreetMap katkıda bulunanlar',
+  ),
+  BaseMapStyle(
+    id: 'osm_local',
+    label: 'Sokak (yerel)',
+    icon: Icons.translate,
+    // OSM Standard prefers local `name` (Thai in Thailand, etc.).
     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: 'OpenStreetMap katkıda bulunanlar',
   ),
@@ -128,13 +139,13 @@ const kBaseMapStyles = <BaseMapStyle>[
         'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Esri, OpenStreetMap katkıda bulunanlar',
   ),
+  // Former duplicate of World_Street_Map; now the clean gray political base.
   BaseMapStyle(
     id: 'positron',
     label: 'Sade / Siyasi',
     icon: Icons.public,
-    // Light political-style base without CARTO API key.
     urlTemplate:
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Esri, OpenStreetMap katkıda bulunanlar',
   ),
 ];

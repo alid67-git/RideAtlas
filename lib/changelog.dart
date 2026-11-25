@@ -26,6 +26,16 @@ class ChangelogEntry {
 
 const kChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: 'v1.4.169 beta',
+    date: '2026-11-26',
+    noteTr:
+        'Sokak haritası artık English etiketli (Phuket vb. okunur). Yerel '
+        'adlar (Tayca vb.) ayrı tür; sade/siyasi gri katman korundu.',
+    noteEn:
+        'Street map now uses English labels (readable in places like Phuket). '
+        'Local names (e.g. Thai) are a separate type; clean gray base kept.',
+  ),
+  ChangelogEntry(
     version: 'v1.4.168 beta',
     date: '2026-11-22',
     noteTr:
